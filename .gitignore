@@ -5,3 +5,8 @@
 .vibecode/
 node_modules/
 .pnpm-store/
+cdk.out/
+**/cdk.out/
+dist/
+**/dist/
+infra/cdk/cdk.context.json

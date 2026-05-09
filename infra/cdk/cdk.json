@@ -1,0 +1,8 @@
+{
+  "app": "node dist/bin/agents-cloud-cdk.js",
+  "context": {
+    "@aws-cdk/core:newStyleStackSynthesis": true,
+    "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": true,
+    "@aws-cdk/aws-iam:minimizePolicies": true
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@agents-cloud/infra-cdk",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "AWS CDK infrastructure foundation for agents-cloud.",
+  "bin": {
+    "agents-cloud-cdk": "dist/bin/agents-cloud-cdk.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist cdk.out",
+    "bootstrap": "pnpm build && cdk bootstrap aws://${CDK_DEFAULT_ACCOUNT:-625250616301}/${AWS_REGION:-us-east-1}",
+    "synth": "pnpm build && cdk synth --app 'node dist/bin/agents-cloud-cdk.js'",
+    "diff": "pnpm build && cdk diff --app 'node dist/bin/agents-cloud-cdk.js'",
+    "deploy": "pnpm build && cdk deploy --app 'node dist/bin/agents-cloud-cdk.js' --all"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.177.0",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "aws-cdk": "^2.177.0",
+    "typescript": "^5.7.3"
+  }
+}

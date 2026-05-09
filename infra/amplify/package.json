@@ -1,0 +1,23 @@
+{
+  "name": "@agents-cloud/infra-amplify",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Amplify Gen 2 app backend shell for agents-cloud.",
+  "scripts": {
+    "sandbox": "ampx sandbox --profile ${AWS_PROFILE:-agents-cloud-source}",
+    "sandbox:delete": "ampx sandbox delete --profile ${AWS_PROFILE:-agents-cloud-source}",
+    "deploy": "ampx pipeline-deploy --branch ${AWS_BRANCH:-main} --app-id ${AWS_AMPLIFY_APP_ID:?Set AWS_AMPLIFY_APP_ID to deploy an Amplify Hosting backend branch}",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aws-amplify/backend": "^1.14.0",
+    "@aws-amplify/backend-cli": "^1.8.2",
+    "aws-cdk-lib": "^2.177.0",
+    "constructs": "^10.4.2",
+    "typescript": "^5.7.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7"
+  }
+}

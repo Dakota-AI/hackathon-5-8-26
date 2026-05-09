@@ -6,7 +6,15 @@
   "packageManager": "pnpm@10.0.0",
   "scripts": {
     "contracts:test": "pnpm --filter @agents-cloud/protocol test",
-    "schemas:validate": "pnpm --filter @agents-cloud/protocol validate"
+    "schemas:validate": "pnpm --filter @agents-cloud/protocol validate",
+    "infra:build": "pnpm --filter @agents-cloud/infra-cdk run build",
+    "infra:synth": "AWS_PROFILE=${AWS_PROFILE:-agents-cloud-source} AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} AGENTS_CLOUD_AWS_REGION=${AGENTS_CLOUD_AWS_REGION:-us-east-1} pnpm --filter @agents-cloud/infra-cdk run synth",
+    "infra:diff": "AWS_PROFILE=${AWS_PROFILE:-agents-cloud-source} AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} AGENTS_CLOUD_AWS_REGION=${AGENTS_CLOUD_AWS_REGION:-us-east-1} pnpm --filter @agents-cloud/infra-cdk run diff",
+    "infra:deploy": "AWS_PROFILE=${AWS_PROFILE:-agents-cloud-source} AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} AGENTS_CLOUD_AWS_REGION=${AGENTS_CLOUD_AWS_REGION:-us-east-1} pnpm --filter @agents-cloud/infra-cdk run deploy",
+    "infra:bootstrap": "AWS_PROFILE=${AWS_PROFILE:-agents-cloud-source} AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} pnpm --filter @agents-cloud/infra-cdk run bootstrap",
+    "amplify:sandbox": "AWS_PROFILE=${AWS_PROFILE:-agents-cloud-source} AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} pnpm --filter @agents-cloud/infra-amplify run sandbox",
+    "amplify:sandbox:delete": "AWS_PROFILE=${AWS_PROFILE:-agents-cloud-source} AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} pnpm --filter @agents-cloud/infra-amplify run sandbox:delete",
+    "amplify:deploy": "AWS_PROFILE=${AWS_PROFILE:-agents-cloud-source} AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} pnpm --filter @agents-cloud/infra-amplify run deploy"
   },
   "engines": {
     "node": ">=22.0.0"

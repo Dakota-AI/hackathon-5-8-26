@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agents-cloud.local/schemas/event-envelope.schema.json",
+  "title": "Canonical Event Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "type",
+    "seq",
+    "createdAt",
+    "orgId",
+    "userId",
+    "workspaceId",
+    "runId",
+    "source",
+    "payload"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Globally unique event id."
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)+$",
+      "description": "Namespaced event type such as run.status.changed."
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Server-assigned monotonically increasing sequence within a run or stream."
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "orgId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "userId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workspaceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "projectId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "taskId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "correlationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["control-api", "agent-manager", "worker", "cloudflare", "client", "system"]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "payloadRef": {
+      "$ref": "#/$defs/payloadRef"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Event-specific payload validated by type-specific schema."
+    }
+  },
+  "$defs": {
+    "payloadRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uri", "contentType"],
+      "properties": {
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contentType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

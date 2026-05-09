@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agents-cloud.local/schemas/events/tool-approval.schema.json",
+  "title": "Tool Approval Payload",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approvalId", "kind", "toolName", "risk", "requestedAction"],
+      "properties": {
+        "approvalId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "const": "request"
+        },
+        "toolName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "risk": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"]
+        },
+        "requestedAction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "argumentsPreview": {
+          "type": "object"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approvalId", "kind", "decision", "decidedBy", "decidedAt"],
+      "properties": {
+        "approvalId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "const": "decision"
+        },
+        "decision": {
+          "type": "string",
+          "enum": ["approved", "rejected"]
+        },
+        "decidedBy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decidedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  ]
+}

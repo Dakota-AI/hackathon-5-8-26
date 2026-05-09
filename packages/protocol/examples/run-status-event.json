@@ -1,0 +1,21 @@
+{
+  "id": "evt_01",
+  "type": "run.status.changed",
+  "seq": 1,
+  "createdAt": "2026-05-09T00:00:00.000Z",
+  "orgId": "org_demo",
+  "userId": "user_demo",
+  "workspaceId": "ws_demo",
+  "projectId": "proj_demo",
+  "runId": "run_demo",
+  "source": {
+    "kind": "agent-manager",
+    "name": "agent-manager"
+  },
+  "payload": {
+    "runId": "run_demo",
+    "status": "running",
+    "message": "Worker started",
+    "workerClass": "agent-code"
+  }
+}

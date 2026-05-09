@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agents-cloud.local/schemas/events/a2ui-delta.schema.json",
+  "title": "A2UI Delta Payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["surfaceId", "catalogId", "message"],
+  "properties": {
+    "surfaceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "catalogId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message": {
+      "type": "object",
+      "description": "A2UI message. Validate with the selected A2UI schema and catalog before client delivery.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["createSurface"],
+          "properties": {
+            "createSurface": {
+              "type": "object"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["updateComponents"],
+          "properties": {
+            "updateComponents": {
+              "type": "object"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["updateDataModel"],
+          "properties": {
+            "updateDataModel": {
+              "type": "object"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["deleteSurface"],
+          "properties": {
+            "deleteSurface": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "actionPolicy": {
+      "type": "string",
+      "enum": ["none", "auto", "approval-required"]
+    }
+  }
+}

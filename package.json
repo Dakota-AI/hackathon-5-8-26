@@ -1,0 +1,14 @@
+{
+  "name": "agents-cloud",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Autonomous AI agent cloud platform foundation workspace.",
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "contracts:test": "pnpm --filter @agents-cloud/protocol test",
+    "schemas:validate": "pnpm --filter @agents-cloud/protocol validate"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

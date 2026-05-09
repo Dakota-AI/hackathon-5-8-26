@@ -1,0 +1,7 @@
+.research/
+.env
+.env.*
+!.env.example
+.vibecode/
+node_modules/
+.pnpm-store/

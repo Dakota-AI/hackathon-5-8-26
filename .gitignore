@@ -33,4 +33,6 @@ infra/amplify/amplify_outputs.*
 *.p8
 tools/App-Store-Connect-CLI/
 tools/bin/asc
-apps/web/.next
+*.tsbuildinfo
+apps/web/.next/
+apps/web/tsconfig.tsbuildinfo

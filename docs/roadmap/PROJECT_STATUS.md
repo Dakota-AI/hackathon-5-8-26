@@ -11,7 +11,7 @@ Current state:
 - CDK platform infrastructure is deployed in AWS account `625250616301`, region `us-east-1`.
 - A Step Functions -> ECS Fargate -> CloudWatch smoke test succeeded.
 - Amplify Gen 2 Auth sandbox is deployed and healthy.
-- Amplify Hosting app exists and is connected to the private GitHub repo, but its first branch deploy failed because the build image did not have `pnpm` installed. This is being fixed with an explicit Amplify build spec.
+- Amplify Hosting app exists, is connected to the private GitHub repo, and now deploys successfully with an explicit `amplify.yml` build spec.
 - The main missing product/backend piece is still the Control API that creates/query runs and bridges Amplify Auth to the CDK platform backend.
 
 Approximate progress:
@@ -103,11 +103,14 @@ Amplify Hosting app:
 - Repository: `https://github.com/SebRincon/agents-cloud`
 - Branch: `main`
 
-Current known issue:
+Deployment status:
 
-- First branch deployment failed during BUILD because the Amplify build image did not have `pnpm` installed.
-- Error: `pnpm: command not found`
-- Fix: commit an explicit `amplify.yml` that enables Corepack and prepares `pnpm@10.0.0` before install/build.
+- Initial job `1` failed because the Amplify build image did not have `pnpm` installed.
+- Fixed by adding `amplify.yml` with Corepack + `pnpm@10.0.0` setup and a placeholder static build.
+- Job `2` succeeded for commit `2606ccf`.
+- Job `3` succeeded for commit `9b084b2`.
+- Live placeholder URL: `https://main.dkqxgsrxe1fih.amplifyapp.com/`
+- Health/status endpoint: `https://main.dkqxgsrxe1fih.amplifyapp.com/status.json`
 
 ## Completed in Git
 

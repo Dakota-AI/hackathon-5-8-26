@@ -15,6 +15,7 @@ export interface AgentsCloudConfig {
   readonly previewIngress: {
     readonly enabled: boolean;
     readonly baseDomain?: string;
+    readonly certificateArn?: string;
     readonly hostedZoneId?: string;
     readonly hostedZoneName?: string;
   };
@@ -48,6 +49,7 @@ export function loadConfig(): AgentsCloudConfig {
     previewIngress: {
       enabled: process.env.AGENTS_CLOUD_PREVIEW_INGRESS_ENABLED === "true",
       baseDomain: process.env.AGENTS_CLOUD_PREVIEW_BASE_DOMAIN,
+      certificateArn: process.env.AGENTS_CLOUD_PREVIEW_CERTIFICATE_ARN,
       hostedZoneId: process.env.AGENTS_CLOUD_PREVIEW_HOSTED_ZONE_ID,
       hostedZoneName: process.env.AGENTS_CLOUD_PREVIEW_HOSTED_ZONE_NAME ?? process.env.AGENTS_CLOUD_PREVIEW_BASE_DOMAIN
     },

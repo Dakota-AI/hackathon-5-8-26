@@ -3,6 +3,13 @@
 Date: 2026-05-09
 Status: High-level build plan after local repo audit, cloned reference audit, and current web research
 
+Current implementation status is tracked in
+`docs/roadmap/MASTER_SCOPE_AND_PROGRESS.md` and
+`docs/roadmap/PROJECT_STATUS.md`. This document remains the long-form design
+roadmap and research baseline, but its early-phase sequencing predates the
+deployed CDK foundation, deployed Amplify Auth sandbox, and green Amplify
+Hosting placeholder.
+
 Second-pass audit: see `docs/roadmap/AUTONOMOUS_AGENT_PLATFORM_EXA_AUDIT_ADDENDUM.md` for Exa MCP research updates on OpenAI Agents SDK, Codex auth, Cloudflare Agents/Durable Objects, A2UI, ECS Managed Instances, Step Functions, S3 bucket split, and Miro.
 
 ## 1. Executive Decision
@@ -149,7 +156,7 @@ Recommended future structure:
 agents-cloud/
   apps/
     web-next/                    # Next.js web app
-    flutter/                     # shared Flutter desktop/mobile app or monorepo package
+    flutter/                     # shared desktop/mobile app or monorepo package
   packages/
     protocol/                    # VibeACP/event schemas, GenUI schemas, TS types
     flutter_protocol/            # generated Dart models if kept separate

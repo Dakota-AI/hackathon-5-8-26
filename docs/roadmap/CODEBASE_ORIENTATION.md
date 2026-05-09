@@ -1,63 +1,92 @@
 # Agents Cloud Codebase Orientation
 
 Date: 2026-05-09
-Status: Orientation snapshot generated from current repository state
+Status: Current repository orientation after CDK and Amplify foundation work
 
 ## What This Repository Is
 
-`agents-cloud` is currently a foundation/planning workspace for an autonomous AI agent cloud platform. It is not yet a working application. The committed implementation is mostly documentation, architecture decisions, and a small protocol/schema package.
+`agents-cloud` is the foundation repository for an autonomous AI agent cloud
+platform. The target system is an agent operating system: a user gives strategic
+CEO-style commands, the platform plans work, delegates to specialist agents,
+runs isolated ECS workers, streams progress to every client, requests approvals,
+archives artifacts, and improves agent definitions through tested promotion
+workflows.
 
-The intended product is an agent operating system: a user issues high-level goals, the platform plans work, dispatches isolated specialist workers, streams progress to clients, requests approval for risky actions, archives artifacts, and promotes/evaluates improved agent definitions safely.
+This is not yet a finished product application. It is now more than a planning
+workspace: it contains a deployed AWS CDK foundation, a deployed Amplify Auth
+sandbox, a green Amplify Hosting placeholder, and protocol contracts.
+
+Read these first:
+
+- `docs/roadmap/MASTER_SCOPE_AND_PROGRESS.md`
+- `docs/roadmap/PROJECT_STATUS.md`
+- `docs/adr/README.md`
+- `docs/roadmap/FOUNDATION_NEXT_STEPS.md`
 
 ## Current Concrete Implementation
 
-The current implemented code is:
+Implemented:
 
 - pnpm monorepo root with Node 22 requirement.
-- `packages/protocol` package with JSON Schemas for the canonical event envelope and first event payloads.
-- AJV-based schema validation script.
-- Example run-status event fixture.
-- Directory skeletons for apps, services, infrastructure, and tests.
-- ADRs and roadmap docs describing the target architecture.
+- `packages/protocol` package with JSON Schemas and validation script.
+- AWS CDK app under `infra/cdk`.
+- Deployed CDK stacks for foundation, network, storage, state, cluster,
+  runtime, and orchestration.
+- Placeholder Fargate runtime task.
+- Step Functions state machine that launches ECS Fargate.
+- Successful Step Functions to ECS smoke execution.
+- Preview deployment registry table.
+- Optional preview ingress stack scaffold.
+- Amplify Gen 2 Auth backend under `infra/amplify`.
+- Deployed Amplify Auth sandbox with Cognito email login.
+- Amplify Hosting placeholder build through root `amplify.yml`.
+- Local Flutter console scaffold under `apps/desktop_mobile` with a
+  command-center shell, planning pages, and local GenUI/A2UI preview.
+- Planning docs, ADRs, and service/app placeholders.
 
-There is no CDK app yet, no Cloudflare Worker code yet, no Control API service code yet, no AgentManager service code yet, no Flutter app code yet, and no Next.js app code yet.
+Not implemented:
+
+- Control API.
+- Real agent runtime.
+- Event relay.
+- Cloudflare Worker/Durable Object realtime plane.
+- Next.js product app.
+- Production Flutter auth/API/realtime integration.
+- A2UI/GenUI renderers.
+- Codex/Hermes worker integrations.
+- Miro bridge.
+- GitHub commit/PR integration.
+- Specialist-agent creation and self-improvement workflows.
 
 ## Verified Commands
 
 From repository root:
 
 ```bash
-pnpm install --frozen-lockfile
 pnpm contracts:test
+pnpm infra:build
+pnpm infra:synth
+pnpm --filter @agents-cloud/infra-amplify run typecheck
+pnpm amplify:hosting:build
+cd apps/desktop_mobile && flutter analyze
+cd apps/desktop_mobile && flutter test
 ```
 
-Result observed: `Protocol schemas validated.`
-
-## Size Snapshot
-
-Excluding `.git`, `node_modules`, and `.research`, pygount reported:
-
-- 48 files total
-- 35 Markdown files
-- 10 JSON files
-- 1 JavaScript file
-- 1 YAML file
-- 333 code lines
-- 2423 Markdown/comment lines
-
-This confirms the repo is architecture-first and contract-first, not application-code-heavy yet.
+These commands were verified on 2026-05-09.
 
 ## Top-Level Map
 
 ```text
 agents-cloud/
   apps/
-    web-next/        planned Next.js web client
-    flutter/         planned Flutter desktop/mobile client
+    web-next/        planned Next.js web command center
+    flutter/         planned desktop/mobile command center
+    desktop_mobile/
+                     local Flutter command-center scaffold
   packages/
-    protocol/        current canonical schemas and schema validator
+    protocol/        canonical event schemas and validator
   services/
-    control-api/     planned app/control API
+    control-api/     planned API for run creation/query/callbacks
     agent-manager/   planned ECS scheduler/lifecycle service
     agent-runtime/   planned Hermes/OpenAI agent worker runtime wrapper
     builder-runtime/ planned build/test/browser-heavy runtime
@@ -65,116 +94,141 @@ agents-cloud/
     event-relay/     planned AWS-to-Cloudflare event relay
     miro-bridge/     planned Miro OAuth/REST/MCP bridge
   infra/
-    cdk/             planned AWS CDK foundation
+    cdk/             current AWS CDK foundation
     cloudflare/      planned Workers/Durable Objects/Queues realtime plane
-    amplify/         planned product-facing Amplify integration
+    amplify/         current Amplify Gen 2 Auth backend
   docs/
     adr/             accepted architectural decisions
-    roadmap/         main implementation plan and next steps
+    roadmap/         source-of-truth status, roadmap, and plans
     research/        source research reports
   tests/
-    contract/        intended protocol compatibility tests
+    contract/        intended cross-package protocol tests
 ```
 
 ## Architectural Spine
 
-The key architectural rule is separation of durable execution from realtime presentation:
+The key rule is separation of durable execution from realtime presentation.
 
 - AWS is the durable source of truth.
-- Cloudflare is the realtime fanout/sync layer.
-- ECS runs heavy, long-running agent/code/build/eval workloads.
-- S3 is the durable artifact/workspace ledger.
-- EFS is only the hot POSIX filesystem layer when agents need mounted workspace semantics.
-- DynamoDB records authoritative run/task/event/artifact/approval state.
-- Step Functions orchestrates durable run lifecycles and ECS callbacks.
+- Cloudflare is the realtime fanout and sync layer.
+- ECS runs heavy, long-running agent, coding, build, test, browser, and eval
+  workloads.
+- S3 stores durable workspaces, artifacts, audit records, previews, and research
+  datasets.
+- EFS is deferred until mounted POSIX workspace semantics are truly needed.
+- DynamoDB records authoritative run, task, event, artifact, approval, and
+  preview deployment state.
+- Step Functions orchestrates durable run lifecycles and ECS task launch.
+- Amplify Auth/Cognito is the initial product identity layer.
 - Clients render canonical events and A2UI surfaces; they do not own run truth.
 
 ## Accepted ADRs
 
-1. `0001-platform-control-plane`: Use AWS DynamoDB, Step Functions, EventBridge/SQS, ECS, and S3 as durable control plane. Cloudflare must not own durable run truth.
-2. `0002-agent-harness`: Use OpenAI Agents SDK for manager/specialist orchestration, Hermes as selected isolated ECS worker runtime, Codex CLI as MCP-backed coding tool, AWS for durable lifecycle truth.
-3. `0003-realtime-plane`: Use Cloudflare Workers plus Durable Objects or Cloudflare Agents SDK for realtime sync; keep AWS DynamoDB/S3 authoritative.
-4. `0004-workspace-storage`: S3 for durable artifact ledger; EFS only for hot mounted POSIX workspaces. Split mutable artifacts, immutable audit log, preview static, and research datasets.
-5. `0005-genui-protocol`: Use A2UI v0.8 stable wrapped in the platform event envelope; allowlisted component catalogs only.
-6. `0006-codex-openai-auth`: Use OpenAI API-key/service-account auth as production default; linked Codex/ChatGPT auth only later for trusted private runners.
-7. `0007-preview-hosting`: Use one wildcard ingress path and a preview-router service instead of per-project ALB listener rules/target groups.
+1. `0001-platform-control-plane`: AWS owns durable control plane state. Cloudflare
+   must not own durable run truth.
+2. `0002-agent-harness`: OpenAI Agents SDK-style orchestration, Hermes as an
+   isolated ECS worker target, Codex CLI as a coding tool where policy and auth
+   allow, with AWS as lifecycle truth.
+3. `0003-realtime-plane`: Cloudflare Workers plus Durable Objects or Cloudflare
+   Agents SDK for realtime sync, with DynamoDB/S3 authoritative.
+4. `0004-workspace-storage`: S3 for durable artifact ledger; EFS only for hot
+   mounted POSIX workspaces.
+5. `0005-genui-protocol`: A2UI-style messages wrapped in platform events and
+   restricted by allowlisted component catalogs.
+6. `0006-codex-openai-auth`: API key/service-account style auth as production
+   default; linked Codex/ChatGPT auth only later for trusted private runners.
+7. `0007-preview-hosting`: One wildcard ingress path and preview-router service
+   instead of per-project ALB listener rules.
 
 ## Protocol Package
 
-`packages/protocol` is the only actual package with logic today.
+`packages/protocol` currently owns:
 
-Schemas:
+- Event envelope schema.
+- Run status payload schema.
+- Tool approval payload schema.
+- Artifact payload schema.
+- A2UI delta wrapper schema.
+- Example run-status event.
+- AJV schema validation script.
 
-- `schemas/event-envelope.schema.json`
-  - Required: `id`, `type`, `seq`, `createdAt`, `orgId`, `userId`, `workspaceId`, `runId`, `source`, `payload`.
-  - Supports optional `projectId`, `taskId`, `correlationId`, `idempotencyKey`, and `payloadRef`.
-  - `seq` is server-assigned and monotonically increasing within a run or stream.
-  - `source.kind` enum: `control-api`, `agent-manager`, `worker`, `cloudflare`, `client`, `system`.
+Known protocol gaps:
 
-- `schemas/events/run-status.schema.json`
-  - Status enum: `queued`, `planning`, `waiting_for_approval`, `running`, `testing`, `archiving`, `succeeded`, `failed`, `cancelled`.
-  - Worker class enum: `agent-light`, `agent-code`, `agent-builder-heavy`, `agent-eval`, `preview-app`.
+- [ ] Event `type` is not strongly bound to one payload schema.
+- [ ] `payloadRef` behavior is not fully modeled for large payload replacement.
+- [ ] Negative fixtures are missing.
+- [ ] A2UI body validation is intentionally loose.
+- [ ] TypeScript and Dart model generation are not implemented.
+- [ ] Replay/gap-repair contract tests are not implemented.
 
-- `schemas/events/tool-approval.schema.json`
-  - Models both request and decision payloads.
-  - Risk enum: `low`, `medium`, `high`, `critical`.
-  - Decision enum: `approved`, `rejected`.
+## Current CDK Stack Shape
 
-- `schemas/events/artifact.schema.json`
-  - Artifact kind enum includes document, website, dataset, report, diff, miro-board, log, trace, other.
-  - Supports URI, content type, preview URL, sha256, bytes, and metadata.
+Default current stack ids:
 
-- `schemas/events/a2ui-delta.schema.json`
-  - Wraps A2UI messages by `surfaceId` and `catalogId`.
-  - Current allowed message forms: `createSurface`, `updateComponents`, `updateDataModel`, `deleteSurface`.
-  - Action policy enum: `none`, `auto`, `approval-required`.
+- `agents-cloud-dev-foundation`
+- `agents-cloud-dev-network`
+- `agents-cloud-dev-storage`
+- `agents-cloud-dev-state`
+- `agents-cloud-dev-cluster`
+- `agents-cloud-dev-runtime`
+- `agents-cloud-dev-orchestration`
 
-## Main Data Flow Intended
+Important note: the current environment label is `dev`, but the user has asked
+to proceed without a dev/prod split. Treat the existing environment as the
+single live environment unless an explicit migration/rename is planned.
+
+## Intended Data Flow
 
 ```text
 Client command
-  -> Cloudflare Worker / realtime edge command envelope
+  -> Cloudflare Worker or direct Control API during early phases
   -> AWS Control API
   -> DynamoDB run/task records
   -> Step Functions run state machine
-  -> AgentManager chooses worker class
   -> ECS worker starts
   -> Worker emits status/artifact/approval/A2UI events
   -> DynamoDB/S3 store durable truth
   -> EventBridge/SQS/Lambda event relay pushes small envelopes to Cloudflare
-  -> SessionDO/WorkspaceDO fans out over WebSocket
+  -> Durable Object fans out over WebSocket
   -> Flutter and Next.js render canonical event stream and A2UI surfaces
 ```
 
+Early implementation may call the Control API directly from the web app before
+Cloudflare realtime exists. That is acceptable as long as AWS remains durable
+truth and the API shape is compatible with later realtime fanout.
+
 ## What Is Next
 
-The repository's own `FOUNDATION_NEXT_STEPS.md` says the highest-value next part is not the full platform at once. It is the contract and control-plane skeleton that every later stack, service, and client depends on.
+The highest-priority missing backend component is the Control API.
 
 Recommended next implementation sequence:
 
-1. Tighten/freeze protocol contracts.
-2. Scaffold AWS CDK foundation.
-3. Add storage/state stacks.
-4. Add Control API skeleton.
-5. Add AgentManager scheduling skeleton.
-6. Add one simple Fargate worker that writes a test artifact and status event.
-7. Add event relay to Cloudflare.
-8. Add tiny Next.js status console.
-9. Add Flutter protocol client.
-10. Only after this, add Codex/Hermes/Miro/A2UI richness.
-
-## Immediate Build Step
-
-The next concrete code-building step should be:
-
-```bash
-pnpm install --frozen-lockfile
-pnpm contracts:test
-# then scaffold infra/cdk as a TypeScript CDK app
-# then add FoundationStack, StorageStack, StateStack, and dev environment config
-# then run cdk synth
-```
+1. Tighten protocol gaps that affect the API.
+2. Add `ControlApiStack`.
+3. Add authenticated `POST /runs`.
+4. Add `GET /runs/{runId}`.
+5. Add `GET /runs/{runId}/events`.
+6. Start the existing Step Functions state machine from the API.
+7. Replace the placeholder worker with a minimal real worker.
+8. Add event relay and Cloudflare realtime.
+9. Add Next.js command center.
+10. Add Flutter clients.
+11. Add Codex/Hermes/Miro/A2UI richness after the run lifecycle is real.
 
 ## Practical Warning
 
-Do not start by building the flashy agent UI, Hermes worker, Codex worker, or Miro bridge. Those will need the event schema, run ledger, storage model, and state-machine lifecycle underneath them. The fastest path to a real product is a boring but verifiable first run path: create run -> schedule worker -> emit status -> write artifact -> persist event -> stream status.
+Do not start by building the most visible pieces first. Miro, Codex, Hermes,
+Flutter, specialist agents, and generated dashboards all depend on the same
+core path:
+
+```text
+create run
+  -> schedule worker
+  -> emit status
+  -> write artifact
+  -> persist event
+  -> query/stream status
+```
+
+The fastest path to the real product is to make that path boring, durable,
+tested, and observable.

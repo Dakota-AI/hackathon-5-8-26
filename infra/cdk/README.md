@@ -46,13 +46,30 @@ Implemented and synthesizing:
   - First Step Functions state machine.
   - Runs the placeholder Fargate task with Step Functions `RUN_JOB` integration.
 
+- Optional `PreviewIngressStack`
+  - Gated by `AGENTS_CLOUD_PREVIEW_INGRESS_ENABLED=true`.
+  - Creates the public HTTPS ALB and placeholder ECS `preview-router` service.
+  - Supports Route 53-owned domains by creating the ACM certificate and alias
+    records in CDK.
+  - Supports Cloudflare/external-DNS domains by importing an already-issued ACM
+    certificate with `AGENTS_CLOUD_PREVIEW_CERTIFICATE_ARN` and leaving DNS
+    record creation outside CDK.
+
 Not implemented yet:
 
 - Real worker application image.
 - Lambda/API Gateway Control API.
 - EventBridge/SQS event relay.
 - Cloudflare realtime stack.
-- Amplify auth/app backend.
+- Direct integration from the CDK Control API to the Amplify Auth/Cognito user
+  pool.
+
+Related implementation that lives outside this package:
+
+- `infra/amplify` has a deployed Amplify Gen 2 Auth sandbox with Cognito email
+  login.
+- The repo root has an `amplify.yml` placeholder Hosting build that currently
+  deploys successfully.
 
 ## Commands
 
@@ -83,6 +100,19 @@ AGENTS_CLOUD_APP_NAME=agents-cloud    # default agents-cloud
 AGENTS_CLOUD_AWS_REGION=us-east-1     # default CDK_DEFAULT_REGION or us-east-1
 AGENTS_CLOUD_MAX_AZS=2                # default 2
 AGENTS_CLOUD_NAT_GATEWAYS=1           # default 1 for dev/staging, 2 for prod
+
+# Optional wildcard preview ingress.
+AGENTS_CLOUD_PREVIEW_INGRESS_ENABLED=true
+AGENTS_CLOUD_PREVIEW_BASE_DOMAIN=preview.solo-ceo.ai
+
+# Route 53 mode: provide both hosted-zone vars and omit certificate ARN.
+AGENTS_CLOUD_PREVIEW_HOSTED_ZONE_ID=Z1234567890EXAMPLE
+AGENTS_CLOUD_PREVIEW_HOSTED_ZONE_NAME=example.com
+
+# External DNS / Cloudflare mode: provide an issued ACM cert ARN and omit the
+# hosted-zone vars. DNS CNAMEs are then managed in Cloudflare or another DNS
+# provider, not by CDK.
+AGENTS_CLOUD_PREVIEW_CERTIFICATE_ARN=arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/...
 ```
 
 Example:
@@ -107,6 +137,92 @@ pnpm --filter @agents-cloud/infra-cdk exec cdk bootstrap aws://ACCOUNT_ID/REGION
 
 4. The deployment environment name is correct (`dev`, `staging`, or `prod`).
 5. The audit bucket retention/Object Lock behavior is acceptable. Object Lock must be enabled at bucket creation time and cannot be disabled later.
+
+## Cloudflare Preview Domain Runbook
+
+The selected preview base domain for the current dev environment is:
+
+```text
+preview.solo-ceo.ai
+*.preview.solo-ceo.ai
+```
+
+`solo-ceo.ai` is managed in Cloudflare, so the preview ingress uses external-DNS
+mode instead of Route 53 mode.
+
+1. Request an ACM certificate in `us-east-1` with both names:
+
+```bash
+AWS_PROFILE=agents-cloud-source \
+AWS_REGION=us-east-1 \
+aws acm request-certificate \
+  --domain-name preview.solo-ceo.ai \
+  --subject-alternative-names '*.preview.solo-ceo.ai' \
+  --validation-method DNS \
+  --idempotency-token soloceopreviewdev \
+  --query CertificateArn \
+  --output text
+```
+
+The current requested certificate is:
+
+```text
+arn:aws:acm:us-east-1:625250616301:certificate/3a26e529-124f-4513-a95a-8d11edab953c
+```
+
+2. In Cloudflare DNS for `solo-ceo.ai`, add the ACM validation CNAME exactly as
+   AWS reports it. For the current certificate:
+
+```text
+Type: CNAME
+Name: _0afc44d369ad2327e61fde6b37cda3ec.preview
+Target: _66ec516291c729371700b200bb0ce52a.jkddzztszm.acm-validations.aws
+Proxy status: DNS only
+TTL: Auto
+```
+
+Do not orange-cloud/proxy this validation record. The `preview` label belongs in
+the Name, not the Target. The resulting public FQDN must be:
+
+```text
+_0afc44d369ad2327e61fde6b37cda3ec.preview.solo-ceo.ai
+```
+
+3. Verify DNS and ACM issuance:
+
+```bash
+dig +short CNAME _0afc44d369ad2327e61fde6b37cda3ec.preview.solo-ceo.ai @1.1.1.1
+
+AWS_PROFILE=agents-cloud-source \
+AWS_REGION=us-east-1 \
+aws acm describe-certificate \
+  --certificate-arn arn:aws:acm:us-east-1:625250616301:certificate/3a26e529-124f-4513-a95a-8d11edab953c \
+  --query 'Certificate.Status' \
+  --output text
+```
+
+4. After ACM status is `ISSUED`, deploy the preview ingress stack:
+
+```bash
+cd /Users/sebastian/Developer/agents-cloud/infra/cdk
+
+AWS_PROFILE=agents-cloud-source \
+AWS_REGION=us-east-1 \
+AWS_DEFAULT_REGION=us-east-1 \
+AGENTS_CLOUD_AWS_REGION=us-east-1 \
+AGENTS_CLOUD_PREVIEW_INGRESS_ENABLED=true \
+AGENTS_CLOUD_PREVIEW_BASE_DOMAIN=preview.solo-ceo.ai \
+AGENTS_CLOUD_PREVIEW_CERTIFICATE_ARN=arn:aws:acm:us-east-1:625250616301:certificate/3a26e529-124f-4513-a95a-8d11edab953c \
+pnpm exec cdk deploy --app 'node dist/bin/agents-cloud-cdk.js' agents-cloud-dev-preview-ingress --require-approval never
+```
+
+5. After deploy, create the final Cloudflare CNAME records pointing at the ALB
+   DNS output:
+
+```text
+preview.solo-ceo.ai      CNAME  <preview-router-alb-dns-name>  DNS only initially
+*.preview.solo-ceo.ai    CNAME  <preview-router-alb-dns-name>  DNS only initially
+```
 
 ## Synthesized Stacks
 

@@ -1,5 +1,5 @@
 import { CfnOutput } from "aws-cdk-lib";
-import { Certificate, CertificateValidation } from "aws-cdk-lib/aws-certificatemanager";
+import { Certificate, CertificateValidation, type ICertificate } from "aws-cdk-lib/aws-certificatemanager";
 import { Port, SecurityGroup } from "aws-cdk-lib/aws-ec2";
 import { ContainerImage } from "aws-cdk-lib/aws-ecs";
 import { ApplicationLoadBalancedFargateService } from "aws-cdk-lib/aws-ecs-patterns";
@@ -29,25 +29,37 @@ export class PreviewIngressStack extends AgentsCloudStack {
     super(scope, id, props);
 
     const previewBaseDomain = props.config.previewIngress.baseDomain;
+    const certificateArn = props.config.previewIngress.certificateArn;
     const hostedZoneId = props.config.previewIngress.hostedZoneId;
     const hostedZoneName = props.config.previewIngress.hostedZoneName;
 
-    if (!previewBaseDomain || !hostedZoneId || !hostedZoneName) {
+    if (!previewBaseDomain) {
       throw new Error(
-        "Preview ingress is enabled but AGENTS_CLOUD_PREVIEW_BASE_DOMAIN, AGENTS_CLOUD_PREVIEW_HOSTED_ZONE_ID, and AGENTS_CLOUD_PREVIEW_HOSTED_ZONE_NAME are not all set."
+        "Preview ingress is enabled but AGENTS_CLOUD_PREVIEW_BASE_DOMAIN is not set."
       );
     }
 
-    const hostedZone = HostedZone.fromHostedZoneAttributes(this, "PreviewHostedZone", {
-      hostedZoneId,
-      zoneName: hostedZoneName
-    });
+    const hostedZone = hostedZoneId && hostedZoneName
+      ? HostedZone.fromHostedZoneAttributes(this, "PreviewHostedZone", {
+          hostedZoneId,
+          zoneName: hostedZoneName
+        })
+      : undefined;
 
-    const certificate = new Certificate(this, "PreviewWildcardCertificate", {
-      domainName: previewBaseDomain,
-      subjectAlternativeNames: [`*.${previewBaseDomain}`],
-      validation: CertificateValidation.fromDns(hostedZone)
-    });
+    const certificate: ICertificate = certificateArn
+      ? Certificate.fromCertificateArn(this, "PreviewWildcardCertificate", certificateArn)
+      : hostedZone
+        ? new Certificate(this, "PreviewWildcardCertificate", {
+            domainName: previewBaseDomain,
+            subjectAlternativeNames: [`*.${previewBaseDomain}`],
+            validation: CertificateValidation.fromDns(hostedZone)
+          })
+        : (() => {
+            throw new Error(
+              "Preview ingress with external DNS requires AGENTS_CLOUD_PREVIEW_CERTIFICATE_ARN. " +
+                "For Cloudflare-managed domains, request/validate an ACM certificate for the preview base domain and wildcard first, then pass its ARN."
+            );
+          })();
 
     const previewRouterSecurityGroup = new SecurityGroup(this, "PreviewRouterSecurityGroup", {
       vpc: props.network.vpc,
@@ -104,17 +116,19 @@ export class PreviewIngressStack extends AgentsCloudStack {
       })
     );
 
-    new ARecord(this, "PreviewWildcardAliasRecord", {
-      zone: hostedZone,
-      recordName: `*.${previewBaseDomain}`,
-      target: RecordTarget.fromAlias(new LoadBalancerTarget(this.previewRouterService.loadBalancer))
-    });
+    if (hostedZone) {
+      new ARecord(this, "PreviewWildcardAliasRecord", {
+        zone: hostedZone,
+        recordName: `*.${previewBaseDomain}`,
+        target: RecordTarget.fromAlias(new LoadBalancerTarget(this.previewRouterService.loadBalancer))
+      });
 
-    new ARecord(this, "PreviewBaseAliasRecord", {
-      zone: hostedZone,
-      recordName: previewBaseDomain,
-      target: RecordTarget.fromAlias(new LoadBalancerTarget(this.previewRouterService.loadBalancer))
-    });
+      new ARecord(this, "PreviewBaseAliasRecord", {
+        zone: hostedZone,
+        recordName: previewBaseDomain,
+        target: RecordTarget.fromAlias(new LoadBalancerTarget(this.previewRouterService.loadBalancer))
+      });
+    }
 
     new CfnOutput(this, "PreviewBaseDomain", {
       value: previewBaseDomain,

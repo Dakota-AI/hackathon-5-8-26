@@ -9,6 +9,27 @@ cdk.out/
 **/cdk.out/
 dist/
 **/dist/
+build/
+**/build/
+.dart_tool/
+**/.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+*.iml
+.idea/
+**/.idea/
+android/local.properties
+**/android/local.properties
 infra/cdk/cdk.context.json
 infra/amplify/.amplify/
 infra/amplify/amplify_outputs.*
+
+# Local Apple/TestFlight tooling and secrets
+.asc/config.json
+**/.asc/config.json
+**/.asc/export-options-app-store.plist
+*.p8
+tools/App-Store-Connect-CLI/
+tools/bin/asc

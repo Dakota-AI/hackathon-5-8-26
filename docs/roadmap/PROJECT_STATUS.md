@@ -2,6 +2,12 @@
 
 _Last updated: 2026-05-09_
 
+Read with:
+
+- `docs/roadmap/MASTER_SCOPE_AND_PROGRESS.md`
+- `docs/roadmap/FOUNDATION_NEXT_STEPS.md`
+- `docs/roadmap/CODEBASE_ORIENTATION.md`
+
 ## Executive Summary
 
 The project has moved from architecture/planning into a real deployed AWS foundation.
@@ -121,6 +127,8 @@ Commits already pushed:
 - `2606ccf fix: make Amplify Hosting build deployable`
 - `9b084b2 feat: document and scaffold preview hosting`
 - `531978b docs: update Amplify deployment status`
+- `7cc6822 docs: plan Amplify Next.js frontend`
+- `4f0a84c fix: keep Amplify pnpm cache small`
 
 These are pushed to:
 
@@ -163,9 +171,15 @@ Current runtime is a placeholder Fargate task. It proves orchestration works, bu
 
 ### Frontend Product UI
 
-Not built yet.
+Partially scaffolded locally, not connected to the backend yet.
 
 Research/planning exists at `docs/roadmap/AMPLIFY_NEXT_FRONTEND_PLAN.md` after reviewing `aws-samples/amplify-next-template` and current Amplify Gen 2/Next.js guidance.
+
+A local Flutter command-center scaffold exists under `apps/desktop_mobile`
+with planning pages and a local GenUI/A2UI preview surface. It currently passes
+`flutter analyze` and `flutter test`, but it is not wired to Amplify Auth, the
+Control API, Cloudflare realtime, push notifications, Miro, or real agent event
+streams.
 
 Needed first screens:
 

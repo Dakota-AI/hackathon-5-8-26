@@ -76,19 +76,22 @@ agents-cloud-dev-state-PreviewDeploymentsTable37B54DE6-WEG6QR56NMCX
 - [x] CDK now has optional preview ingress config in `loadConfig()`.
 - [x] CDK now has a `PreviewIngressStack` scaffold.
 - [x] `PreviewIngressStack` synthesizes when the required domain env vars are provided.
+- [x] `PreviewIngressStack` now supports Cloudflare/external-DNS domains by importing an existing ACM certificate ARN instead of requiring a Route 53 hosted zone.
 - [x] `PreviewIngressStack` includes:
-  - ACM certificate for preview base domain and wildcard SAN.
+  - Route 53 mode: ACM certificate for preview base domain and wildcard SAN.
+  - External DNS mode: imported ACM certificate via `AGENTS_CLOUD_PREVIEW_CERTIFICATE_ARN`.
   - public Application Load Balancer.
   - HTTPS listener.
   - HTTP-to-HTTPS redirect.
-  - wildcard Route 53 alias record.
-  - base-domain Route 53 alias record.
+  - Route 53 mode only: wildcard and base-domain Route 53 alias records.
   - ECS Fargate `preview-router` service.
   - read permission from preview-router to preview static S3 bucket.
   - read permission from preview-router to `PreviewDeploymentsTable`.
-- [ ] `PreviewIngressStack` is not deployed yet because no preview base domain was selected in this run.
+- [x] Final preview base domain selected: `preview.solo-ceo.ai`.
+- [ ] `PreviewIngressStack` is not deployed yet because `solo-ceo.ai` is managed in Cloudflare and the ACM certificate is still pending DNS validation.
 - [ ] No live wildcard DNS record currently points to the preview-router ALB.
-- [ ] No live ACM wildcard certificate has been issued for the final preview domain yet.
+- [x] ACM wildcard certificate has been requested for the final preview domain.
+- [ ] ACM wildcard certificate has not been issued yet.
 - [ ] The preview-router container is currently a placeholder nginx image, not the final host-header-aware router implementation.
 
 ### Available Route 53 Hosted Zones Seen In Account
@@ -230,17 +233,135 @@ pnpm exec cdk deploy --app 'node dist/bin/agents-cloud-cdk.js' --all --require-a
 
 ### Pick Domain
 
-- [ ] Choose final preview base domain.
+- [x] Choose final preview base domain.
 
-Recommended options from currently visible hosted zones:
+Selected:
 
-- [ ] `preview.vibe-coder.com`
-- [ ] `preview.upnextai.app`
-- [ ] another hosted-zone-backed subdomain
+```text
+preview.solo-ceo.ai
+*.preview.solo-ceo.ai
+```
+
+`solo-ceo.ai` is managed in Cloudflare, not Route 53. Therefore the Route 53 alias-record path does not apply unless DNS is migrated or delegated. The current path is external DNS mode:
+
+1. Request an ACM certificate in `us-east-1` for `preview.solo-ceo.ai` and `*.preview.solo-ceo.ai`.
+2. Add the ACM DNS validation CNAME records in Cloudflare.
+3. Wait until the ACM certificate status is `ISSUED`.
+4. Deploy the preview ingress stack with `AGENTS_CLOUD_PREVIEW_CERTIFICATE_ARN`.
+5. Add Cloudflare CNAME records pointing `preview.solo-ceo.ai` and `*.preview.solo-ceo.ai` at the ALB DNS output.
+
+Current ACM certificate:
+
+```text
+arn:aws:acm:us-east-1:625250616301:certificate/3a26e529-124f-4513-a95a-8d11edab953c
+```
+
+Current ACM status:
+
+```text
+PENDING_VALIDATION
+```
+
+Cloudflare DNS validation record needed:
+
+```text
+Type: CNAME
+Name: _0afc44d369ad2327e61fde6b37cda3ec.preview
+Target: _66ec516291c729371700b200bb0ce52a.jkddzztszm.acm-validations.aws
+Proxy: DNS only
+```
+
+The same ACM CNAME validates both `preview.solo-ceo.ai` and `*.preview.solo-ceo.ai`.
+
+Earlier recommended hosted-zone-backed options were `preview.vibe-coder.com` and
+`preview.upnextai.app`, but the selected domain is now `preview.solo-ceo.ai`.
+Because `solo-ceo.ai` is Cloudflare-managed, the active path is external DNS
+mode with an imported ACM certificate rather than Route 53 mode.
+
+#### Cloudflare DNS Correction Note
+
+The first manual Cloudflare record was exported as:
+
+```text
+_0afc44d369ad2327e61fde6b37cda3ec.solo-ceo.ai. CNAME _0afc44d369ad2327e61fde6b37cda3ec.preview.
+```
+
+That is not the ACM validation record AWS is waiting for. It puts the `preview`
+label in the target instead of the record name. The correct Cloudflare record is:
+
+```text
+_0afc44d369ad2327e61fde6b37cda3ec.preview.solo-ceo.ai. CNAME _66ec516291c729371700b200bb0ce52a.jkddzztszm.acm-validations.aws.
+```
+
+In the Cloudflare UI for the `solo-ceo.ai` zone, that means:
+
+```text
+Type: CNAME
+Name: _0afc44d369ad2327e61fde6b37cda3ec.preview
+Target: _66ec516291c729371700b200bb0ce52a.jkddzztszm.acm-validations.aws
+Proxy status: DNS only
+TTL: Auto
+```
+
+Verify the corrected record with:
+
+```bash
+dig +short CNAME _0afc44d369ad2327e61fde6b37cda3ec.preview.solo-ceo.ai @1.1.1.1
+```
+
+Expected output:
+
+```text
+_66ec516291c729371700b200bb0ce52a.jkddzztszm.acm-validations.aws.
+```
 
 ### Deploy Wildcard Ingress
 
-After choosing a domain, deploy with:
+Because `solo-ceo.ai` is on Cloudflare, deploy in two phases.
+
+#### Phase 1: Request ACM certificate and validate in Cloudflare
+
+Certificate already requested:
+
+```text
+arn:aws:acm:us-east-1:625250616301:certificate/3a26e529-124f-4513-a95a-8d11edab953c
+```
+
+Original request command:
+
+```bash
+AWS_PROFILE=agents-cloud-source \
+AWS_REGION=us-east-1 \
+aws acm request-certificate \
+  --domain-name preview.solo-ceo.ai \
+  --subject-alternative-names '*.preview.solo-ceo.ai' \
+  --validation-method DNS \
+  --idempotency-token soloceopreviewdev \
+  --query CertificateArn \
+  --output text
+```
+
+Then fetch the DNS validation records to create in Cloudflare:
+
+```bash
+AWS_PROFILE=agents-cloud-source \
+AWS_REGION=us-east-1 \
+aws acm describe-certificate \
+  --certificate-arn <certificate-arn> \
+  --query 'Certificate.DomainValidationOptions[].ResourceRecord' \
+  --output table
+```
+
+Add each returned CNAME in Cloudflare for `solo-ceo.ai`, then wait for issuance:
+
+```bash
+AWS_PROFILE=agents-cloud-source \
+AWS_REGION=us-east-1 \
+aws acm wait certificate-validated \
+  --certificate-arn arn:aws:acm:us-east-1:625250616301:certificate/3a26e529-124f-4513-a95a-8d11edab953c
+```
+
+#### Phase 2: Deploy the AWS ingress using the issued certificate
 
 ```bash
 cd /Users/sebastian/Developer/agents-cloud/infra/cdk
@@ -250,13 +371,35 @@ AWS_REGION=us-east-1 \
 AWS_DEFAULT_REGION=us-east-1 \
 AGENTS_CLOUD_AWS_REGION=us-east-1 \
 AGENTS_CLOUD_PREVIEW_INGRESS_ENABLED=true \
-AGENTS_CLOUD_PREVIEW_BASE_DOMAIN=preview.vibe-coder.com \
-AGENTS_CLOUD_PREVIEW_HOSTED_ZONE_ID=Z01344962LWJY5J5E6WE4 \
-AGENTS_CLOUD_PREVIEW_HOSTED_ZONE_NAME=vibe-coder.com \
+AGENTS_CLOUD_PREVIEW_BASE_DOMAIN=preview.solo-ceo.ai \
+AGENTS_CLOUD_PREVIEW_CERTIFICATE_ARN=arn:aws:acm:us-east-1:625250616301:certificate/3a26e529-124f-4513-a95a-8d11edab953c \
 pnpm exec cdk deploy --app 'node dist/bin/agents-cloud-cdk.js' agents-cloud-dev-preview-ingress --require-approval never
 ```
 
-Use the matching hosted zone id/name for whichever domain is chosen.
+After deploy, read the ALB DNS output:
+
+```bash
+AWS_PROFILE=agents-cloud-source \
+AWS_REGION=us-east-1 \
+aws cloudformation describe-stacks \
+  --stack-name agents-cloud-dev-preview-ingress \
+  --query "Stacks[0].Outputs[?OutputKey=='PreviewRouterLoadBalancerDnsName'].OutputValue" \
+  --output text
+```
+
+Create these Cloudflare DNS records:
+
+```text
+Type: CNAME
+Name: preview
+Target: <preview-router-alb-dns-name>
+Proxy: DNS only to start, then test Cloudflare proxy mode separately if desired.
+
+Type: CNAME
+Name: *.preview
+Target: <preview-router-alb-dns-name>
+Proxy: DNS only to start, then test Cloudflare proxy mode separately if desired.
+```
 
 ### Implement Real Preview Router
 

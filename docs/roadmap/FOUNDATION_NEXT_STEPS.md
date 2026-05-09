@@ -1,176 +1,203 @@
 # Foundation Next Steps
 
 Date: 2026-05-09
-Status: Active implementation starter plan
+Status: Current post-CDK implementation starter plan
 
-## 1. What We Can Start Now
+## Current Foundation State
 
-We can start laying the foundation now. The highest-value next part is not the full CDK stack yet. The right next part is the contract and control-plane skeleton that every later stack, service, and client depends on.
+The project is no longer at "CDK not started." A real CDK foundation exists,
+has been synthesized, deployed, and smoke-tested.
 
-The next implementation order should be:
+Completed:
 
-1. Protocol contracts.
-2. AWS CDK foundation.
-3. Cloudflare realtime skeleton.
-4. Control API skeleton.
-5. AgentManager ECS scheduling skeleton.
-6. One simple Fargate worker.
-7. Event relay from AWS to Cloudflare.
-8. Next.js status console.
-9. Flutter protocol client.
-10. Codex MCP worker.
-11. Hermes worker.
-12. A2UI renderer.
-13. Miro bridge.
-14. Self-improvement quarantine.
+- [x] Protocol package exists with canonical event schemas.
+- [x] AWS CDK app exists under `infra/cdk`.
+- [x] Foundation, network, storage, state, cluster, runtime, and orchestration
+  stacks exist.
+- [x] Step Functions to ECS Fargate smoke path succeeded.
+- [x] Amplify Auth sandbox exists.
+- [x] Amplify Hosting placeholder is green.
+- [x] Preview deployment registry table exists.
+- [x] Optional preview ingress stack is scaffolded.
 
-## 2. What Is Needed From The User
+Still missing:
 
-These are the only inputs that materially affect the next build steps.
+- [ ] Control API.
+- [ ] Real worker runtime.
+- [ ] Worker event/artifact writes.
+- [ ] Event relay.
+- [ ] Cloudflare realtime plane.
+- [ ] Next.js command center.
+- [ ] Production desktop/mobile client integration.
+- [ ] Miro bridge.
+- [ ] Codex/Hermes worker integrations.
+- [ ] Specialist-agent creation and self-improvement workflow.
 
-### Required Soon
+Use `MASTER_SCOPE_AND_PROGRESS.md` for the full scope and detailed checklists.
 
-- AWS account/region to target first.
-- Base domain for Route 53 wildcard previews.
-- Whether Route 53 currently owns the domain or DNS needs migration.
-- Preferred app name and environment names, for example `dev`, `staging`, `prod`.
-- Whether this will start as single-user/private or multi-user SaaS from day one.
-- GitHub App name or whether GitHub integration can wait.
-- Miro app/client credentials or whether Miro can stay stubbed.
-- OpenAI production auth mode:
-  - platform API key/service account first, recommended;
-  - optional linked Codex/ChatGPT auth later.
-- Cloudflare account id and zone/domain for Workers and Durable Objects.
+## Highest-Value Next Step
 
-### Can Wait
+Build the first app-callable durable run lifecycle.
 
-- Final billing model.
-- Full enterprise/org permission model.
-- Mobile app store packaging.
-- Advanced marketplace for specialist agents.
-- Full self-improvement promotion workflow.
+The next concrete slice is:
 
-## 3. Phase 0 Implementation Scope
+```text
+Amplify Auth user
+  -> Control API
+  -> DynamoDB run/event records
+  -> Step Functions execution
+  -> ECS worker
+  -> durable status/events/artifacts
+  -> queryable run detail
+```
 
-Phase 0 should produce a repo that is ready for real implementation:
+Do not begin with a large UI, Miro integration, Codex worker, Hermes worker, or
+custom specialist system. Those layers need the Control API, run ledger, event
+contract, and worker lifecycle underneath them.
 
-- ADRs for core decisions.
-- Protocol schemas.
-- Contract validation.
-- Monorepo layout.
-- CDK stack plan.
-- Cloudflare realtime plan.
-- Service ownership boundaries.
-- App ownership boundaries.
+## Implementation Order
 
-Current status:
+1. Tighten protocol contracts where the current package is too loose.
+2. Add `ControlApiStack` to `infra/cdk`.
+3. Add Lambda handlers for:
+   - `POST /runs`
+   - `GET /runs/{runId}`
+   - `GET /runs/{runId}/events`
+4. Validate Cognito JWTs from the Amplify Auth user pool.
+5. Write run and initial event rows to DynamoDB.
+6. Start the existing Step Functions state machine.
+7. Query ordered events with cursor support.
+8. Replace the placeholder ECS task with a minimal real worker.
+9. Have the worker write status events and one artifact to S3.
+10. Add event relay and Cloudflare realtime after durable polling works.
 
-- ADRs: started.
-- Protocol schemas: started.
-- Repo skeleton: started.
-- CDK code: not started.
-- Cloudflare code: not started.
-- App code: not started.
-- Service code: not started.
+## User Inputs Needed Soon
 
-## 4. Phase 1 Build Scope
+Required soon:
 
-Phase 1 should create a deployable backend foundation.
+- [ ] Preview base domain for wildcard website previews.
+- [ ] Confirmation that Route53 owns DNS for the chosen domain or that DNS can
+  be migrated.
+- [ ] Whether to keep the current single environment named `dev` or deliberately
+  rename/redeploy as `prod`.
+- [ ] First GitHub integration mode: GitHub App is preferred for multi-user;
+  OAuth/PAT can work only for early private usage.
+- [ ] Whether Miro can stay stubbed until the run lifecycle and clients exist.
+- [ ] Whether linked Codex/ChatGPT auth is private/trusted-runner only for the
+  first release.
+- [ ] Cloudflare account id and zone/domain when realtime work begins.
 
-Build:
+Can wait:
 
-- `infra/cdk` TypeScript CDK app.
-- `FoundationStack`.
-- `NetworkStack`.
-- `StorageStack`.
-- `StateStack`.
-- DynamoDB run/task/event tables.
-- S3 bucket split:
-  - live workspace artifacts;
-  - immutable audit log;
-  - preview static;
-  - research datasets.
-- KMS keys.
-- IAM role boundaries.
-- Basic outputs file consumed by later Cloudflare/Amplify setup.
+- [ ] Final billing model.
+- [ ] Full organization/team permission model.
+- [ ] App store packaging.
+- [ ] Advanced specialist marketplace.
+- [ ] Full self-improvement promotion workflow.
 
-Exit criteria:
-
-- `cdk synth` works.
-- The stack can deploy to a dev AWS account.
-- Buckets, tables, KMS keys, queues, and event bus exist.
-- No ECS workers yet.
-
-## 5. Phase 2 Build Scope
-
-Phase 2 should add the first durable run path.
+## Phase 1: Control API V1
 
 Build:
 
-- `services/control-api` skeleton.
-- `services/agent-manager` skeleton.
-- One Step Functions state machine.
-- One simple Fargate task definition.
-- One worker image that receives `RUN_ID`, emits status, writes an artifact to S3, and exits.
-- DynamoDB event writes.
+- [ ] API Gateway.
+- [ ] Cognito JWT authorizer.
+- [ ] `CreateRunFunction`.
+- [ ] `GetRunFunction`.
+- [ ] `ListRunEventsFunction`.
+- [ ] DynamoDB access helpers.
+- [ ] Step Functions start helper.
+- [ ] Request and response schemas.
+- [ ] Idempotency key support for run creation.
 
 Exit criteria:
 
-- User can create a run through the Control API.
-- AgentManager starts a Fargate task.
-- Worker writes a test artifact to S3.
-- Run status reaches `succeeded` or `failed`.
-- Event records can be queried from DynamoDB.
+- [ ] Authenticated user can create a run.
+- [ ] Unauthorized requests fail.
+- [ ] User cannot read another user's run.
+- [ ] Run row is created.
+- [ ] Initial status event is created.
+- [ ] Step Functions execution starts.
+- [ ] Ordered event query works.
+- [ ] `pnpm contracts:test` passes.
+- [ ] `pnpm infra:build` passes.
+- [ ] `pnpm infra:synth` passes.
 
-## 6. Phase 3 Build Scope
-
-Phase 3 should connect clients through realtime.
+## Phase 2: Minimal Real Worker
 
 Build:
 
-- `infra/cloudflare` Worker.
-- `SessionDO` or Cloudflare Agents SDK equivalent.
-- WebSocket endpoint.
-- Event relay from AWS to Cloudflare.
-- Replay cursor and gap repair stub.
-- Tiny Next.js run-status console.
+- [ ] Worker package or service entrypoint.
+- [ ] Dockerfile.
+- [ ] Runtime context contract.
+- [ ] DynamoDB event writer.
+- [ ] S3 artifact writer.
+- [ ] Terminal status handling.
+- [ ] Structured CloudWatch logs.
+- [ ] Container image build/push path.
 
 Exit criteria:
 
-- Web client sees run status changes live.
-- Disconnect/reconnect resumes from last sequence.
-- Large payloads are referenced through S3 pointers.
+- [ ] API-created run launches worker.
+- [ ] Worker writes `running`.
+- [ ] Worker writes a test artifact.
+- [ ] Worker writes `succeeded` or `failed`.
+- [ ] Artifact metadata can be queried.
+- [ ] Logs include run id and task id.
 
-## 7. Decisions Still Open
+## Phase 3: Realtime Skeleton
 
-These should be resolved with small ADR updates before implementation gets too deep:
+Build only after durable polling works:
 
-- Raw Durable Objects vs Cloudflare Agents SDK.
-- Exact CDK stack names and environment naming.
-- DynamoDB single-table vs focused tables for MVP.
-- Whether `control-api` starts as Lambda/API Gateway, ECS service, or Amplify function.
-- Whether `event-relay` starts as Lambda, Worker pull, or API callback.
-- Whether the first Next.js app should be Amplify-hosted, Vercel-hosted, or ECS-hosted.
-- Whether Flutter starts as one app package or separate packages for mobile/desktop.
+- [ ] EventBridge/SQS event path.
+- [ ] Event relay publisher.
+- [ ] Cloudflare Wrangler project.
+- [ ] Durable Object WebSocket endpoint.
+- [ ] Client cursor/replay protocol.
+- [ ] Gap repair through Control API.
 
-Recommended defaults:
+Exit criteria:
 
-- Raw Durable Objects first unless Cloudflare Agents SDK materially speeds up implementation.
-- Focused DynamoDB tables for MVP.
-- Control API as Lambda/API Gateway first.
-- Event relay as Lambda pushing to Cloudflare first.
-- Next.js local app first, then deploy after realtime contract is stable.
-- Flutter one shared app package.
+- [ ] Two clients receive the same status event.
+- [ ] Reconnect resumes from cursor.
+- [ ] Cloudflare does not own the only copy of any event.
 
-## 8. Immediate Next Command Path
+## Phase 4: First Product Surface
 
-The next concrete build step is:
+Build:
 
-1. Install workspace dependencies.
-2. Validate protocol schemas.
-3. Scaffold `infra/cdk` as a TypeScript CDK app.
-4. Add `FoundationStack`, `StorageStack`, and `StateStack`.
-5. Add environment config for `dev`.
-6. Run `cdk synth`.
+- [ ] Next.js app shell.
+- [ ] Amplify Auth login.
+- [ ] Create-run UI.
+- [ ] Run list.
+- [ ] Run detail timeline.
+- [ ] Artifact list.
+- [ ] WebSocket connection after realtime exists.
 
-After that, implement the first simple run path before adding Hermes, Codex, Miro, or A2UI rendering.
+Exit criteria:
+
+- [ ] User signs in.
+- [ ] User creates a run.
+- [ ] User sees status and artifacts.
+
+## Commands To Keep Green
+
+From repository root:
+
+```bash
+pnpm contracts:test
+pnpm infra:build
+pnpm infra:synth
+pnpm --filter @agents-cloud/infra-amplify run typecheck
+pnpm amplify:hosting:build
+```
+
+The first deployed API smoke test should prove:
+
+```text
+POST /runs
+  -> DynamoDB run row
+  -> DynamoDB event row
+  -> Step Functions execution
+  -> ECS task
+  -> terminal status visible through GET /runs/{runId}/events
+```

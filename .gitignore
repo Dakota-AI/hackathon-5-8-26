@@ -10,3 +10,5 @@ cdk.out/
 dist/
 **/dist/
 infra/cdk/cdk.context.json
+infra/amplify/.amplify/
+infra/amplify/amplify_outputs.*

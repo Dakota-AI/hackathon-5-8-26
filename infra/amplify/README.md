@@ -39,10 +39,11 @@ Keep heavy durable infrastructure in `infra/cdk`:
 
 Implemented now:
 
-- Minimal Amplify Gen 2 backend shell at `amplify/backend.ts`.
+- Amplify Gen 2 backend at `amplify/backend.ts`.
+- Cognito/Auth resource at `amplify/auth/resource.ts` with email sign-in enabled.
 - Local sandbox/deploy scripts wired to the `agents-cloud-source` AWS profile by default.
 
-No Auth/Data resources are defined yet. Add them when the first app client/control API flow is ready.
+No app-facing Data/API resources are defined here yet. The next durable backend connection should be the CDK-owned Control API, which will validate Cognito JWTs from this Amplify Auth layer before creating/querying runs.
 
 ## Commands
 
@@ -52,6 +53,20 @@ From the repo root:
 pnpm amplify:sandbox
 pnpm amplify:sandbox:delete
 ```
+
+For a one-shot sandbox deployment from the Amplify package directory:
+
+```bash
+AWS_PROFILE=agents-cloud-source AWS_REGION=us-east-1 pnpm exec ampx sandbox --profile agents-cloud-source --once
+```
+
+The current dev sandbox was deployed with identifier `sebastian` and stack name:
+
+```text
+amplify-agentscloudinfraamplify-sebastian-sandbox-9f28c677ec
+```
+
+The sandbox writes `amplify_outputs.json` locally for client development. That file is ignored because it is environment/sandbox-specific; generate it locally when wiring a frontend.
 
 The production/branch deploy command requires an existing Amplify Hosting app id:
 

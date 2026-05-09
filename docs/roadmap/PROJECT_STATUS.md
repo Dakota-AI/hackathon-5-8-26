@@ -118,6 +118,9 @@ Commits already pushed:
 
 - `61f14a6 feat: add AWS CDK foundation infrastructure`
 - `73e3877 feat: add Amplify Auth sandbox backend`
+- `2606ccf fix: make Amplify Hosting build deployable`
+- `9b084b2 feat: document and scaffold preview hosting`
+- `531978b docs: update Amplify deployment status`
 
 These are pushed to:
 
@@ -161,6 +164,8 @@ Current runtime is a placeholder Fargate task. It proves orchestration works, bu
 ### Frontend Product UI
 
 Not built yet.
+
+Research/planning exists at `docs/roadmap/AMPLIFY_NEXT_FRONTEND_PLAN.md` after reviewing `aws-samples/amplify-next-template` and current Amplify Gen 2/Next.js guidance.
 
 Needed first screens:
 

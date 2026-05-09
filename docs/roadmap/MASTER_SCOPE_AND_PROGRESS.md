@@ -118,6 +118,7 @@ Use these docs in this order:
 9. `docs/roadmap/DESKTOP_MOBILE_BOILERPLATE_STATUS.md`
 10. `docs/roadmap/DESKTOP_MOBILE_IMPLEMENTATION_PLAN.md`
 11. `docs/roadmap/TESTFLIGHT_SETUP.md`
+12. `docs/roadmap/WEB_APP_STATUS.md`
 
 The long roadmap and paperclip architecture docs are still useful, but this
 master document and `PROJECT_STATUS.md` reflect the current implementation

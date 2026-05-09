@@ -11,9 +11,10 @@ frontend:
       commands:
         - pnpm amplify:hosting:build
   artifacts:
-    baseDirectory: dist
+    baseDirectory: apps/web/.next
     files:
       - '**/*'
   cache:
     paths:
       - .pnpm-store/**/*
+      - apps/web/.next/cache/**/*

@@ -21,3 +21,4 @@ Core planning and audit docs:
 - [Desktop and Mobile Boilerplate Status](roadmap/DESKTOP_MOBILE_BOILERPLATE_STATUS.md)
 - [Desktop and Mobile Implementation Plan](roadmap/DESKTOP_MOBILE_IMPLEMENTATION_PLAN.md)
 - [TestFlight Setup](roadmap/TESTFLIGHT_SETUP.md)
+- [Web App Status](roadmap/WEB_APP_STATUS.md)

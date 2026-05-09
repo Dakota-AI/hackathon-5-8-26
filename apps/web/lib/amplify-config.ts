@@ -23,18 +23,24 @@ export function getAmplifyConfig(): ResourcesConfig | null {
     return null;
   }
 
+  const cognitoConfig = {
+    userPoolId: env.userPoolId,
+    userPoolClientId: env.userPoolClientId,
+    ...(env.identityPoolId
+      ? {
+          identityPoolId: env.identityPoolId,
+          allowGuestAccess: true
+        }
+      : {}),
+    signUpVerificationMethod: "code",
+    loginWith: {
+      email: true
+    }
+  } as NonNullable<ResourcesConfig["Auth"]>["Cognito"];
+
   return {
     Auth: {
-      Cognito: {
-        userPoolId: env.userPoolId,
-        userPoolClientId: env.userPoolClientId,
-        identityPoolId: env.identityPoolId,
-        allowGuestAccess: true,
-        signUpVerificationMethod: "code",
-        loginWith: {
-          email: true
-        }
-      }
+      Cognito: cognitoConfig
     }
-  };
+  } as ResourcesConfig;
 }

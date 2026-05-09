@@ -15,7 +15,10 @@
     "amplify:sandbox": "AWS_PROFILE=${AWS_PROFILE:-agents-cloud-source} AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} pnpm --filter @agents-cloud/infra-amplify run sandbox",
     "amplify:sandbox:delete": "AWS_PROFILE=${AWS_PROFILE:-agents-cloud-source} AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} pnpm --filter @agents-cloud/infra-amplify run sandbox:delete",
     "amplify:deploy": "AWS_PROFILE=${AWS_PROFILE:-agents-cloud-source} AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} pnpm --filter @agents-cloud/infra-amplify run deploy",
-    "amplify:hosting:build": "node scripts/build-amplify-placeholder.mjs"
+    "web:dev": "pnpm --filter @agents-cloud/web dev",
+    "web:typecheck": "pnpm --filter @agents-cloud/web typecheck",
+    "web:build": "pnpm --filter @agents-cloud/web build",
+    "amplify:hosting:build": "pnpm web:build"
   },
   "engines": {
     "node": ">=22.0.0"

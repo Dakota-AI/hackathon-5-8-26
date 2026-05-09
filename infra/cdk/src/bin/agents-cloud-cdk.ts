@@ -5,6 +5,7 @@ import { ClusterStack } from "../stacks/cluster-stack.js";
 import { FoundationStack } from "../stacks/foundation-stack.js";
 import { NetworkStack } from "../stacks/network-stack.js";
 import { OrchestrationStack } from "../stacks/orchestration-stack.js";
+import { PreviewIngressStack } from "../stacks/preview-ingress-stack.js";
 import { RuntimeStack } from "../stacks/runtime-stack.js";
 import { StateStack } from "../stacks/state-stack.js";
 import { StorageStack } from "../stacks/storage-stack.js";
@@ -30,6 +31,17 @@ const orchestration = new OrchestrationStack(app, stackName(config, "orchestrati
   runtime
 });
 
+const previewIngress = config.previewIngress.enabled
+  ? new PreviewIngressStack(app, stackName(config, "preview-ingress"), {
+      config,
+      env,
+      network,
+      cluster,
+      storage,
+      state
+    })
+  : undefined;
+
 network.addDependency(foundation);
 storage.addDependency(foundation);
 state.addDependency(foundation);
@@ -38,6 +50,11 @@ runtime.addDependency(cluster);
 runtime.addDependency(storage);
 runtime.addDependency(state);
 orchestration.addDependency(runtime);
+if (previewIngress) {
+  previewIngress.addDependency(cluster);
+  previewIngress.addDependency(storage);
+  previewIngress.addDependency(state);
+}
 
 Tags.of(app).add("Application", config.appName);
 Tags.of(app).add("Environment", config.envName);

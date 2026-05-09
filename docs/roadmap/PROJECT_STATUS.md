@@ -44,9 +44,9 @@ The following CDK stacks are deployed and verified as `CREATE_COMPLETE`:
 | `agents-cloud-dev-foundation` | Complete | Environment metadata, tags, base SSM parameters. |
 | `agents-cloud-dev-network` | Complete | VPC, subnets, NAT, S3/DynamoDB endpoints, worker security group. |
 | `agents-cloud-dev-storage` | Complete | S3 buckets for live artifacts, audit logs, previews, and research datasets. |
-| `agents-cloud-dev-state` | Complete | DynamoDB run/task/event/artifact/approval tables. |
+| `agents-cloud-dev-state` | Complete | DynamoDB run/task/event/artifact/approval tables plus preview deployment registry. |
 | `agents-cloud-dev-cluster` | Complete | ECS cluster and CloudWatch log group. |
-| `agents-cloud-dev-runtime` | Complete | Placeholder Fargate task definition and IAM grants. |
+| `agents-cloud-dev-runtime` | Complete | Placeholder Fargate task definition and IAM grants, including preview deployment registry access. |
 | `agents-cloud-dev-orchestration` | Complete | Step Functions state machine that launches the Fargate task. |
 
 Smoke test result:
@@ -62,6 +62,7 @@ Important deployed resources:
 - Worker security group: `sg-0ac59e4aaed3d4cce`
 - Live artifacts bucket: `agents-cloud-dev-storage-workspaceliveartifactsbuc-8br4g70cte0m`
 - Preview static bucket: `agents-cloud-dev-storage-previewstaticbucket42b307-oyrfiakvhnf8`
+- Preview deployments table: `agents-cloud-dev-state-PreviewDeploymentsTable37B54DE6-WEG6QR56NMCX`
 - Runtime task definition: `arn:aws:ecs:us-east-1:625250616301:task-definition/agents-cloud-dev-agent-runtime:1`
 
 ## Completed and Deployed: Amplify Auth Sandbox
@@ -167,11 +168,31 @@ Needed first screens:
 - events/progress stream,
 - artifacts list/viewer.
 
+### Wildcard Preview Ingress
+
+Partially built.
+
+Completed:
+
+- `PreviewDeploymentsTable` is defined and deployed.
+- Agent runtime role has read/write access to the preview deployment registry.
+- Optional `PreviewIngressStack` is scaffolded and gated by environment variables.
+- Preview ingress synth has been validated with dummy domain values.
+
+Not complete:
+
+- No preview base domain has been selected.
+- No wildcard DNS/ACM certificate/ALB preview ingress is deployed yet.
+- The preview-router container is still a placeholder nginx image.
+- No Control API or agent workflow writes preview deployment records yet.
+
+See `docs/roadmap/WILDCARD_PREVIEW_HOSTING_STATUS.md` for the detailed checklist.
+
 ### Amplify Hosting Production Build
 
-In progress.
+Complete for placeholder hosting.
 
-A placeholder hosting build is acceptable for now so the Amplify app can deploy successfully while the real frontend is built.
+The Amplify app now has an explicit `amplify.yml` build spec that enables Corepack, activates `pnpm@10.0.0`, installs with the frozen lockfile, and generates a temporary static hosting page. This keeps the branch deploy green while the real frontend is built.
 
 ### CI/CD
 
@@ -230,8 +251,8 @@ Avoid connecting the frontend directly to all core platform tables/resources.
 
 ## Next Best Step
 
-1. Fix Amplify Hosting build so the `agents-cloud` Amplify app deploys cleanly.
-2. Build `ControlApiStack` in CDK.
-3. Smoke test `POST /runs` through API Gateway/Lambda into Step Functions/ECS.
-4. Replace the placeholder runtime with a minimal real worker that writes status/events/artifacts.
+1. Build `ControlApiStack` in CDK.
+2. Smoke test `POST /runs` through API Gateway/Lambda into Step Functions/ECS.
+3. Replace the placeholder runtime with a minimal real worker that writes status/events/artifacts.
+4. Choose a preview base domain if wildcard preview hosting should go live.
 5. Build the first authenticated frontend dashboard against Amplify Auth + Control API.

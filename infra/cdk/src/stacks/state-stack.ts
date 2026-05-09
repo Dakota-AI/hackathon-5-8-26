@@ -11,6 +11,7 @@ export class StateStack extends AgentsCloudStack {
   public readonly eventsTable: Table;
   public readonly artifactsTable: Table;
   public readonly approvalsTable: Table;
+  public readonly previewDeploymentsTable: Table;
 
   public constructor(scope: Construct, id: string, props: AgentsCloudStackProps) {
     super(scope, id, props);
@@ -55,11 +56,26 @@ export class StateStack extends AgentsCloudStack {
       projectionType: ProjectionType.ALL
     });
 
+    this.previewDeploymentsTable = this.createTable("PreviewDeploymentsTable", "previewHost", AttributeType.STRING, "deploymentId", AttributeType.STRING, props);
+    this.previewDeploymentsTable.addGlobalSecondaryIndex({
+      indexName: "by-workspace-updated-at",
+      partitionKey: { name: "workspaceId", type: AttributeType.STRING },
+      sortKey: { name: "updatedAt", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+    this.previewDeploymentsTable.addGlobalSecondaryIndex({
+      indexName: "by-project-updated-at",
+      partitionKey: { name: "projectId", type: AttributeType.STRING },
+      sortKey: { name: "updatedAt", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+
     this.outputTable("RunsTableName", "runs-table-name", this.runsTable, props);
     this.outputTable("TasksTableName", "tasks-table-name", this.tasksTable, props);
     this.outputTable("EventsTableName", "events-table-name", this.eventsTable, props);
     this.outputTable("ArtifactsTableName", "artifacts-table-name", this.artifactsTable, props);
     this.outputTable("ApprovalsTableName", "approvals-table-name", this.approvalsTable, props);
+    this.outputTable("PreviewDeploymentsTableName", "preview-deployments-table-name", this.previewDeploymentsTable, props);
   }
 
   private createTable(

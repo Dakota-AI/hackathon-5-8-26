@@ -12,6 +12,12 @@ export interface AgentsCloudConfig {
     readonly maxAzs: number;
     readonly natGateways: number;
   };
+  readonly previewIngress: {
+    readonly enabled: boolean;
+    readonly baseDomain?: string;
+    readonly hostedZoneId?: string;
+    readonly hostedZoneName?: string;
+  };
   readonly tags: Record<string, string>;
 }
 
@@ -38,6 +44,12 @@ export function loadConfig(): AgentsCloudConfig {
     network: {
       maxAzs: Number(process.env.AGENTS_CLOUD_MAX_AZS ?? "2"),
       natGateways: Number(process.env.AGENTS_CLOUD_NAT_GATEWAYS ?? (isProd ? "2" : "1"))
+    },
+    previewIngress: {
+      enabled: process.env.AGENTS_CLOUD_PREVIEW_INGRESS_ENABLED === "true",
+      baseDomain: process.env.AGENTS_CLOUD_PREVIEW_BASE_DOMAIN,
+      hostedZoneId: process.env.AGENTS_CLOUD_PREVIEW_HOSTED_ZONE_ID,
+      hostedZoneName: process.env.AGENTS_CLOUD_PREVIEW_HOSTED_ZONE_NAME ?? process.env.AGENTS_CLOUD_PREVIEW_BASE_DOMAIN
     },
     tags: {
       Application: appName,

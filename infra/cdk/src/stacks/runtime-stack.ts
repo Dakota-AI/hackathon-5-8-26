@@ -55,6 +55,7 @@ export class RuntimeStack extends AgentsCloudStack {
     props.state.eventsTable.grantReadWriteData(this.agentRuntimeTaskDefinition.taskRole);
     props.state.artifactsTable.grantReadWriteData(this.agentRuntimeTaskDefinition.taskRole);
     props.state.approvalsTable.grantReadWriteData(this.agentRuntimeTaskDefinition.taskRole);
+    props.state.previewDeploymentsTable.grantReadWriteData(this.agentRuntimeTaskDefinition.taskRole);
 
     this.agentRuntimeTaskDefinition.taskRole.addToPrincipalPolicy(
       new PolicyStatement({

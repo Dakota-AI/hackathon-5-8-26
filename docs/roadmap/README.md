@@ -17,6 +17,7 @@ Planning documents for the autonomous agent cloud platform.
 - [Communication Event Contracts](COMMUNICATION_EVENT_CONTRACTS_2026_05_10.md)
 - [Voice Call And Audio Message Architecture](VOICE_CALL_AUDIO_MESSAGE_ARCHITECTURE_2026_05_10.md)
 - [Proactive Communication Remaining Work](PROACTIVE_COMMUNICATION_REMAINING_WORK_2026_05_10.md)
+- [Agent-Controlled GenUI Architecture And Phase Plan](AGENT_CONTROLLED_GENUI_ARCHITECTURE_AND_PHASE_PLAN_2026_05_10.md)
 - [Desktop and Mobile Boilerplate Status](DESKTOP_MOBILE_BOILERPLATE_STATUS.md)
 - [Desktop and Mobile Implementation Plan](DESKTOP_MOBILE_IMPLEMENTATION_PLAN.md)
 - [Implementation Roadmap](AUTONOMOUS_AGENT_PLATFORM_IMPLEMENTATION_ROADMAP.md)

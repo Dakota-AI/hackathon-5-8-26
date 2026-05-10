@@ -105,6 +105,12 @@ contract-correct.
   and CDK regression coverage. The provisioned product routes intentionally
   return `501 NotImplemented` until the next Control API phase adds real
   validation and tenant authorization.
+- The agent-controlled GenUI/client-control north star and technical phasing are
+  documented in
+  `docs/roadmap/AGENT_CONTROLLED_GENUI_ARCHITECTURE_AND_PHASE_PLAN_2026_05_10.md`;
+  this should guide future Surface protocol, layout validation, realtime patch,
+  client observation, client-control tool, main-agent authority, user takeover,
+  and Flutter/mobile orb work after the WorkItem/Surface foundations are safe.
 
 ### Not Complete
 
@@ -125,6 +131,8 @@ contract-correct.
   repair semantics.
 - Cancel/resume/retry semantics.
 - Artifact listing/download APIs.
+- Agent-controlled client sessions, observation snapshots, UI command protocol,
+  control leases, and main-agent-only client-control tools.
 - Observability, alarms, access logs, and operational runbooks.
 - Production deployment policy for live environment retention and deletion
   protection.

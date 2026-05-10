@@ -132,9 +132,10 @@ Use these docs in this order:
 15. `docs/roadmap/PAPERCLIP_KANBAN_UI_UX_AUDIT.md`
 16. `docs/roadmap/WORK_BOARD_FLUTTER_KANBAN_ROI_AUDIT.md`
 17. `docs/roadmap/AGENT_CREATED_INTERFACES_GENUI_PRODUCT_VISION.md`
-18. `docs/roadmap/BEST_NEXT_STEPS_EXECUTION_PLAN.md`
-19. `docs/roadmap/WORKITEM_GENUI_IMPLEMENTATION_PLAN.md`
-20. `docs/roadmap/WORKITEM_GENUI_INFRA_IMPLEMENTATION.md`
+18. `docs/roadmap/AGENT_CONTROLLED_GENUI_ARCHITECTURE_AND_PHASE_PLAN_2026_05_10.md`
+19. `docs/roadmap/BEST_NEXT_STEPS_EXECUTION_PLAN.md`
+20. `docs/roadmap/WORKITEM_GENUI_IMPLEMENTATION_PLAN.md`
+21. `docs/roadmap/WORKITEM_GENUI_INFRA_IMPLEMENTATION.md`
 
 The long roadmap and architecture docs are still useful, but this master
 document and `PROJECT_STATUS.md` reflect the current implementation position.

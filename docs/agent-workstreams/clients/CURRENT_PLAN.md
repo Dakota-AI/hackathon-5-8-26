@@ -13,6 +13,7 @@ Own the user-facing Agents Cloud experience across:
 - `apps/desktop_mobile/` Flutter desktop/mobile app.
 - client-facing roadmap/status docs.
 - client expectations against shared protocol, Control API, realtime, artifact, approval, and generated UI contracts.
+- future agent-controlled GenUI/client-control UX described in `docs/roadmap/AGENT_CONTROLLED_GENUI_ARCHITECTURE_AND_PHASE_PLAN_2026_05_10.md`, including Surface renderers, streaming patches, client observation, command application/rejection, user takeover states, and Flutter/mobile agent presence.
 
 This session is intentionally scope-first. The first required deliverable is this plan. Broad UI implementation should not start until this file exists and records current state, gaps, risks, dependencies, expected files, validation, and definition of done.
 
@@ -182,6 +183,7 @@ Current Flutter limitations:
 - Flutter client has no shared contract consumption path yet.
 - Artifact browser/download and approval decision APIs are not usable from clients yet.
 - Generated Surface contracts and validation outputs are not finalized for client renderers.
+- Agent-controlled UI contracts are not defined yet: clients need observation snapshots, command envelopes/results, control lease states, user takeover events, and a platform capability matrix before the main agent can safely drive web/desktop/mobile surfaces.
 
 ### State coverage gaps
 
@@ -216,6 +218,7 @@ Need fixture/test coverage for:
 - WorkItem Control API is not fully stable/deployed as product logic. Client should use fixture/adaptor boundary first.
 - Web and Flutter may diverge if each invents separate WorkItem/artifact/approval payload shapes.
 - Generated UI rendering is unsafe unless tied to server-validated, allowlisted Surface payloads.
+- Client-control will become unsafe if implemented as broad remote-control primitives; it must remain an allowlisted command protocol with client-side validation, explicit control leases, user takeover/yield behavior, and main-agent-only authority.
 - Current Flutter monolithic `main.dart` increases risk of broad, conflicting edits. Client slices should either be small targeted patches or first create a tested domain/repository layer before large refactors.
 
 ## Files Expected To Change

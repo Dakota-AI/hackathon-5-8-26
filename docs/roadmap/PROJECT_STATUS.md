@@ -31,6 +31,7 @@ Current state:
 - `docs/roadmap/WORKITEM_GENUI_IMPLEMENTATION_PLAN.md` expands that roadmap into an implementation-ready TDD plan with protocol, CDK, Control API, artifact, DataSourceRef, Surface validator, web, Flutter, approvals, validation, and subagent execution tasks.
 - `docs/roadmap/WORKITEM_GENUI_INFRA_IMPLEMENTATION.md` documents the completed infrastructure slice for that product spine: WorkItems/DataSources/Surfaces DynamoDB tables, WorkItem lookup GSIs, product-shaped Control API routes behind Cognito with explicit 501 placeholders, scoped IAM grants, Step Functions `workItemId` passthrough, runtime table environment variables, and CDK regression tests.
 - `docs/roadmap/FRONTEND_WIRING_BACKEND_READINESS_2026_05_10.md` records the current frontend/backend readiness decision: frontend wiring can proceed around live Auth, Control API, WorkItems, Runs, Events, Admin, Runners, and realtime, while backend work continues on artifact APIs, surface/data-source handlers, workspace authorization, runner token brokering, resident runner launch, and scoped model/provider execution.
+- `docs/roadmap/AGENT_CONTROLLED_GENUI_ARCHITECTURE_AND_PHASE_PLAN_2026_05_10.md` now captures the deeper north-star and phased technical plan for agent-controlled generated UI: validated Surface specs, strict layout rules, streaming Surface patches, client observation snapshots, client-control WebSocket commands, main-agent-only UI authority, user takeover/yield semantics, and the Flutter/mobile agent orb/voice experience.
 
 Approximate progress:
 

@@ -5,6 +5,24 @@ export interface QueryResult {
   readonly body: Record<string, unknown>;
 }
 
+export async function listRuns(deps: {
+  readonly store: ControlApiStore;
+  readonly user: AuthenticatedUser;
+  readonly workspaceId?: string;
+  readonly limit?: number;
+}): Promise<QueryResult> {
+  const runs = await deps.store.listRunsForUser({
+    userId: deps.user.userId,
+    workspaceId: cleanOptional(deps.workspaceId),
+    limit: clampLimit(deps.limit)
+  });
+
+  return {
+    statusCode: 200,
+    body: { runs }
+  };
+}
+
 export async function getRun(deps: {
   readonly store: ControlApiStore;
   readonly user: AuthenticatedUser;
@@ -137,6 +155,14 @@ function isAdminUser(user: AuthenticatedUser, adminEmails: readonly string[]): b
 
 function hasFailurePayload(payload: Record<string, unknown>): boolean {
   return payload.status === "failed" || payload.error !== undefined;
+}
+
+function cleanOptional(value: string | undefined): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function clampLimit(value: number | undefined): number {
+  return Math.min(Math.max(value ?? 50, 1), 100);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

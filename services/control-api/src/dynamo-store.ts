@@ -1,8 +1,30 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, ScanCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import type { AgentProfileRecord, ArtifactRecord, ArtifactStore, ControlApiStore, EventRecord, HostNodeRecord, RunRecord, TaskRecord, UserRunnerRecord, WorkItemRecord } from "./ports.js";
+import type {
+  AgentProfileRecord,
+  ApprovalRecord,
+  ArtifactRecord,
+  ArtifactStore,
+  ApprovalStore,
+  ControlApiStore,
+  DataSourceRefRecord,
+  DataSourceRefStore,
+  EventRecord,
+  HostNodeRecord,
+  RunRecord,
+  SurfaceRecord,
+  SurfaceStore,
+  TaskRecord,
+  UserRunnerRecord,
+  WorkItemRecord
+} from "./ports.js";
 
-export class DynamoControlApiStore implements ControlApiStore, ArtifactStore {
+export class DynamoControlApiStore implements
+  ControlApiStore,
+  ArtifactStore,
+  DataSourceRefStore,
+  SurfaceStore,
+  ApprovalStore {
   public constructor(
     private readonly client: DynamoDBDocumentClient,
     private readonly tables: {
@@ -11,6 +33,9 @@ export class DynamoControlApiStore implements ControlApiStore, ArtifactStore {
       readonly tasksTableName: string;
       readonly eventsTableName: string;
       readonly artifactsTableName?: string;
+      readonly dataSourcesTableName?: string;
+      readonly surfacesTableName?: string;
+      readonly approvalsTableName?: string;
       readonly hostNodesTableName?: string;
       readonly userRunnersTableName?: string;
       readonly agentProfilesTableName?: string;
@@ -23,6 +48,9 @@ export class DynamoControlApiStore implements ControlApiStore, ArtifactStore {
     const tasksTableName = mustEnv("TASKS_TABLE_NAME");
     const eventsTableName = mustEnv("EVENTS_TABLE_NAME");
     const artifactsTableName = mustEnv("ARTIFACTS_TABLE_NAME");
+    const dataSourcesTableName = mustEnv("DATA_SOURCES_TABLE_NAME");
+    const surfacesTableName = mustEnv("SURFACES_TABLE_NAME");
+    const approvalsTableName = mustEnv("APPROVALS_TABLE_NAME");
     const hostNodesTableName = mustEnv("HOST_NODES_TABLE_NAME");
     const userRunnersTableName = mustEnv("USER_RUNNERS_TABLE_NAME");
     const agentProfilesTableName = mustEnv("AGENT_PROFILES_TABLE_NAME");
@@ -32,6 +60,9 @@ export class DynamoControlApiStore implements ControlApiStore, ArtifactStore {
       tasksTableName,
       eventsTableName,
       artifactsTableName,
+      dataSourcesTableName,
+      surfacesTableName,
+      approvalsTableName,
       hostNodesTableName,
       userRunnersTableName,
       agentProfilesTableName
@@ -66,6 +97,170 @@ export class DynamoControlApiStore implements ControlApiStore, ArtifactStore {
       ...(input.workspaceId ? { FilterExpression: "workspaceId = :workspaceId" } : {})
     }));
     return (result.Items ?? []) as AgentProfileRecord[];
+  }
+
+  async putDataSourceRef(item: DataSourceRefRecord): Promise<void> {
+    await this.client.send(new PutCommand({
+      TableName: requiredTable(this.tables.dataSourcesTableName, "DATA_SOURCES_TABLE_NAME"),
+      Item: item,
+      ConditionExpression: "attribute_not_exists(workspaceId) AND attribute_not_exists(dataSourceId)"
+    }));
+  }
+
+  async getDataSourceRef(workspaceId: string, dataSourceId: string): Promise<DataSourceRefRecord | undefined> {
+    const result = await this.client.send(new GetCommand({
+      TableName: requiredTable(this.tables.dataSourcesTableName, "DATA_SOURCES_TABLE_NAME"),
+      Key: { workspaceId, dataSourceId }
+    }));
+    return result.Item as DataSourceRefRecord | undefined;
+  }
+
+  async listDataSourceRefsForWorkItem(input: { readonly workItemId: string; readonly limit?: number }): Promise<DataSourceRefRecord[]> {
+    const result = await this.client.send(new QueryCommand({
+      TableName: requiredTable(this.tables.dataSourcesTableName, "DATA_SOURCES_TABLE_NAME"),
+      IndexName: "by-workitem-created-at",
+      KeyConditionExpression: "workItemId = :workItemId",
+      ExpressionAttributeValues: { ":workItemId": input.workItemId },
+      Limit: clampDynamoLimit(input.limit),
+      ScanIndexForward: false
+    }));
+    return ((result.Items ?? []) as DataSourceRefRecord[]).filter(isCompleteDataSourceRefRecord);
+  }
+
+  async listDataSourceRefsForRun(input: { readonly runId: string; readonly limit?: number }): Promise<DataSourceRefRecord[]> {
+    const result = await this.client.send(new QueryCommand({
+      TableName: requiredTable(this.tables.dataSourcesTableName, "DATA_SOURCES_TABLE_NAME"),
+      IndexName: "by-run-created-at",
+      KeyConditionExpression: "runId = :runId",
+      ExpressionAttributeValues: { ":runId": input.runId },
+      Limit: clampDynamoLimit(input.limit),
+      ScanIndexForward: false
+    }));
+    return ((result.Items ?? []) as DataSourceRefRecord[]).filter(isCompleteDataSourceRefRecord);
+  }
+
+  async putSurface(item: SurfaceRecord): Promise<void> {
+    await this.client.send(new PutCommand({
+      TableName: requiredTable(this.tables.surfacesTableName, "SURFACES_TABLE_NAME"),
+      Item: item,
+      ConditionExpression: "attribute_not_exists(workspaceId) AND attribute_not_exists(surfaceId)"
+    }));
+  }
+
+  async getSurface(workspaceId: string, surfaceId: string): Promise<SurfaceRecord | undefined> {
+    const result = await this.client.send(new GetCommand({
+      TableName: requiredTable(this.tables.surfacesTableName, "SURFACES_TABLE_NAME"),
+      Key: { workspaceId, surfaceId }
+    }));
+    return isCompleteSurfaceRecord(result.Item) ? result.Item : undefined;
+  }
+
+  async updateSurface(input: { readonly workspaceId: string; readonly surfaceId: string; readonly updates: Partial<SurfaceRecord> }): Promise<SurfaceRecord | undefined> {
+    const names: Record<string, string> = {};
+    const values: Record<string, unknown> = {};
+    const assignments = Object.entries(input.updates)
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value], index) => {
+        const nameKey = `#n${index}`;
+        const valueKey = `:v${index}`;
+        names[nameKey] = key;
+        values[valueKey] = value;
+        return `${nameKey} = ${valueKey}`;
+      });
+
+    if (assignments.length === 0) {
+      return this.getSurface(input.workspaceId, input.surfaceId);
+    }
+
+    const result = await this.client.send(new UpdateCommand({
+      TableName: requiredTable(this.tables.surfacesTableName, "SURFACES_TABLE_NAME"),
+      Key: { workspaceId: input.workspaceId, surfaceId: input.surfaceId },
+      UpdateExpression: `SET ${assignments.join(", ")}`,
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: values,
+      ReturnValues: "ALL_NEW"
+    }));
+    return isCompleteSurfaceRecord(result.Attributes) ? result.Attributes : undefined;
+  }
+
+  async listSurfacesForWorkItem(input: { readonly workItemId: string; readonly limit?: number }): Promise<SurfaceRecord[]> {
+    const result = await this.client.send(new QueryCommand({
+      TableName: requiredTable(this.tables.surfacesTableName, "SURFACES_TABLE_NAME"),
+      IndexName: "by-workitem-updated-at",
+      KeyConditionExpression: "workItemId = :workItemId",
+      ExpressionAttributeValues: { ":workItemId": input.workItemId },
+      Limit: clampDynamoLimit(input.limit),
+      ScanIndexForward: false
+    }));
+    return ((result.Items ?? []) as SurfaceRecord[]).filter(isCompleteSurfaceRecord);
+  }
+
+  async listSurfacesForRun(input: { readonly runId: string; readonly limit?: number }): Promise<SurfaceRecord[]> {
+    const result = await this.client.send(new QueryCommand({
+      TableName: requiredTable(this.tables.surfacesTableName, "SURFACES_TABLE_NAME"),
+      IndexName: "by-run-updated-at",
+      KeyConditionExpression: "runId = :runId",
+      ExpressionAttributeValues: { ":runId": input.runId },
+      Limit: clampDynamoLimit(input.limit),
+      ScanIndexForward: false
+    }));
+    return ((result.Items ?? []) as SurfaceRecord[]).filter(isCompleteSurfaceRecord);
+  }
+
+  async putApproval(item: ApprovalRecord): Promise<void> {
+    await this.client.send(new PutCommand({
+      TableName: requiredTable(this.tables.approvalsTableName, "APPROVALS_TABLE_NAME"),
+      Item: item,
+      ConditionExpression: "attribute_not_exists(workspaceId) AND attribute_not_exists(approvalId)"
+    }));
+  }
+
+  async getApproval(workspaceId: string, approvalId: string): Promise<ApprovalRecord | undefined> {
+    const result = await this.client.send(new GetCommand({
+      TableName: requiredTable(this.tables.approvalsTableName, "APPROVALS_TABLE_NAME"),
+      Key: { workspaceId, approvalId }
+    }));
+    return isCompleteApprovalRecord(result.Item) ? result.Item : undefined;
+  }
+
+  async listApprovalsForRun(input: { readonly runId: string; readonly limit?: number }): Promise<ApprovalRecord[]> {
+    const result = await this.client.send(new QueryCommand({
+      TableName: requiredTable(this.tables.approvalsTableName, "APPROVALS_TABLE_NAME"),
+      IndexName: "by-run-created-at",
+      KeyConditionExpression: "runId = :runId",
+      ExpressionAttributeValues: { ":runId": input.runId },
+      Limit: clampDynamoLimit(input.limit),
+      ScanIndexForward: false
+    }));
+    return ((result.Items ?? []) as ApprovalRecord[]).filter(isCompleteApprovalRecord);
+  }
+
+  async updateApproval(input: { readonly workspaceId: string; readonly approvalId: string; readonly updates: Partial<ApprovalRecord> }): Promise<ApprovalRecord | undefined> {
+    const names: Record<string, string> = {};
+    const values: Record<string, unknown> = {};
+    const assignments = Object.entries(input.updates)
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value], index) => {
+        const nameKey = `#n${index}`;
+        const valueKey = `:v${index}`;
+        names[nameKey] = key;
+        values[valueKey] = value;
+        return `${nameKey} = ${valueKey}`;
+      });
+
+    if (assignments.length === 0) {
+      return this.getApproval(input.workspaceId, input.approvalId);
+    }
+
+    const result = await this.client.send(new UpdateCommand({
+      TableName: requiredTable(this.tables.approvalsTableName, "APPROVALS_TABLE_NAME"),
+      Key: { workspaceId: input.workspaceId, approvalId: input.approvalId },
+      UpdateExpression: `SET ${assignments.join(", ")}`,
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: values,
+      ReturnValues: "ALL_NEW"
+    }));
+    return isCompleteApprovalRecord(result.Attributes) ? result.Attributes : undefined;
   }
 
   async updateAgentProfileVersion(input: { readonly workspaceId: string; readonly profileId: string; readonly version: string; readonly updates: Partial<AgentProfileRecord> }): Promise<AgentProfileRecord | undefined> {
@@ -359,6 +554,28 @@ export class DynamoControlApiStore implements ControlApiStore, ArtifactStore {
     return (result.Items ?? []).filter(isCompleteRunRecord);
   }
 
+  async listRunsForUser(input: { readonly userId: string; readonly workspaceId?: string; readonly limit?: number }): Promise<RunRecord[]> {
+    const result = await this.client.send(new QueryCommand({
+      TableName: this.tables.runsTableName,
+      IndexName: "by-user-created-at",
+      KeyConditionExpression: "userId = :userId",
+      ExpressionAttributeValues: input.workspaceId
+        ? {
+            ":userId": input.userId,
+            ":workspaceId": input.workspaceId
+          }
+        : { ":userId": input.userId },
+      Limit: clampDynamoLimit(input.limit),
+      ScanIndexForward: false,
+      ...(input.workspaceId
+        ? {
+            FilterExpression: "workspaceId = :workspaceId"
+          }
+        : {})
+    }));
+    return (result.Items ?? []).filter(isCompleteRunRecord);
+  }
+
   async listEvents(runId: string, options: { readonly afterSeq?: number; readonly limit?: number } = {}): Promise<EventRecord[]> {
     const names: Record<string, string> = { "#runId": "runId" };
     const values: Record<string, unknown> = { ":runId": runId };
@@ -446,6 +663,65 @@ function isCompleteRunRecord(value: unknown): value is RunRecord {
     typeof item.runId === "string" &&
     typeof item.userId === "string" &&
     typeof item.status === "string" &&
+    typeof item.createdAt === "string" &&
+    typeof item.updatedAt === "string"
+  );
+}
+
+function isCompleteDataSourceRefRecord(value: unknown): value is DataSourceRefRecord {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const item = value as Partial<DataSourceRefRecord>;
+  return (
+    typeof item.workspaceId === "string" &&
+    typeof item.dataSourceId === "string" &&
+    typeof item.userId === "string" &&
+    typeof item.sourceKind === "string" &&
+    typeof item.source === "string" &&
+    typeof item.status === "string" &&
+    typeof item.createdAt === "string" &&
+    typeof item.updatedAt === "string"
+  );
+}
+
+function isCompleteSurfaceRecord(value: unknown): value is SurfaceRecord {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const item = value as Partial<SurfaceRecord>;
+  return (
+    typeof item.workspaceId === "string" &&
+    typeof item.surfaceId === "string" &&
+    typeof item.userId === "string" &&
+    typeof item.surfaceType === "string" &&
+    typeof item.name === "string" &&
+    typeof item.status === "string" &&
+    typeof item.definition === "object" &&
+    item.definition !== null &&
+    !Array.isArray(item.definition) &&
+    typeof item.workspaceStatus === "string" &&
+    typeof item.createdAt === "string" &&
+    typeof item.updatedAt === "string"
+  );
+}
+
+function isCompleteApprovalRecord(value: unknown): value is ApprovalRecord {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const item = value as Partial<ApprovalRecord>;
+  return (
+    typeof item.workspaceId === "string" &&
+    typeof item.approvalId === "string" &&
+    typeof item.runId === "string" &&
+    typeof item.userId === "string" &&
+    typeof item.toolName === "string" &&
+    typeof item.risk === "string" &&
+    typeof item.requestedAction === "string" &&
+    typeof item.status === "string" &&
+    typeof item.requestedBy === "string" &&
+    typeof item.requestedAt === "string" &&
     typeof item.createdAt === "string" &&
     typeof item.updatedAt === "string"
   );

@@ -132,6 +132,7 @@ describe("WorkItem/GenUI infrastructure", () => {
           ARTIFACTS_TABLE_NAME: Match.anyValue(),
           DATA_SOURCES_TABLE_NAME: Match.anyValue(),
           SURFACES_TABLE_NAME: Match.anyValue(),
+          APPROVALS_TABLE_NAME: Match.anyValue(),
           HOST_NODES_TABLE_NAME: Match.anyValue(),
           USER_RUNNERS_TABLE_NAME: Match.anyValue(),
           AGENT_PROFILES_TABLE_NAME: Match.anyValue(),
@@ -141,6 +142,7 @@ describe("WorkItem/GenUI infrastructure", () => {
     });
 
     for (const routeKey of [
+      "GET /runs",
       "POST /work-items",
       "GET /work-items",
       "GET /work-items/{workItemId}",
@@ -163,6 +165,10 @@ describe("WorkItem/GenUI infrastructure", () => {
       "GET /runs/{runId}/surfaces",
       "PATCH /surfaces/{surfaceId}",
       "POST /surfaces/{surfaceId}/publish",
+      "POST /approvals",
+      "GET /approvals/{approvalId}",
+      "GET /runs/{runId}/approvals",
+      "POST /approvals/{approvalId}/decision",
       "POST /runner-hosts",
       "POST /runner-hosts/{hostId}/heartbeat",
       "POST /user-runners",

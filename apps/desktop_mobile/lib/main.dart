@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:genui/genui.dart' as genui;
+import 'package:markdown_widget/markdown_widget.dart' as md;
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 import 'backend_config.dart';
@@ -503,6 +504,7 @@ class _HeroCommandPanel extends StatelessWidget {
                 color: _Palette.accent,
               ),
               _StatusPill(label: 'CEO workflow', color: _Palette.success),
+              _StatusPill(label: 'Markdown + GenUI', color: _Palette.info),
             ],
           ),
           SizedBox(height: isCompact ? 10 : 14),
@@ -517,36 +519,60 @@ class _HeroCommandPanel extends StatelessWidget {
           ),
           SizedBox(height: isCompact ? 8 : 10),
           const Text(
-            'Give one objective. Agents Cloud plans, staffs, runs, tests, publishes, and reports back.',
+            'A workflow-first command surface for objectives, streamed reasoning, approvals, generated UI, and durable artifacts.',
             style: TextStyle(color: _Palette.muted, fontSize: 13, height: 1.35),
           ),
           SizedBox(height: isCompact ? 10 : 12),
-          Container(
-            padding: EdgeInsets.all(isCompact ? 10 : 12),
-            decoration: BoxDecoration(
-              color: _Palette.input,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _Palette.border),
-            ),
-            child: const Row(
-              children: [
-                Icon(RadixIcons.magicWand, color: _Palette.accent, size: 18),
-                SizedBox(width: 9),
-                Expanded(
-                  child: Text(
-                    'Build a launch page, research competitors, test it, and prepare a CEO report.',
-                    style: TextStyle(
-                      color: _Palette.text,
-                      fontSize: 12,
-                      height: 1.35,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const _CommandComposerMock(),
         ],
       ),
+    );
+  }
+}
+
+class _CommandComposerMock extends StatelessWidget {
+  const _CommandComposerMock();
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).width < 760;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextArea(
+          initialValue:
+              'Build a launch page, research competitors, test it, publish a preview, and prepare a CEO report.',
+          minLines: isCompact ? 3 : 2,
+          maxLines: 5,
+          readOnly: true,
+          filled: true,
+          placeholder: const Text('Describe the strategic objective...'),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: const [
+            Button.primary(
+              enabled: false,
+              leading: Icon(RadixIcons.play, size: 14),
+              child: Text('Create run'),
+            ),
+            Button.outline(
+              enabled: false,
+              leading: Icon(RadixIcons.reader, size: 14),
+              child: Text('Draft report'),
+            ),
+            Button.outline(
+              enabled: false,
+              leading: Icon(RadixIcons.globe, size: 14),
+              child: Text('Preview site'),
+            ),
+            _StatusPill(label: 'fixture UI only', color: _Palette.warning),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -799,15 +825,33 @@ class _RunsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _PlaceholderPage(
-      title: 'Runs',
-      subtitle:
-          'Durable run ledger for CEO commands, team delegation, events, artifacts, and status.',
-      bullets: [
-        'POST /runs',
-        'GET /runs/{runId}',
-        'Live event stream',
-        'Run cancellation',
+    final isCompact = MediaQuery.sizeOf(context).width < 860;
+    return ListView(
+      padding: EdgeInsets.all(isCompact ? 8 : 14),
+      children: [
+        const _SectionHeader(
+          title: 'Runs',
+          subtitle:
+              'Durable run ledger projection: status, events, approvals, generated UI, and artifacts in one replayable surface.',
+        ),
+        const SizedBox(height: 12),
+        if (isCompact)
+          const Column(
+            children: [
+              _RunLedgerCard(),
+              SizedBox(height: 10),
+              _ChatSurfacePanel(),
+            ],
+          )
+        else
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 5, child: _RunLedgerCard()),
+              SizedBox(width: 12),
+              Expanded(flex: 7, child: _ChatSurfacePanel()),
+            ],
+          ),
       ],
     );
   }
@@ -837,15 +881,44 @@ class _ArtifactsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _PlaceholderPage(
-      title: 'Artifacts',
-      subtitle:
-          'Reports, websites, documents, code diffs, test outputs, screenshots, and preview deployments.',
-      bullets: [
-        'S3 artifact browser',
-        'Signed URLs',
-        'Website preview tiles',
-        'Document viewer',
+    final isCompact = MediaQuery.sizeOf(context).width < 900;
+    return ListView(
+      padding: EdgeInsets.all(isCompact ? 8 : 14),
+      children: [
+        const _SectionHeader(
+          title: 'Artifacts',
+          subtitle:
+              'Reports, websites, documents, code diffs, logs, screenshots, and preview deployments rendered as typed cards.',
+        ),
+        const SizedBox(height: 12),
+        if (isCompact)
+          const Column(
+            children: [
+              _ArtifactGalleryPanel(),
+              SizedBox(height: 10),
+              _MarkdownReportPanel(),
+              SizedBox(height: 10),
+              _BrowserPreviewPanel(),
+            ],
+          )
+        else
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 6, child: _ArtifactGalleryPanel()),
+              SizedBox(width: 12),
+              Expanded(
+                flex: 6,
+                child: Column(
+                  children: [
+                    _MarkdownReportPanel(),
+                    SizedBox(height: 12),
+                    _BrowserPreviewPanel(),
+                  ],
+                ),
+              ),
+            ],
+          ),
       ],
     );
   }
@@ -875,16 +948,530 @@ class _ApprovalsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _PlaceholderPage(
-      title: 'Approvals',
-      subtitle:
-          'Human-in-the-loop control for publishing, spending, tool creation, credential use, and GitHub writes.',
-      bullets: [
-        'Approve deployment',
-        'Reject risky action',
-        'Request revision',
-        'Audit every decision',
+    return const _ApprovalQueuePanel();
+  }
+}
+
+class _ChatSurfacePanel extends StatelessWidget {
+  const _ChatSurfacePanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          _SectionHeader(
+            title: 'Agent conversation surface',
+            subtitle:
+                'A shadcn-native chat/timeline hybrid for commands, streamed Markdown, tools, approvals, and final reports.',
+          ),
+          SizedBox(height: 12),
+          _ChatBubble(
+            role: 'You',
+            body:
+                'Create a launch site, validate the market, run quality checks, publish a preview, and write the executive memo.',
+            alignRight: true,
+          ),
+          SizedBox(height: 8),
+          _ChatBubble(
+            role: 'Executive agent',
+            body:
+                'I will split this into research, build, QA, preview publishing, and CEO-report workstreams. Approval is required before external publish.',
+          ),
+          SizedBox(height: 8),
+          _ToolCallCard(),
+          SizedBox(height: 12),
+          TextArea(
+            readOnly: true,
+            minLines: 2,
+            maxLines: 4,
+            filled: true,
+            initialValue:
+                'Ask for a status update, request a report, or tell the team to revise the artifact...',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatBubble extends StatelessWidget {
+  const _ChatBubble({
+    required this.role,
+    required this.body,
+    this.alignRight = false,
+  });
+
+  final String role;
+  final String body;
+  final bool alignRight;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Card(
+          filled: true,
+          fillColor: alignRight ? _Palette.input : const Color(0xFF101010),
+          borderColor: _Palette.border,
+          borderRadius: BorderRadius.circular(12),
+          padding: const EdgeInsets.all(12),
+          boxShadow: const [],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _StatusPill(label: role, color: _Palette.info),
+              const SizedBox(height: 8),
+              Text(body, style: const TextStyle(height: 1.35, fontSize: 12)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ToolCallCard extends StatelessWidget {
+  const _ToolCallCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      filled: true,
+      fillColor: _Palette.input,
+      borderColor: _Palette.border,
+      borderRadius: BorderRadius.circular(12),
+      padding: const EdgeInsets.all(12),
+      boxShadow: const [],
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(RadixIcons.gear, size: 16, color: _Palette.text),
+          SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Tool call: preview.publish',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Blocked until human approval. Future events map to approval.requested and artifact.created.',
+                  style: TextStyle(
+                    color: _Palette.muted,
+                    fontSize: 12,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _StatusPill(label: 'approval', color: _Palette.warning),
+        ],
+      ),
+    );
+  }
+}
+
+class _RunLedgerCard extends StatelessWidget {
+  const _RunLedgerCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _Panel(
+      padding: EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(
+            title: 'Run ledger',
+            subtitle:
+                'Fixture projection of Control API -> DynamoDB -> ECS -> artifacts; ready for event reducer wiring.',
+          ),
+          SizedBox(height: 14),
+          _TimelineItem(
+            status: 'queued',
+            title: 'Objective accepted by Control API',
+            body:
+                'Idempotent POST /runs creates durable run and first status event.',
+          ),
+          _TimelineItem(
+            status: 'running',
+            title: 'Worker emits canonical progress',
+            body:
+                'Runtime writes run.status and artifact.created events in order.',
+          ),
+          _TimelineItem(
+            status: 'approval',
+            title: 'Publish gate requires review',
+            body:
+                'Preview domains, GitHub writes, spend, and credentials pause for approval.',
+            isLast: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ArtifactGalleryPanel extends StatelessWidget {
+  const _ArtifactGalleryPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).width < 760;
+    final cards = const [
+      _ArtifactTile(
+        kind: 'report',
+        title: 'CEO launch memo.md',
+        body:
+            'Markdown report with assumptions, market risks, and recommended next moves.',
+        action: 'Open document',
+      ),
+      _ArtifactTile(
+        kind: 'website',
+        title: 'preview.solo-ceo.ai',
+        body:
+            'Generated launch site preview. Opens in the embedded browser shell.',
+        action: 'Preview site',
+      ),
+      _ArtifactTile(
+        kind: 'diff',
+        title: 'product-site.patch',
+        body:
+            'Code changes stay as reviewable artifacts before any GitHub write.',
+        action: 'Review diff',
+      ),
+      _ArtifactTile(
+        kind: 'log',
+        title: 'quality-gate.log',
+        body:
+            'Test, lint, deploy, and evaluator output is captured as an audit artifact.',
+        action: 'Open log',
+      ),
+    ];
+
+    return _Panel(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeader(
+            title: 'Artifact workspace',
+            subtitle:
+                'Typed cards first; signed URLs, downloads, previews, and share actions wire in behind Control API.',
+          ),
+          const SizedBox(height: 12),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: isCompact ? 1 : 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: isCompact ? 2.5 : 1.55,
+            children: cards,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ArtifactTile extends StatelessWidget {
+  const _ArtifactTile({
+    required this.kind,
+    required this.title,
+    required this.body,
+    required this.action,
+  });
+
+  final String kind;
+  final String title;
+  final String body;
+  final String action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      filled: true,
+      fillColor: _Palette.input,
+      borderColor: _Palette.border,
+      borderRadius: BorderRadius.circular(12),
+      padding: const EdgeInsets.all(12),
+      boxShadow: const [],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _StatusPill(label: kind, color: _Palette.info),
+              const _StatusPill(label: 'S3 pointer', color: _Palette.warning),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 5),
+          Expanded(
+            child: Text(
+              body,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _Palette.muted,
+                fontSize: 12,
+                height: 1.3,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Button.outline(enabled: false, child: Text(action)),
+        ],
+      ),
+    );
+  }
+}
+
+class _MarkdownReportPanel extends StatelessWidget {
+  const _MarkdownReportPanel();
+
+  static const _report = '''
+# Executive report preview
+
+Agents Cloud should render final agent output as rich Markdown, not plain text.
+
+| Artifact | Status | Owner |
+| --- | --- | --- |
+| Launch page | Drafted | Build agent |
+| Competitor scan | Running | Research agent |
+| CEO memo | Ready | Executive agent |
+
+```text
+quality gate -> tests -> preview -> approval -> publish
+```
+''';
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeader(
+            title: 'Markdown document viewer',
+            subtitle:
+                'markdown_widget renders reports, tables, code blocks, and research artifacts inside shadcn cards.',
+          ),
+          const SizedBox(height: 12),
+          Card(
+            filled: true,
+            fillColor: _Palette.input,
+            borderColor: _Palette.border,
+            borderRadius: BorderRadius.circular(12),
+            padding: const EdgeInsets.all(12),
+            boxShadow: const [],
+            child: const md.MarkdownBlock(data: _report, selectable: true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BrowserPreviewPanel extends StatelessWidget {
+  const _BrowserPreviewPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          _SectionHeader(
+            title: 'Embedded browser shell',
+            subtitle:
+                'WebView preview chrome for generated domains and artifact links; locked down with origin allowlists before live use.',
+          ),
+          SizedBox(height: 12),
+          _BrowserToolbar(),
+          SizedBox(height: 10),
+          _BrowserFramePlaceholder(),
+        ],
+      ),
+    );
+  }
+}
+
+class _BrowserToolbar extends StatelessWidget {
+  const _BrowserToolbar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      filled: true,
+      fillColor: _Palette.input,
+      borderColor: _Palette.border,
+      borderRadius: BorderRadius.circular(12),
+      padding: const EdgeInsets.all(8),
+      boxShadow: const [],
+      child: Row(
+        children: const [
+          Icon(RadixIcons.lockClosed, size: 14, color: _Palette.text),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'https://launch-demo.preview.solo-ceo.ai',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, color: _Palette.text),
+            ),
+          ),
+          SizedBox(width: 8),
+          Button.outline(enabled: false, child: Text('Open')),
+          SizedBox(width: 6),
+          Button.outline(enabled: false, child: Text('Share')),
+        ],
+      ),
+    );
+  }
+}
+
+class _BrowserFramePlaceholder extends StatelessWidget {
+  const _BrowserFramePlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      filled: true,
+      fillColor: const Color(0xFF0A0A0A),
+      borderColor: _Palette.border,
+      borderRadius: BorderRadius.circular(12),
+      padding: const EdgeInsets.all(16),
+      boxShadow: const [],
+      child: const SizedBox(
+        height: 170,
+        width: double.infinity,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(RadixIcons.globe, size: 28, color: _Palette.text),
+            SizedBox(height: 10),
+            Text(
+              'Embedded WebView preview slot',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            SizedBox(height: 6),
+            Text(
+              'webview_flutter is installed. Live preview activation waits for signed preview URLs, origin policy, and token isolation.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: _Palette.muted,
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ApprovalQueuePanel extends StatelessWidget {
+  const _ApprovalQueuePanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(14),
+      children: const [
+        _SectionHeader(
+          title: 'Approvals',
+          subtitle:
+              'Human-in-the-loop governance for publishing, spend, tool creation, credential use, and repository writes.',
+        ),
+        SizedBox(height: 12),
+        _ApprovalCard(
+          risk: 'external publish',
+          title: 'Publish launch-demo.preview.solo-ceo.ai',
+          body:
+              'The build agent finished a preview website. Publishing exposes generated content on a public preview domain.',
+        ),
+        SizedBox(height: 10),
+        _ApprovalCard(
+          risk: 'GitHub write',
+          title: 'Create pull request with generated site changes',
+          body:
+              'Code writes remain blocked until policy, tests, and scoped GitHub credentials are approved.',
+        ),
       ],
+    );
+  }
+}
+
+class _ApprovalCard extends StatelessWidget {
+  const _ApprovalCard({
+    required this.risk,
+    required this.title,
+    required this.body,
+  });
+
+  final String risk;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _StatusPill(label: risk, color: _Palette.warning),
+              const _StatusPill(
+                label: 'approval.requested',
+                color: _Palette.info,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            body,
+            style: const TextStyle(color: _Palette.muted, height: 1.35),
+          ),
+          const SizedBox(height: 12),
+          const Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Button.primary(enabled: false, child: Text('Approve')),
+              Button.outline(enabled: false, child: Text('Request revision')),
+              Button.destructive(enabled: false, child: Text('Deny')),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

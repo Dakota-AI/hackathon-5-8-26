@@ -31,7 +31,9 @@ apps/desktop_mobile
 - [x] Command-center shell added.
 - [x] command-center navigation added.
 - [x] Local GenUI/A2UI preview surface added.
-- [x] Widget tests added and passing for boot/navigation.
+- [x] First shadcn-native chat/command surface boilerplate added.
+- [x] First artifact workspace, Markdown document viewer, browser preview shell, and approval queue boilerplate added.
+- [x] Widget tests added and passing for boot/navigation/mobile/artifact-preview surfaces.
 - [x] `flutter analyze` passes.
 - [x] `flutter test` passes.
 - [ ] Amplify/Cognito Auth is not wired yet.
@@ -54,10 +56,15 @@ The app currently includes planning surfaces for:
 The Command Center includes:
 
 - CEO command workflow hero panel,
+- shadcn-native command composer mock,
 - control-plane status,
 - platform metrics,
 - autonomous run timeline,
-- live GenUI surface.
+- live GenUI surface,
+- first artifact workspace cards,
+- Markdown document viewer,
+- embedded browser preview shell,
+- approval queue cards.
 
 ## Design direction
 

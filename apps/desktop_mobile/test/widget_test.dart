@@ -75,6 +75,27 @@ void main() {
     expect(find.text('Files'), findsOneWidget);
     expect(find.text('Command Center'), findsNothing);
     expect(find.text('Command the company. Track every run.'), findsOneWidget);
-    expect(find.text('Live GenUI surface'), findsOneWidget);
+    expect(find.text('Create run'), findsOneWidget);
+  });
+
+  testWidgets('renders artifact, markdown, and browser preview surfaces', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 920);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const ProviderScope(child: AgentsCloudConsoleApp()),
+    );
+    await tester.tap(find.byType(NavigationItem).at(3));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Artifact workspace'), findsOneWidget);
+    expect(find.text('Markdown document viewer'), findsOneWidget);
+    expect(find.text('Embedded browser shell'), findsOneWidget);
+    expect(find.text('CEO launch memo.md'), findsOneWidget);
+    expect(find.text('Embedded WebView preview slot'), findsOneWidget);
   });
 }

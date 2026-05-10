@@ -2,6 +2,8 @@ import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 import {
   buildArtifactCreatedEvent,
   buildRunStatusEvent,
@@ -258,6 +260,7 @@ export class ResidentRunner {
       }
     };
     await this.persistState();
+    await this.persistAgentInstance(agent, "idle");
     return agent;
   }
 
@@ -282,6 +285,7 @@ export class ResidentRunner {
       agents: this.state.agents.map((agent) => agents.some((selected) => selected.agentId === agent.agentId) ? { ...agent, status: "running" } : agent)
     };
     await this.persistState();
+    await Promise.all(agents.map((agent) => this.persistAgentInstance({ ...agent, status: "running" }, "running")));
 
     events.push(await this.emitStatus(runId, taskId, "planning", "Resident runner accepted wake request.", 0.1));
 
@@ -348,6 +352,10 @@ export class ResidentRunner {
         }
       };
       await this.persistState();
+      const updatedAgent = this.state.agents.find((item) => item.agentId === agent.agentId);
+      if (updatedAgent) {
+        await this.persistAgentInstance(updatedAgent, updatedAgent.status, runId, record.finishedAt);
+      }
     }
 
     const finalStatus: RunStatus = heartbeats.some((heartbeat) => heartbeat.status === "failed") ? "failed" : "succeeded";
@@ -547,6 +555,42 @@ export class ResidentRunner {
     await writeFile(this.statePath, `${JSON.stringify(this.state, null, 2)}\n`);
   }
 
+  private async persistAgentInstance(
+    agent: ResidentAgentRuntimeState,
+    status: ResidentAgentRuntimeState["status"],
+    runId?: string,
+    timestamp?: string
+  ): Promise<void> {
+    const tableName = process.env.AGENT_INSTANCES_TABLE_NAME;
+    if (!tableName) {
+      return;
+    }
+    const now = timestamp ?? this.config.now();
+    const item = {
+      runnerId: this.config.runnerId,
+      agentId: agent.agentId,
+      userId: this.config.userId,
+      workspaceId: this.config.workspaceId,
+      orgId: this.config.orgId,
+      profileId: agent.profileId,
+      profileVersion: agent.profileVersion,
+      role: agent.role,
+      status,
+      userStatus: `${this.config.userId}#${status}`,
+      model: agent.model,
+      provider: agent.provider,
+      toolsets: agent.toolsets,
+      sessionId: agent.sessionId,
+      lastRunId: runId ?? agent.lastRunId,
+      lastHeartbeatAt: timestamp ?? agent.lastHeartbeatAt,
+      heartbeatCount: agent.heartbeatCount,
+      wakeBucket: `workspace#${this.config.workspaceId}`,
+      createdAt: now,
+      updatedAt: now
+    };
+    await dynamoDocumentClient().send(new PutCommand({ TableName: tableName, Item: withoutUndefined(item) }));
+  }
+
   private async writeProfile(profile: ResidentAgentProfile): Promise<void> {
     const path = confinedPath(`${profile.agentId}.json`, join(this.rootDir, "profiles"), "profile path");
     await mkdir(dirname(path), { recursive: true });
@@ -695,6 +739,16 @@ function copyEnv(target: NodeJS.ProcessEnv, key: string): void {
   if (value !== undefined) {
     target[key] = value;
   }
+}
+
+let cachedDynamoDocumentClient: DynamoDBDocumentClient | undefined;
+function dynamoDocumentClient(): DynamoDBDocumentClient {
+  cachedDynamoDocumentClient ??= DynamoDBDocumentClient.from(new DynamoDBClient({}));
+  return cachedDynamoDocumentClient;
+}
+
+function withoutUndefined<T extends Record<string, unknown>>(value: T): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
 }
 
 function requiredEnv(name: string, fallback: string): string {

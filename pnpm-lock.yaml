@@ -209,7 +209,13 @@ importers:
       '@aws-sdk/client-dynamodb':
         specifier: ^3.821.0
         version: 3.1045.0
+      '@aws-sdk/client-ecs':
+        specifier: ^3.821.0
+        version: 3.1045.0
       '@aws-sdk/client-s3':
+        specifier: ^3.821.0
+        version: 3.1045.0
+      '@aws-sdk/client-secrets-manager':
         specifier: ^3.821.0
         version: 3.1045.0
       '@aws-sdk/client-sfn':

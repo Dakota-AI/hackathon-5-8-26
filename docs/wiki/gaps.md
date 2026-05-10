@@ -82,11 +82,9 @@ These are different from the skip list — they're missing features that affect 
 
 1. ~~**No real model invocation in worker.**~~ ✅ **Resolved for resident runner** in commit `d8c2a22`. Image bakes Hermes; `runAdapter` defaults to `hermes-cli`; live ECS task reached OpenAI Codex. ⚠️ Stateless SFN-driven worker still uses smoke. ⚠️ Provider quota hit `429` — needs billing.
 
-2. **No userId → resident runner dispatch.** The "one ECS per user" architecture has every component built — image, TaskDef, IAM, Secrets Manager `RUNNER_API_TOKEN` token, `/wake` endpoint, manual ECS proof — except the dispatcher. **Currently the #1 hackathon blocker.**
-   - Fix: 1–2 days. See [multi-user-routing.md](flows/multi-user-routing.md), [HACKATHON_CRITICAL_PATH.md#2](HACKATHON_CRITICAL_PATH.md).
+2. ~~**No userId → resident runner dispatch.**~~ ✅ **Resolved.** `services/control-api/src/runner-dispatcher.ts` + `runner-dispatcher-aws.ts` (auto-creates `UserRunner` rows, calls `ecs:RunTask`, posts to `/wake`). Wired in `handlers.ts`; CDK grants IAM and injects env. 65 control-api tests pass.
 
-3. **Resident runner reachability layer.** Even after a task launches, no Cloud Map / Service Discovery / internal ALB target maps `userId → endpoint`. Lambda has no way to call `/wake` — needs the task to register its private IP in `UserRunnersTable` on boot, or a Cloud Map service.
-   - Fix: ~half day, included in #2.
+3. ~~**Resident runner reachability layer.**~~ ✅ **Resolved** with `EcsTaskObserver` — polls `ecs:DescribeTasks` for `privateIp` from container network interfaces. No Cloud Map, no ALB.
 
 #### Severity 2 — degrades the demo
 

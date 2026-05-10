@@ -69,8 +69,8 @@ Legend: ✅ done · ⚠️ partial · ❌ missing/stub · 🗑️ skip for hacka
 - [x] `assertSafeId` path-traversal guard (`1deaf57`) ✅
 - [x] `ResidentRunnerApiToken` Secrets Manager secret provisioned in CDK ✅
 - [x] **Live ECS proof:** task `agents-cloud-dev-resident-runner:4` reached OpenAI Codex (got 429 quota) ✅
-- [ ] **Resident runner dispatcher** — no `ecs:RunTask` caller for resident family ❌
-- [ ] Resident runner reachability (Cloud Map / internal ALB) ❌
+- [x] **Resident runner dispatcher** — `services/control-api/src/runner-dispatcher.ts` + `runner-dispatcher-aws.ts`. Auto-detects via `RESIDENT_RUNNER_TASK_DEFINITION_ARN` env. Implements `ExecutionStarter` so it slots into `create-run.ts` without modification. ✅
+- [x] Resident runner reachability — observer polls `ecs:DescribeTasks`, extracts `privateIp` from container network interfaces, writes to `UserRunnersTable`. No Cloud Map/ALB needed. ✅
 - [ ] Resident runner durable adapters (events → DDB, artifacts → S3, snapshots → `RunnerSnapshotsTable`) ❌
 - [ ] Resident runner inbox / wake timers ❌
 - [ ] Resident runner concurrent agents — wake() loop is serial ⚠️
@@ -204,9 +204,9 @@ After commit `b4d18fc` (auth + transport real, render paths still fixture):
 - [x] **`GET /runs` user listing** ✅
 - [x] Resident runner image with real Hermes baked + ECS proof ✅
 - [x] `RUNNER_API_TOKEN` provisioned via Secrets Manager (`ResidentRunnerApiToken`) ✅
-- [ ] **userId → resident-runner dispatch** — image proven, no automated caller ❌ blocking
-- [ ] **Resident runner reachability** (Cloud Map / internal ALB) ❌ blocking
-- [ ] **Resident runner durable adapters** (events to DDB, artifacts to S3, snapshots) ❌ blocking
+- [x] **userId → resident-runner dispatcher** — `services/control-api/src/runner-dispatcher.ts` + `runner-dispatcher-aws.ts` (auto-detects via `RESIDENT_RUNNER_TASK_DEFINITION_ARN`) ✅
+- [x] **Resident runner reachability via ECS observer** — polls `DescribeTasks` for privateIp; no Cloud Map/ALB needed ✅
+- [ ] **Resident runner durable adapters** (events to DDB, artifacts to S3, snapshots) ❌ remaining
 - [ ] `subscribeRun` ownership check ⚠️
 - [ ] Workspace membership validation (any user can pick any workspaceId today) ⚠️
 

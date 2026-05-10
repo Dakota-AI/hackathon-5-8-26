@@ -39,9 +39,13 @@ Goal recap (per user spec):
 
 ⚠️ Provider quota: the live exercise hit `429 usage_limit_reached` on Codex. Demo needs a billing account with quota.
 
-### 2. Per-user resident runner dispatch — see [multi-user-routing.md](flows/multi-user-routing.md)
+### 2. ~~Per-user resident runner dispatch~~ — ✅ DONE (see [multi-user-routing.md](flows/multi-user-routing.md))
 
-**This is now the #1 hackathon blocker.** The container, image, TaskDef, IAM, Secrets Manager token, and `/wake` endpoint are all real and proven. Only the automated caller is missing.
+**Implemented.** `services/control-api/src/runner-dispatcher.ts` (pure logic) + `runner-dispatcher-aws.ts` (AWS adapter with `EcsRunTaskLauncher`, `EcsTaskObserver`, `FetchWakeClient`, `CachedSecretsManagerTokenProvider`). Implements `ExecutionStarter` so `create-run.ts` is unchanged; `handlers.ts` auto-picks it when `RESIDENT_RUNNER_TASK_DEFINITION_ARN` is set. CDK grants IAM (ecs:RunTask, ecs:DescribeTasks/StopTask, iam:PassRole, secretsmanager:GetSecretValue) and injects env vars. 8 dedicated tests pass.
+
+**To activate after `cdk deploy`:** the new env vars are auto-set by CDK; no manual override needed. See [HACKATHON_CRITICAL_PATH.md#deployment-checklist](#deployment-checklist) below.
+
+### 2. ARCHIVED scope (kept for reference)
 
 Implement the missing dispatcher in `services/control-api/src/`:
 
@@ -131,16 +135,31 @@ See [gaps.md](gaps.md) for the full skip list.
 
 ---
 
+## Deployment checklist
+
+After `cdk deploy agents-cloud-dev-control-api` (which now depends on runtime/cluster/network):
+
+1. The createRun Lambda automatically receives `RESIDENT_RUNNER_TASK_DEFINITION_ARN` and friends as env vars; `DispatcherExecutionStarter.isConfigured()` returns true and the dispatcher path activates.
+2. First `POST /runs` from a user with no `UserRunner` row will:
+   - Auto-create a row with status=`starting`, placementTarget=`ecs-fargate`.
+   - Call `ecs:RunTask` against the resident family with overrides `USER_ID/RUNNER_ID/WORKSPACE_ID/ORG_ID`.
+   - Inject `RUNNER_API_TOKEN` and `HERMES_AUTH_JSON_BOOTSTRAP` via Secrets Manager.
+   - Poll `ecs:DescribeTasks` until `lastStatus=RUNNING` and the container ENI exposes a `privateIp`.
+   - Persist `privateIp`, `runnerEndpoint=http://<ip>:8787`, status=`running`, taskArn into `UserRunnersTable`.
+   - POST `/wake` with the bearer token.
+3. Subsequent `POST /runs` from the same user reuse the existing runner — no relaunch.
+4. **Pre-req:** the Hermes auth secret at `agents-cloud/<env>/resident-runner/hermes-auth-json` must contain a valid Hermes auth.json (the runner already pulls it via `HERMES_AUTH_JSON_BOOTSTRAP`). Without it, the container starts but the model call fails. See [agent-runtime.md](services/agent-runtime.md).
+
 ## Suggested time budget
 
-| # | Task | Rough size |
-|---|---|---|
-| 1 | Stateless smoke worker → real (or retire path) | 0–6 hr (already done in resident; pick a route) |
-| 2 | **Resident runner dispatcher** (#1 blocker) | 1–2 days |
-| 3 | Resident runner durable adapters | half day |
-| 4 | Flutter render paths consume real providers | half day per page |
-| 5 | Worker producers for `tool.approval` and `a2ui.delta` | half day |
+| # | Task | Rough size | Status |
+|---|---|---|---|
+| 1 | Stateless smoke worker → real (or retire path) | 0–6 hr | resident already real; smoke can be retired |
+| 2 | **Resident runner dispatcher** | 1–2 days | ✅ **shipped** |
+| 3 | Resident runner durable adapters | half day | remaining |
+| 4 | Flutter render paths consume real providers | half day per page | remaining |
+| 5 | Worker producers for `tool.approval` and `a2ui.delta` | half day | remaining |
 
-If you have **1 day**, ship #2 only. Demo from web. Single user via the dispatcher.
-If you have **2 days**, add #3 (durable adapters) so multi-user actually persists.
-If you have **3+ days**, add #5 (real approval / GenUI events) and #4 (Flutter parity).
+If you have **1 day**, ship #3 (durable adapters) so multi-user actually persists.
+If you have **2 days**, add #5 (real approval / GenUI events).
+If you have **3+ days**, add #4 (Flutter parity) and #1 (retire the SFN smoke path).

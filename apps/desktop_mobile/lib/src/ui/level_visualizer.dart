@@ -45,7 +45,7 @@ class _LevelVisualizerState extends State<LevelVisualizer>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
   double _t = 0;
-  late List<double> _gains = List<double>.filled(widget.numBars, 0);
+  late final List<double> _gains = List<double>.filled(widget.numBars, 0);
 
   // Per-bar phase offsets so the wave doesn't move uniformly.
   late final List<double> _phase = List.generate(
@@ -83,13 +83,16 @@ class _LevelVisualizerState extends State<LevelVisualizer>
       final centerBias =
           1.0 - ((i - (widget.numBars - 1) / 2).abs() / (widget.numBars / 2));
       if (widget.active) {
-        out[i] = (0.18 + wave * 0.18 + secondary * 0.10 + widget.level * 0.85)
-                .clamp(0.0, 1.0) *
+        out[i] =
+            (0.18 + wave * 0.18 + secondary * 0.10 + widget.level * 0.85).clamp(
+              0.0,
+              1.0,
+            ) *
             (0.55 + centerBias * 0.45);
       } else {
         // Idle: gentle wave, never zero so we always feel "alive".
-        out[i] = (0.10 + wave * 0.12 + secondary * 0.08) *
-            (0.6 + centerBias * 0.4);
+        out[i] =
+            (0.10 + wave * 0.12 + secondary * 0.08) * (0.6 + centerBias * 0.4);
       }
     }
     return out;

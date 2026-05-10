@@ -155,7 +155,15 @@ export async function heartbeatUserRunner(input: {
   readonly user: AuthenticatedUser;
   readonly now: () => string;
   readonly runnerId: string;
-  readonly request: { readonly status?: string; readonly hostId?: string; readonly placementTarget?: string; readonly health?: Record<string, unknown> };
+  readonly request: {
+    readonly status?: string;
+    readonly hostId?: string;
+    readonly placementTarget?: string;
+    readonly health?: Record<string, unknown>;
+    readonly privateIp?: string;
+    readonly runnerEndpoint?: string;
+    readonly taskArn?: string;
+  };
 }): Promise<Result> {
   const existing = await input.store.getUserRunner(input.user.userId, input.runnerId);
   if (!existing) {
@@ -165,6 +173,9 @@ export async function heartbeatUserRunner(input: {
   const status = clean(input.request.status) ?? existing.status;
   const hostId = clean(input.request.hostId) ?? existing.hostId;
   const placementTarget = clean(input.request.placementTarget) ?? existing.placementTarget;
+  const privateIp = clean(input.request.privateIp) ?? existing.privateIp;
+  const runnerEndpoint = clean(input.request.runnerEndpoint) ?? existing.runnerEndpoint ?? (privateIp ? `http://${privateIp}:8787` : undefined);
+  const taskArn = clean(input.request.taskArn) ?? existing.taskArn;
   const record: UserRunnerRecord = withoutUndefined({
     ...existing,
     status,
@@ -172,6 +183,9 @@ export async function heartbeatUserRunner(input: {
     placementTarget,
     hostStatus: `${hostId ?? "unassigned"}#${status}`,
     health: input.request.health ?? existing.health,
+    privateIp,
+    runnerEndpoint,
+    taskArn,
     lastHeartbeatAt: now,
     updatedAt: now
   });

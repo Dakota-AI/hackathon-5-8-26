@@ -12,6 +12,7 @@ import type {
   EventRecord,
   HostNodeRecord,
   RunRecord,
+  RunnerStateStore,
   SurfaceRecord,
   SurfaceStore,
   TaskRecord,
@@ -24,7 +25,8 @@ export class DynamoControlApiStore implements
   ArtifactStore,
   DataSourceRefStore,
   SurfaceStore,
-  ApprovalStore {
+  ApprovalStore,
+  RunnerStateStore {
   public constructor(
     private readonly client: DynamoDBDocumentClient,
     private readonly tables: {

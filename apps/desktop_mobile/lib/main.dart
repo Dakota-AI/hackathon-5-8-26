@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:fl_chart/fl_chart.dart' as fl;
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:genui/genui.dart' as genui;
@@ -48,9 +49,8 @@ Future<void> main() async {
 }
 
 enum ConsolePage {
+  chat,
   work,
-  agentChat,
-  voiceCall,
   kanban,
   genuiLab,
   browser,
@@ -66,9 +66,7 @@ final selectedPageProvider = StateProvider<ConsolePage>(
   (ref) => ConsolePage.work,
 );
 
-final selectedAgentIdProvider = StateProvider<String?>(
-  (ref) => _fixtureAgents.first.id,
-);
+final selectedAgentIdProvider = StateProvider<String?>((ref) => null);
 
 final sidebarCollapsedProvider = StateProvider<bool>((ref) => false);
 
@@ -79,7 +77,7 @@ class AgentsCloudConsoleApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ProviderScope(
       child: ShadcnApp(
-        title: 'Agents Cloud',
+        title: '',
         debugShowCheckedModeBanner: false,
         themeMode: ThemeMode.dark,
         theme: const ThemeData.dark(
@@ -139,8 +137,6 @@ class ConsoleShell extends ConsumerWidget {
         child: isCompact
             ? Column(
                 children: [
-                  const _MobileTopBar(),
-                  const Divider(height: 1, color: _Palette.border),
                   Expanded(child: _PageBody(page: selectedPage)),
                   const Divider(height: 1, color: _Palette.border),
                   _MobileNavBar(selectedPage: selectedPage),
@@ -208,8 +204,8 @@ class _Sidebar extends ConsumerWidget {
             collapsed: collapsed,
           ),
           _NavButton(
-            label: 'Approvals',
-            icon: RadixIcons.checkCircled,
+            label: 'Inbox',
+            icon: RadixIcons.envelopeClosed,
             page: ConsolePage.approvals,
             selected: selectedPage == ConsolePage.approvals,
             collapsed: collapsed,
@@ -219,14 +215,6 @@ class _Sidebar extends ConsumerWidget {
             icon: RadixIcons.globe,
             page: ConsolePage.browser,
             selected: selectedPage == ConsolePage.browser,
-            collapsed: collapsed,
-          ),
-          const SizedBox(height: 8),
-          _NavButton(
-            label: 'GenUI Lab',
-            icon: RadixIcons.component1,
-            page: ConsolePage.genuiLab,
-            selected: selectedPage == ConsolePage.genuiLab,
             collapsed: collapsed,
           ),
           _NavButton(
@@ -263,8 +251,10 @@ class _SidebarCollapseButton extends ConsumerWidget {
     final button = GestureDetector(
       key: const ValueKey('sidebar-collapse-button'),
       behavior: HitTestBehavior.opaque,
-      onTap: () =>
-          ref.read(sidebarCollapsedProvider.notifier).state = !collapsed,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        ref.read(sidebarCollapsedProvider.notifier).state = !collapsed;
+      },
       child: Container(
         height: 38,
         width: collapsed ? 44 : double.infinity,
@@ -279,16 +269,9 @@ class _SidebarCollapseButton extends ConsumerWidget {
               ? MainAxisAlignment.center
               : MainAxisAlignment.spaceBetween,
           children: [
-            const Icon(RadixIcons.cube, size: 16, color: _Palette.text),
+            const Icon(RadixIcons.target, size: 16, color: _Palette.text),
             if (!collapsed) ...[
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'Agents Cloud',
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
-                ),
-              ),
+              const Spacer(),
               const Icon(
                 RadixIcons.doubleArrowLeft,
                 size: 14,
@@ -303,24 +286,6 @@ class _SidebarCollapseButton extends ConsumerWidget {
       label: collapsed ? 'Expand navigation' : 'Collapse navigation',
       enabled: collapsed,
       child: button,
-    );
-  }
-}
-
-class _LogoMark extends StatelessWidget {
-  const _LogoMark();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 34,
-      height: 34,
-      decoration: BoxDecoration(
-        color: _Palette.accent.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _Palette.accent.withValues(alpha: 0.35)),
-      ),
-      child: const Icon(RadixIcons.cube, color: _Palette.accent, size: 19),
     );
   }
 }
@@ -347,7 +312,9 @@ class _NavButton extends ConsumerWidget {
       child: NavigationItem(
         selected: selected,
         onChanged: (value) {
-          if (value) ref.read(selectedPageProvider.notifier).state = page;
+          if (!value || selected) return;
+          HapticFeedback.selectionClick();
+          ref.read(selectedPageProvider.notifier).state = page;
         },
         label: collapsed ? null : Text(label, overflow: TextOverflow.ellipsis),
         child: Icon(icon, size: 17),
@@ -421,33 +388,6 @@ class _TopBar extends ConsumerWidget {
   }
 }
 
-class _MobileTopBar extends StatelessWidget {
-  const _MobileTopBar();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      color: _Palette.sidebar,
-      child: const Row(
-        children: [
-          _LogoMark(),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Agents Cloud',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _MobileNavBar extends ConsumerWidget {
   const _MobileNavBar({required this.selectedPage});
 
@@ -463,28 +403,35 @@ class _MobileNavBar extends ConsumerWidget {
         children: [
           _MobileNavItem(
             label: 'Work',
-            icon: RadixIcons.dashboard,
+            icon: RadixIcons.layout,
+            selected: selectedPage == ConsolePage.kanban,
+            onTap: () => _selectMobilePage(ref, ConsolePage.kanban),
+          ),
+          _MobileNavItem(
+            label: 'Chat',
+            icon: RadixIcons.chatBubble,
+            selected: selectedPage == ConsolePage.chat,
+            emphasized: true,
+            onTap: () => _selectMobilePage(ref, ConsolePage.chat),
+          ),
+          _MobileNavItem(
+            label: 'Agents',
+            icon: RadixIcons.group,
             selected: selectedPage == ConsolePage.work,
-            onTap: () => ref.read(selectedPageProvider.notifier).state =
-                ConsolePage.work,
-          ),
-          _MobileNavItem(
-            label: 'GenUI',
-            icon: RadixIcons.component1,
-            selected: selectedPage == ConsolePage.genuiLab,
-            onTap: () => ref.read(selectedPageProvider.notifier).state =
-                ConsolePage.genuiLab,
-          ),
-          _MobileNavItem(
-            label: 'Browser',
-            icon: RadixIcons.globe,
-            selected: selectedPage == ConsolePage.browser,
-            onTap: () => ref.read(selectedPageProvider.notifier).state =
-                ConsolePage.browser,
+            onTap: () => _selectMobilePage(ref, ConsolePage.work),
           ),
         ],
       ),
     );
+  }
+
+  void _selectMobilePage(WidgetRef ref, ConsolePage page) {
+    if (selectedPage == page) return;
+    HapticFeedback.selectionClick();
+    if (page != ConsolePage.work) {
+      ref.read(selectedAgentIdProvider.notifier).state = null;
+    }
+    ref.read(selectedPageProvider.notifier).state = page;
   }
 }
 
@@ -494,12 +441,14 @@ class _MobileNavItem extends StatelessWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
+    this.emphasized = false,
   });
 
   final String label;
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
@@ -511,10 +460,16 @@ class _MobileNavItem extends StatelessWidget {
           margin: const EdgeInsets.symmetric(horizontal: 2),
           padding: const EdgeInsets.symmetric(vertical: 5),
           decoration: BoxDecoration(
-            color: selected ? _Palette.input : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
+            color: selected
+                ? _Palette.input
+                : (emphasized
+                      ? _Palette.input.withValues(alpha: 0.45)
+                      : Colors.transparent),
+            borderRadius: BorderRadius.circular(emphasized ? 12 : 10),
             border: Border.all(
-              color: selected ? _Palette.border : Colors.transparent,
+              color: selected || emphasized
+                  ? _Palette.border
+                  : Colors.transparent,
             ),
           ),
           child: Column(
@@ -552,9 +507,8 @@ class _PageBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (page) {
+      ConsolePage.chat => const AgentChatSurface(),
       ConsolePage.work => const _AgentsWorkspacePage(),
-      ConsolePage.agentChat => const _AgentsWorkspacePage(),
-      ConsolePage.voiceCall => const _AgentsWorkspacePage(),
       ConsolePage.kanban => const _KanbanPage(),
       ConsolePage.genuiLab => const _GenUiLabPage(),
       ConsolePage.browser => const _BrowserPage(),
@@ -613,7 +567,7 @@ const List<_AgentDescriptor> _fixtureAgents = [
   _AgentDescriptor(
     id: 'agent-reviewer',
     name: 'Reviewer',
-    role: 'Approvals & QA',
+    role: 'Inbox & QA',
     status: 'idle',
     unread: 3,
     workItemId: 'work-launch-preview',
@@ -667,24 +621,16 @@ class _AgentsWorkspacePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedId =
-        ref.watch(selectedAgentIdProvider) ?? _fixtureAgents.first.id;
+    final selectedId = ref.watch(selectedAgentIdProvider);
+    final compact = MediaQuery.sizeOf(context).width < 980;
+    if (compact && selectedId == null) return const _AgentListPage();
+
     final selected = _fixtureAgents.firstWhere(
-      (agent) => agent.id == selectedId,
+      (agent) => agent.id == (selectedId ?? _fixtureAgents.first.id),
       orElse: () => _fixtureAgents.first,
     );
-    final compact = MediaQuery.sizeOf(context).width < 980;
     if (compact) {
-      return Column(
-        children: [
-          SizedBox(
-            height: 118,
-            child: _AgentRail(selectedId: selected.id, horizontal: true),
-          ),
-          const Divider(height: 1, color: _Palette.border),
-          Expanded(child: _AgentDetailPage(agent: selected)),
-        ],
-      );
+      return _AgentDetailPage(agent: selected, compact: true);
     }
     return Row(
       children: [
@@ -696,86 +642,63 @@ class _AgentsWorkspacePage extends ConsumerWidget {
   }
 }
 
+class _AgentListPage extends ConsumerWidget {
+  const _AgentListPage();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ListView.separated(
+      padding: const EdgeInsets.all(10),
+      itemBuilder: (context, index) =>
+          _AgentListItem(agent: _fixtureAgents[index], selected: false),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemCount: _fixtureAgents.length,
+    );
+  }
+}
+
 class _AgentRail extends ConsumerWidget {
-  const _AgentRail({required this.selectedId, this.horizontal = false});
+  const _AgentRail({required this.selectedId});
 
   final String selectedId;
-  final bool horizontal;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final content = [
       Padding(
-        padding: EdgeInsets.fromLTRB(
-          horizontal ? 10 : 12,
-          10,
-          horizontal ? 6 : 12,
-          8,
-        ),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
         child: Row(
           children: [
             const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Agents',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Select an agent, chat, review work.',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: _Palette.muted, fontSize: 11),
-                  ),
-                ],
+              child: Text(
+                'Agents',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
               ),
             ),
             _MiniIconButton(icon: RadixIcons.plus, label: 'New agent'),
           ],
         ),
       ),
-      if (!horizontal) const Divider(height: 1, color: _Palette.border),
-      if (horizontal)
-        Expanded(
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-            itemBuilder: (context, index) => SizedBox(
-              width: 220,
-              child: _AgentListItem(
-                agent: _fixtureAgents[index],
-                selected: _fixtureAgents[index].id == selectedId,
-              ),
-            ),
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemCount: _fixtureAgents.length,
+      const Divider(height: 1, color: _Palette.border),
+      Expanded(
+        child: ListView.separated(
+          padding: const EdgeInsets.all(8),
+          itemBuilder: (context, index) => _AgentListItem(
+            agent: _fixtureAgents[index],
+            selected: _fixtureAgents[index].id == selectedId,
           ),
-        )
-      else
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.all(8),
-            itemBuilder: (context, index) => _AgentListItem(
-              agent: _fixtureAgents[index],
-              selected: _fixtureAgents[index].id == selectedId,
-            ),
-            separatorBuilder: (_, _) => const SizedBox(height: 6),
-            itemCount: _fixtureAgents.length,
-          ),
+          separatorBuilder: (_, _) => const SizedBox(height: 6),
+          itemCount: _fixtureAgents.length,
         ),
+      ),
     ];
 
     return ColoredBox(
       color: _Palette.sidebar,
-      child: horizontal
-          ? Column(children: content)
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: content,
-            ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: content,
+      ),
     );
   }
 }
@@ -830,8 +753,10 @@ class _AgentListItemState extends ConsumerState<_AgentListItem> {
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () =>
-            ref.read(selectedAgentIdProvider.notifier).state = agent.id,
+        onTap: () {
+          if (!selected) HapticFeedback.selectionClick();
+          ref.read(selectedAgentIdProvider.notifier).state = agent.id;
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           transform: Matrix4.translationValues(0, _hovered ? -1 : 0, 0),
@@ -962,8 +887,9 @@ class _AgentListItemState extends ConsumerState<_AgentListItem> {
 }
 
 class _AgentDetailPage extends ConsumerStatefulWidget {
-  const _AgentDetailPage({required this.agent});
+  const _AgentDetailPage({required this.agent, this.compact = false});
   final _AgentDescriptor agent;
+  final bool compact;
 
   @override
   ConsumerState<_AgentDetailPage> createState() => _AgentDetailPageState();
@@ -1002,10 +928,11 @@ class _AgentDetailPageState extends ConsumerState<_AgentDetailPage> {
 
   Widget _buildContent(WorkItem? detail) {
     final agent = widget.agent;
+    final compact = widget.compact;
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+          padding: EdgeInsets.fromLTRB(compact ? 10 : 16, 12, 12, 10),
           decoration: const BoxDecoration(
             border: Border(
               bottom: BorderSide(color: _Palette.border, width: 1),
@@ -1013,6 +940,16 @@ class _AgentDetailPageState extends ConsumerState<_AgentDetailPage> {
           ),
           child: Row(
             children: [
+              if (compact) ...[
+                IconButton.ghost(
+                  icon: const Icon(RadixIcons.arrowLeft, size: 15),
+                  onPressed: () {
+                    HapticFeedback.selectionClick();
+                    ref.read(selectedAgentIdProvider.notifier).state = null;
+                  },
+                ),
+                const SizedBox(width: 4),
+              ],
               Container(
                 width: 8,
                 height: 8,
@@ -1022,19 +959,34 @@ class _AgentDetailPageState extends ConsumerState<_AgentDetailPage> {
                 ),
               ),
               const SizedBox(width: 10),
-              Text(
-                agent.name,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      agent.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: compact ? 16 : 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      agent.role,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _Palette.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Text(
-                agent.role,
-                style: const TextStyle(color: _Palette.muted, fontSize: 12),
-              ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Text(
                 _statusLabel(agent.status),
                 style: const TextStyle(color: _Palette.muted, fontSize: 12),
@@ -1057,12 +1009,15 @@ class _AgentDetailPageState extends ConsumerState<_AgentDetailPage> {
                 (1, 'Work', null),
                 (2, 'Activity', null),
                 (3, 'Artifacts', null),
-                (4, 'Approvals', null),
               ])
                 Padding(
                   padding: const EdgeInsets.only(right: 18),
                   child: GestureDetector(
-                    onTap: () => setState(() => _tabIndex = entry.$1),
+                    onTap: () {
+                      if (_tabIndex == entry.$1) return;
+                      HapticFeedback.selectionClick();
+                      setState(() => _tabIndex = entry.$1);
+                    },
                     child: Column(
                       children: [
                         if (entry.$3 != null)
@@ -1104,11 +1059,8 @@ class _AgentDetailPageState extends ConsumerState<_AgentDetailPage> {
             1 => _OverviewTab(agent: agent, detail: detail),
             2 => _ActivityTab(detail: detail),
             3 => _ArtifactsTab(detail: detail),
-            4 => _ApprovalsTab(detail: detail),
             _ => AgentChatSurface(
               key: ValueKey('agent-chat-${agent.id}'),
-              agentName: '${agent.name} chat',
-              showTopBar: false,
               showVoiceAction: true,
               compact: true,
             ),
@@ -1376,54 +1328,6 @@ class _ArtifactDownloadActionState
   }
 }
 
-class _ApprovalsTab extends StatelessWidget {
-  const _ApprovalsTab({required this.detail});
-  final WorkItem? detail;
-
-  @override
-  Widget build(BuildContext context) {
-    final approvals = detail?.approvals ?? const [];
-    if (approvals.isEmpty) {
-      return const Center(
-        child: Text(
-          'No pending approvals.',
-          style: TextStyle(color: _Palette.muted),
-        ),
-      );
-    }
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemBuilder: (context, i) {
-        final a = approvals[i];
-        return Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: _Palette.panel,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: _Palette.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                a.title,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Owner: ${a.owner} · ${a.dueLabel}',
-                style: const TextStyle(color: _Palette.muted, fontSize: 11.5),
-              ),
-            ],
-          ),
-        );
-      },
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemCount: approvals.length,
-    );
-  }
-}
-
 class _KanbanPage extends StatelessWidget {
   const _KanbanPage();
 
@@ -1520,7 +1424,7 @@ class _WorkDashboard extends ConsumerWidget {
               const _SectionHeader(
                 title: 'Work',
                 subtitle:
-                    'Delegated objectives. Each item rolls up runs, events, artifacts, and approvals.',
+                    'Delegated objectives. Each item rolls up runs, events, artifacts, and inbox items.',
               ),
               const SizedBox(height: 10),
               Wrap(
@@ -1560,7 +1464,7 @@ String _pluralize(int count, String singular, [String? plural]) {
 }
 
 String _statRowLabel(WorkItemSummary summary) {
-  return '${summary.runSummary} · ${_pluralize(summary.artifactCount, 'artifact')} · ${_pluralize(summary.pendingApprovalCount, 'approval')}';
+  return '${summary.runSummary} · ${_pluralize(summary.artifactCount, 'artifact')} · ${_pluralize(summary.pendingApprovalCount, 'inbox item')}';
 }
 
 class _WorkQueue extends StatelessWidget {
@@ -1704,7 +1608,7 @@ class _WorkDetail extends StatelessWidget {
             children: [
               _SmallSurfaceLine(
                 title: item.nextAction,
-                subtitle: 'Awaiting approval API.',
+                subtitle: 'Awaiting inbox decision.',
                 leading: RadixIcons.checkCircled,
               ),
               const SizedBox(height: 8),
@@ -1792,7 +1696,7 @@ class _DetailStatRow extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: _TinyStat(
-            label: 'Approvals',
+            label: 'Inbox',
             value: summary.pendingApprovalCount.toString(),
           ),
         ),
@@ -2050,14 +1954,14 @@ class _MetricsStrip extends StatelessWidget {
     ];
 
     if (isCompact) {
-      return GridView.count(
-        crossAxisCount: 2,
-        crossAxisSpacing: 6,
-        mainAxisSpacing: 6,
-        childAspectRatio: 1.52,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        children: cards,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var index = 0; index < cards.length; index++) ...[
+            cards[index],
+            if (index != cards.length - 1) const SizedBox(height: 8),
+          ],
+        ],
       );
     }
 
@@ -2284,29 +2188,35 @@ class _GenUiLabPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 760;
     return ListView(
       padding: const EdgeInsets.all(14),
-      children: const [
-        _SectionHeader(
+      children: [
+        const _SectionHeader(
           title: 'GenUI component lab',
           subtitle:
               'Safe generated UI preview surface for testing cards, tables, timelines, approvals, loading states, and agent chat output before backend wiring.',
         ),
-        SizedBox(height: 12),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: _GeneratedSurfacePreview()),
-            SizedBox(width: 12),
-            Expanded(child: _AgentChatStatePanel()),
-          ],
-        ),
-        SizedBox(height: 12),
-        _GenUiChartGallery(),
-        SizedBox(height: 12),
-        _LiveGenUiSurfaceCard(),
-        SizedBox(height: 12),
-        _LoadingStatesPanel(),
+        const SizedBox(height: 12),
+        if (compact) ...[
+          const _GeneratedSurfacePreview(),
+          const SizedBox(height: 12),
+          const _AgentChatStatePanel(),
+        ] else
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _GeneratedSurfacePreview()),
+              SizedBox(width: 12),
+              Expanded(child: _AgentChatStatePanel()),
+            ],
+          ),
+        const SizedBox(height: 12),
+        const _GenUiChartGallery(),
+        const SizedBox(height: 12),
+        const _LiveGenUiSurfaceCard(),
+        const SizedBox(height: 12),
+        const _LoadingStatesPanel(),
       ],
     );
   }
@@ -2371,26 +2281,42 @@ class _GenUiChartGallery extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 760;
+    final charts = const [
+      _GeneratedLineChartCard(),
+      _GeneratedBarChartCard(),
+      _GeneratedPieChartCard(),
+    ];
     return _Panel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          _SectionHeader(
+        children: [
+          const _SectionHeader(
             title: 'FL Chart generated analytics',
             subtitle:
                 'Real fl_chart widgets used for GenUI analytics previews: trend, workload bars, and approval mix.',
           ),
-          SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: _GeneratedLineChartCard()),
-              SizedBox(width: 10),
-              Expanded(child: _GeneratedBarChartCard()),
-              SizedBox(width: 10),
-              Expanded(child: _GeneratedPieChartCard()),
-            ],
-          ),
+          const SizedBox(height: 12),
+          if (compact)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var index = 0; index < charts.length; index++) ...[
+                  charts[index],
+                  if (index != charts.length - 1) const SizedBox(height: 10),
+                ],
+              ],
+            )
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var index = 0; index < charts.length; index++) ...[
+                  Expanded(child: charts[index]),
+                  if (index != charts.length - 1) const SizedBox(width: 10),
+                ],
+              ],
+            ),
         ],
       ),
     );
@@ -2506,49 +2432,35 @@ class _GeneratedPieChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 520;
+    final legend = const Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _LegendDot(label: 'Ready', value: '45%', color: _Palette.text),
+        SizedBox(height: 8),
+        _LegendDot(label: 'Waiting', value: '35%', color: _Palette.muted),
+        SizedBox(height: 8),
+        _LegendDot(label: 'Blocked', value: '20%', color: Color(0xFF525252)),
+      ],
+    );
     return _ChartCard(
       title: 'Approval mix',
-      child: Row(
-        children: [
-          Expanded(
-            child: fl.PieChart(
-              fl.PieChartData(
-                centerSpaceRadius: 34,
-                sectionsSpace: 2,
-                pieTouchData: fl.PieTouchData(enabled: true),
-                sections: [
-                  _pieSection(45, _Palette.text),
-                  _pieSection(35, _Palette.muted),
-                  _pieSection(20, const Color(0xFF525252)),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          const SizedBox(
-            width: 96,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: compact
+          ? Column(
               children: [
-                _LegendDot(label: 'Ready', value: '45%', color: _Palette.text),
-                SizedBox(height: 8),
-                _LegendDot(
-                  label: 'Waiting',
-                  value: '35%',
-                  color: _Palette.muted,
-                ),
-                SizedBox(height: 8),
-                _LegendDot(
-                  label: 'Blocked',
-                  value: '20%',
-                  color: Color(0xFF525252),
-                ),
+                Expanded(child: _PieChart()),
+                const SizedBox(height: 10),
+                legend,
+              ],
+            )
+          : Row(
+              children: [
+                const Expanded(child: _PieChart()),
+                const SizedBox(width: 10),
+                SizedBox(width: 96, child: legend),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -2559,6 +2471,26 @@ class _GeneratedPieChartCard extends StatelessWidget {
       color: color,
       radius: 42,
       titleStyle: const TextStyle(fontSize: 0),
+    );
+  }
+}
+
+class _PieChart extends StatelessWidget {
+  const _PieChart();
+
+  @override
+  Widget build(BuildContext context) {
+    return fl.PieChart(
+      fl.PieChartData(
+        centerSpaceRadius: 34,
+        sectionsSpace: 2,
+        pieTouchData: fl.PieTouchData(enabled: true),
+        sections: [
+          _GeneratedPieChartCard._pieSection(45, _Palette.text),
+          _GeneratedPieChartCard._pieSection(35, _Palette.muted),
+          _GeneratedPieChartCard._pieSection(20, const Color(0xFF525252)),
+        ],
+      ),
     );
   }
 }
@@ -2608,6 +2540,7 @@ class _ChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 760;
     return Card(
       filled: true,
       fillColor: _Palette.input,
@@ -2623,7 +2556,11 @@ class _ChartCard extends StatelessWidget {
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
-          SizedBox(height: 154, child: child),
+          SizedBox(
+            width: double.infinity,
+            height: compact ? 190 : 154,
+            child: child,
+          ),
         ],
       ),
     );
@@ -2969,7 +2906,7 @@ class _BrowserPageState extends State<_BrowserPage> {
   static const _previewUrl = 'https://example.com';
   late final TextEditingController _urlController;
   WebViewController? _controller;
-  String _status = 'WebView ready';
+  String _status = '';
 
   @override
   void initState() {
@@ -2989,7 +2926,7 @@ class _BrowserPageState extends State<_BrowserPage> {
             onPageStarted: (url) => setState(() => _status = 'Loading $url'),
             onPageFinished: (url) {
               setState(() {
-                _status = 'WebView ready';
+                _status = '';
                 _urlController.text = url;
               });
             },
@@ -3052,36 +2989,23 @@ class _BrowserPageState extends State<_BrowserPage> {
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
       child: Column(
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: _SectionHeader(
-                  title: 'Embedded browser',
-                  subtitle:
-                      'Full-height in-app preview for generated domains and signed artifact URLs. HTTPS only; no app secrets enter web content.',
-                ),
-              ),
-              _StatusPill(label: _status, color: _Palette.success),
-            ],
-          ),
-          const SizedBox(height: 8),
           Card(
             filled: true,
             fillColor: _Palette.input,
             borderColor: _Palette.border,
-            borderRadius: BorderRadius.circular(12),
-            padding: const EdgeInsets.all(8),
+            borderRadius: BorderRadius.circular(10),
+            padding: const EdgeInsets.all(6),
             boxShadow: const [],
             child: Row(
               children: [
-                Button.outline(
+                IconButton.outline(
                   onPressed: _goBack,
-                  child: const Icon(RadixIcons.arrowLeft, size: 14),
+                  icon: const Icon(RadixIcons.arrowLeft, size: 14),
                 ),
                 const SizedBox(width: 6),
-                Button.outline(
+                IconButton.outline(
                   onPressed: _reload,
-                  child: const Icon(RadixIcons.reload, size: 14),
+                  icon: const Icon(RadixIcons.reload, size: 14),
                 ),
                 const SizedBox(width: 8),
                 const Icon(
@@ -3097,17 +3021,26 @@ class _BrowserPageState extends State<_BrowserPage> {
                     onSubmitted: (_) => _loadTypedUrl(),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Button.primary(
-                  onPressed: _loadTypedUrl,
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Load'),
-                      SizedBox(width: 6),
-                      Icon(RadixIcons.arrowRight, size: 13),
-                    ],
+                if (_status.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 180),
+                    child: Text(
+                      _status,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _Palette.muted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
+                ],
+                const SizedBox(width: 8),
+                IconButton.primary(
+                  onPressed: _loadTypedUrl,
+                  icon: const Icon(RadixIcons.arrowRight, size: 14),
                 ),
               ],
             ),
@@ -3118,26 +3051,14 @@ class _BrowserPageState extends State<_BrowserPage> {
               filled: true,
               fillColor: const Color(0xFF080808),
               borderColor: _Palette.border,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               padding: EdgeInsets.zero,
               boxShadow: const [],
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 child: _runningInWidgetTest
                     ? const Center(child: Text('Preview opened inside the app'))
-                    : Stack(
-                        children: [
-                          WebViewWidget(controller: _controller!),
-                          Positioned(
-                            left: 12,
-                            top: 12,
-                            child: _StatusPill(
-                              label: _status,
-                              color: _Palette.success,
-                            ),
-                          ),
-                        ],
-                      ),
+                    : WebViewWidget(controller: _controller!),
               ),
             ),
           ),
@@ -3816,7 +3737,7 @@ class _MarkdownReportPanel extends StatelessWidget {
   static const _report = '''
 # Executive report preview
 
-Agents Cloud should render final agent output as rich Markdown, not plain text.
+The client should render final agent output as rich Markdown, not plain text.
 
 | Artifact | Status | Owner |
 | --- | --- | --- |
@@ -3866,16 +3787,15 @@ class _BrowserPreviewPanel extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          _SectionHeader(
-            title: 'Embedded browser shell',
-            subtitle:
-                'WebView preview chrome for generated domains and artifact links; locked down with origin allowlists before live use.',
+        children: [
+          const Text(
+            'Browser',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
           ),
-          SizedBox(height: 12),
-          _BrowserToolbar(),
-          SizedBox(height: 10),
-          _BrowserFramePlaceholder(),
+          const SizedBox(height: 12),
+          const _BrowserToolbar(),
+          const SizedBox(height: 10),
+          const _BrowserFramePlaceholder(),
         ],
       ),
     );
@@ -3906,9 +3826,15 @@ class _BrowserToolbar extends StatelessWidget {
             ),
           ),
           SizedBox(width: 8),
-          Button.outline(enabled: false, child: Text('Open')),
+          IconButton.outline(
+            enabled: false,
+            icon: Icon(RadixIcons.openInNewWindow, size: 14),
+          ),
           SizedBox(width: 6),
-          Button.outline(enabled: false, child: Text('Share')),
+          IconButton.outline(
+            enabled: false,
+            icon: Icon(RadixIcons.share1, size: 14),
+          ),
         ],
       ),
     );
@@ -3935,20 +3861,7 @@ class _BrowserFramePlaceholder extends StatelessWidget {
           children: [
             Icon(RadixIcons.globe, size: 28, color: _Palette.text),
             SizedBox(height: 10),
-            Text(
-              'Embedded WebView preview slot',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-            SizedBox(height: 6),
-            Text(
-              'webview_flutter is installed. Live preview activation waits for signed preview URLs, origin policy, and token isolation.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _Palette.muted,
-                fontSize: 12,
-                height: 1.35,
-              ),
-            ),
+            Text('Preview', style: TextStyle(fontWeight: FontWeight.w900)),
           ],
         ),
       ),
@@ -3965,9 +3878,9 @@ class _ApprovalQueuePanel extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       children: const [
         _SectionHeader(
-          title: 'Approvals',
+          title: 'Inbox',
           subtitle:
-              'Human-in-the-loop governance for publishing, spend, tool creation, credential use, and repository writes.',
+              'Decisions, approvals, publish gates, and agent requests that need attention.',
         ),
         SizedBox(height: 12),
         _ApprovalCard(
@@ -4010,10 +3923,7 @@ class _ApprovalCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _StatusPill(label: risk, color: _Palette.warning),
-              const _StatusPill(
-                label: 'approval.requested',
-                color: _Palette.info,
-              ),
+              const _StatusPill(label: 'inbox.requested', color: _Palette.info),
             ],
           ),
           const SizedBox(height: 10),

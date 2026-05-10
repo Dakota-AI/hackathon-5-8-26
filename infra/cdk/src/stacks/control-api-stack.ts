@@ -1,17 +1,22 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CfnOutput, Duration } from "aws-cdk-lib";
+import { CfnOutput, Duration, Stack } from "aws-cdk-lib";
 import { UserPool } from "aws-cdk-lib/aws-cognito";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { HttpApi, CorsHttpMethod, HttpMethod } from "aws-cdk-lib/aws-apigatewayv2";
 import { HttpJwtAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
+import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
+import { Port, SubnetType } from "aws-cdk-lib/aws-ec2";
 import type { Construct } from "constructs";
 import { logicalName } from "../config/environments.js";
 import { AgentsCloudStack } from "./agents-cloud-stack.js";
 import type { AgentsCloudStackProps } from "./agents-cloud-stack.js";
+import type { ClusterStack } from "./cluster-stack.js";
+import type { NetworkStack } from "./network-stack.js";
 import type { OrchestrationStack } from "./orchestration-stack.js";
+import type { RuntimeStack } from "./runtime-stack.js";
 import type { StateStack } from "./state-stack.js";
 import type { StorageStack } from "./storage-stack.js";
 
@@ -19,6 +24,12 @@ export interface ControlApiStackProps extends AgentsCloudStackProps {
   readonly state: StateStack;
   readonly storage: StorageStack;
   readonly orchestration: OrchestrationStack;
+  /** When provided, wires the createRunFunction to dispatch to the resident runner instead of the SFN smoke worker. */
+  readonly residentDispatch?: {
+    readonly cluster: ClusterStack;
+    readonly network: NetworkStack;
+    readonly runtime: RuntimeStack;
+  };
 }
 
 const thisFile = fileURLToPath(import.meta.url);
@@ -68,9 +79,14 @@ export class ControlApiStack extends AgentsCloudStack {
       runtime: Runtime.NODEJS_22_X,
       entry: controlApiEntry,
       handler: "createRunHandler",
-      timeout: Duration.seconds(15),
+      timeout: props.residentDispatch ? Duration.seconds(180) : Duration.seconds(15),
       memorySize: 256,
-      environment: commonEnvironment
+      environment: commonEnvironment,
+      ...(props.residentDispatch ? {
+        vpc: props.residentDispatch.network.vpc,
+        vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
+        securityGroups: [props.residentDispatch.network.workerSecurityGroup]
+      } : {})
     });
 
     const getRunFunction = new NodejsFunction(this, "GetRunFunction", {
@@ -197,6 +213,62 @@ export class ControlApiStack extends AgentsCloudStack {
     props.state.tasksTable.grantReadWriteData(createRunFunction);
     props.state.eventsTable.grantReadWriteData(createRunFunction);
     props.orchestration.simpleRunStateMachine.grantStartExecution(createRunFunction);
+
+    // Resident-runner dispatcher: env vars, IAM, and secret access. When
+    // residentDispatch is set, the createRun Lambda boots a per-user resident
+    // runner via ecs:RunTask instead of starting the SFN smoke worker.
+    if (props.residentDispatch) {
+      const { cluster, network, runtime } = props.residentDispatch;
+      network.workerSecurityGroup.addIngressRule(
+        network.workerSecurityGroup,
+        Port.tcp(8787),
+        "Allow the VPC-attached Control API dispatcher to wake resident runner tasks."
+      );
+      props.state.userRunnersTable.grantReadWriteData(createRunFunction);
+      props.state.hostNodesTable.grantReadData(createRunFunction);
+
+      createRunFunction.addEnvironment("RESIDENT_RUNNER_TASK_DEFINITION_ARN", runtime.residentRunnerTaskDefinition.taskDefinitionArn);
+      createRunFunction.addEnvironment("RESIDENT_RUNNER_CONTAINER_NAME", runtime.residentRunnerContainerName);
+      createRunFunction.addEnvironment("RESIDENT_RUNNER_CLUSTER_ARN", cluster.cluster.clusterArn);
+      createRunFunction.addEnvironment(
+        "RESIDENT_RUNNER_SUBNET_IDS",
+        network.vpc.privateSubnets.map((subnet) => subnet.subnetId).join(",")
+      );
+      createRunFunction.addEnvironment("RESIDENT_RUNNER_SECURITY_GROUP_ID", network.workerSecurityGroup.securityGroupId);
+      createRunFunction.addEnvironment("RESIDENT_RUNNER_API_TOKEN_SECRET_ARN", runtime.residentRunnerApiToken.secretArn);
+      createRunFunction.addEnvironment("RESIDENT_RUNNER_LAUNCH_WAIT_MS", "150000");
+
+      // ecs:RunTask scoped to the resident family (revision wildcard).
+      const residentFamilyArn = `arn:${Stack.of(this).partition}:ecs:${Stack.of(this).region}:${Stack.of(this).account}:task-definition/${logicalName(props.config, "resident-runner")}:*`;
+      createRunFunction.addToRolePolicy(new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ["ecs:RunTask"],
+        resources: [residentFamilyArn]
+      }));
+      createRunFunction.addToRolePolicy(new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ["ecs:DescribeTasks", "ecs:StopTask"],
+        resources: ["*"]
+      }));
+      // PassRole for both task role and execution role.
+      const passRoleArns: string[] = [];
+      if (runtime.residentRunnerTaskDefinition.taskRole) {
+        passRoleArns.push(runtime.residentRunnerTaskDefinition.taskRole.roleArn);
+      }
+      const executionRole = (runtime.residentRunnerTaskDefinition as { executionRole?: { readonly roleArn: string } }).executionRole;
+      if (executionRole) {
+        passRoleArns.push(executionRole.roleArn);
+      }
+      if (passRoleArns.length > 0) {
+        createRunFunction.addToRolePolicy(new PolicyStatement({
+          effect: Effect.ALLOW,
+          actions: ["iam:PassRole"],
+          resources: passRoleArns,
+          conditions: { StringEquals: { "iam:PassedToService": "ecs-tasks.amazonaws.com" } }
+        }));
+      }
+      runtime.residentRunnerApiToken.grantRead(createRunFunction);
+    }
 
     props.state.runsTable.grantReadData(getRunFunction);
     props.state.runsTable.grantReadData(listRunEventsFunction);

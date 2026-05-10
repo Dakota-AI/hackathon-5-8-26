@@ -92,8 +92,10 @@ class NotificationService {
 
     // Permissions: ask once. iOS only; Android handles via system.
     if (defaultTargetPlatform == TargetPlatform.iOS) {
-      final ios = _plugin.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
+      final ios = _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >();
       final granted = await ios?.requestPermissions(
         alert: true,
         badge: true,
@@ -135,7 +137,7 @@ class NotificationService {
   /// there), or the app is not yet initialised.
   Future<void> showProactive({
     required String body,
-    String title = 'AI Caller',
+    String title = 'Agent',
     String payload = 'open-chat',
   }) async {
     if (!_initialized) return;
@@ -184,7 +186,7 @@ class NotificationService {
   Future<void> scheduleProactive({
     required String body,
     required Duration after,
-    String title = 'AI Caller',
+    String title = 'Agent',
     String payload = 'open-chat',
   }) async {
     if (!_initialized) return;

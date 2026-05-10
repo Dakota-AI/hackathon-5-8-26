@@ -119,21 +119,15 @@ class _KanbanBody extends StatelessWidget {
           );
         }
 
-        // Narrow: horizontal scroll with min column widths.
-        final children = <Widget>[];
-        for (var i = 0; i < columns.length; i++) {
-          children.add(SizedBox(width: minColumnWidth, child: columns[i]));
-          if (i != columns.length - 1) {
-            children.add(const SizedBox(width: gap));
-          }
-        }
         return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: children,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < columns.length; i++) ...[
+                columns[i],
+                if (i != columns.length - 1) const SizedBox(height: gap),
+              ],
+            ],
           ),
         );
       },
@@ -308,7 +302,7 @@ class _KanbanCardState extends State<_KanbanCard> {
                   ),
                   _MutedMetaText(
                     text:
-                        '$approvalCount ${approvalCount == 1 ? 'approval' : 'approvals'}',
+                        '$approvalCount ${approvalCount == 1 ? 'inbox item' : 'inbox items'}',
                   ),
                 ],
               ),

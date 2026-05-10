@@ -111,14 +111,14 @@ Status legend: ✅ done · ⚠️ partial · ❌ stub · 🔘 nothing
 
 ⚠️ **Partial / fragile:**
 - Stateless smoke worker still has `HERMES_RUNNER_MODE=smoke` — no real model in the SFN-driven path.
-- **Resident runner has no automated dispatcher** — only operator-driven `aws ecs run-task` triggers it. No `ecs:RunTask` caller for the resident family in the codebase.
+- ~~**Resident runner has no automated dispatcher**~~ ✅ **Shipped.** `services/control-api/src/runner-dispatcher.ts` + `runner-dispatcher-aws.ts` auto-launch a resident task per user, observe ECS for the privateIp, and POST to `/wake`. Wired in `handlers.ts` (auto-detects via `RESIDENT_RUNNER_TASK_DEFINITION_ARN`). 8 dedicated tests pass.
 - Worker hardcodes `seq=2,3,4` — any retry crashes on conditional-check failures.
 - Realtime fanout exists (DDB Streams → relay → WebSocket) but no client consumes WebSocket — web polls every 2.5–4 s, Flutter doesn't subscribe at all.
 - `subscribeRun` doesn't verify run ownership (mitigated only by event userId filter on relay).
 - Workspace IDs are seeded client-side; no `/workspaces` discovery API; backend doesn't validate userId-to-workspace membership.
 
 ❌ **Missing / stub:**
-- **Per-user runner placement / dispatcher** (the "one ECS per user with N agents inside" model) — image, TaskDef, IAM, secrets all there; the caller is missing.
+- ~~**Per-user runner placement / dispatcher**~~ ✅ shipped (`runner-dispatcher.ts`).
 - Worker producers for `tool.approval` and `a2ui.delta` events (clients render them, no producer fires them).
 - Resident runner durable adapters (events to DDB, artifacts to S3, snapshots to `RunnerSnapshotsTable`) — currently local FS only.
 - `Notifications` doesn't exist at any layer.

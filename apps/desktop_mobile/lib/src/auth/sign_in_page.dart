@@ -90,7 +90,8 @@ class _SignInPageState extends ConsumerState<SignInPage> {
     final auth = ref.watch(authControllerProvider);
     final busy = auth.status == AuthStatus.signingIn;
     final inConfirmFlow =
-        auth.needsConfirmation && (auth.pendingConfirmEmail?.isNotEmpty ?? false);
+        auth.needsConfirmation &&
+        (auth.pendingConfirmEmail?.isNotEmpty ?? false);
 
     return Scaffold(
       backgroundColor: _Palette.background,
@@ -143,10 +144,10 @@ class _SignInPageState extends ConsumerState<SignInPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildHeader(
-          title: 'Agents Cloud',
+          title: _tab == 0 ? 'Sign in' : 'Create account',
           subtitle: _tab == 0
-              ? 'Sign in to continue'
-              : 'Create an account to get started',
+              ? 'Continue to your workspace'
+              : 'Set up access to your workspace',
         ),
         const SizedBox(height: 18),
         Tabs(
@@ -275,11 +276,7 @@ class _SignInPageState extends ConsumerState<SignInPage> {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: _Palette.border),
             ),
-            child: const Icon(
-              RadixIcons.cube,
-              size: 18,
-              color: _Palette.text,
-            ),
+            child: const Icon(RadixIcons.cube, size: 18, color: _Palette.text),
           ),
         ),
         const SizedBox(height: 14),

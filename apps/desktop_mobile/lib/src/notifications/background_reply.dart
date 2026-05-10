@@ -42,8 +42,10 @@ Future<void> backgroundReplyHandler(NotificationResponse response) async {
   // throw on first use.
   DartPluginRegistrant.ensureInitialized();
 
-  _log('handler invoked type=${response.notificationResponseType} '
-      'action=${response.actionId} inputLen=${response.input?.length ?? 0}');
+  _log(
+    'handler invoked type=${response.notificationResponseType} '
+    'action=${response.actionId} inputLen=${response.input?.length ?? 0}',
+  );
 
   if (response.notificationResponseType !=
       NotificationResponseType.selectedNotificationAction) {
@@ -93,19 +95,11 @@ class _Turn {
     required this.origin,
   }) : createdAt = DateTime.now();
 
-  factory _Turn.user(String text, int seq) => _Turn(
-        id: 'user-$seq',
-        role: 'user',
-        text: text,
-        origin: 'reactive',
-      );
+  factory _Turn.user(String text, int seq) =>
+      _Turn(id: 'user-$seq', role: 'user', text: text, origin: 'reactive');
 
-  factory _Turn.agent(String text, int seq) => _Turn(
-        id: 'agent-$seq',
-        role: 'agent',
-        text: text,
-        origin: 'proactive',
-      );
+  factory _Turn.agent(String text, int seq) =>
+      _Turn(id: 'agent-$seq', role: 'agent', text: text, origin: 'proactive');
 
   final String id;
   final String role;
@@ -114,13 +108,13 @@ class _Turn {
   final DateTime createdAt;
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'role': role,
-        'text': text,
-        'createdAt': createdAt.toIso8601String(),
-        'modality': 'text',
-        'origin': origin,
-      };
+    'id': id,
+    'role': role,
+    'text': text,
+    'createdAt': createdAt.toIso8601String(),
+    'modality': 'text',
+    'origin': origin,
+  };
 }
 
 Future<File> _historyFile() async {
@@ -178,10 +172,7 @@ Future<String> _openAiCompletion(List<_Turn> history) async {
   final messages = <Map<String, String>>[
     {'role': 'system', 'content': _systemPrompt},
     for (final t in history)
-      {
-        'role': t.role == 'agent' ? 'assistant' : 'user',
-        'content': t.text,
-      },
+      {'role': t.role == 'agent' ? 'assistant' : 'user', 'content': t.text},
   ];
 
   // iOS gives ~30s of background execution for notification responses.
@@ -246,7 +237,7 @@ Future<void> _showFollowupBanner(String body) async {
   final id = DateTime.now().millisecondsSinceEpoch.remainder(1 << 31);
   await plugin.show(
     id,
-    'AI Caller',
+    'Agent',
     body,
     const NotificationDetails(
       iOS: DarwinNotificationDetails(

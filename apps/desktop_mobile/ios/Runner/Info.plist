@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Agents Cloud</string>
+	<string>Actions</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -67,11 +67,11 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Agents Cloud uses the microphone for live voice conversations with the AI agent.</string>
+	<string>This app uses the microphone for live voice conversations with the agent.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Agents Cloud transcribes your voice on-device so the agent can respond.</string>
+	<string>This app transcribes your voice on-device so the agent can respond.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Agents Cloud uses the local network for low-latency voice connections during calls.</string>
+	<string>This app uses the local network for low-latency voice connections during calls.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_dartobservatory._tcp</string>

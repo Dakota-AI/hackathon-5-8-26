@@ -36,7 +36,12 @@ const controlApi = new ControlApiStack(app, stackName(config, "control-api"), {
   env,
   state,
   storage,
-  orchestration
+  orchestration,
+  residentDispatch: {
+    cluster,
+    network,
+    runtime
+  }
 });
 const realtimeApi = new RealtimeApiStack(app, stackName(config, "realtime-api"), {
   config,
@@ -65,6 +70,9 @@ runtime.addDependency(state);
 controlApi.addDependency(orchestration);
 controlApi.addDependency(storage);
 controlApi.addDependency(state);
+controlApi.addDependency(runtime);
+controlApi.addDependency(cluster);
+controlApi.addDependency(network);
 realtimeApi.addDependency(state);
 if (previewIngress) {
   previewIngress.addDependency(cluster);

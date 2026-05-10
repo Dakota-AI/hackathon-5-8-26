@@ -150,11 +150,7 @@ class LogoMark extends StatelessWidget {
         borderRadius: BorderRadius.circular(size * 0.3),
         border: Border.all(color: Palette.accent.withValues(alpha: 0.25)),
       ),
-      child: Icon(
-        RadixIcons.mobile,
-        color: Palette.accent,
-        size: size * 0.55,
-      ),
+      child: Icon(RadixIcons.mobile, color: Palette.accent, size: size * 0.55),
     );
   }
 }
@@ -163,7 +159,7 @@ class LogoMark extends StatelessWidget {
 class BrandHeader extends StatelessWidget {
   const BrandHeader({
     super.key,
-    this.title = 'AI Caller',
+    this.title = 'Agent',
     this.subtitle = 'Voice agent on call',
     this.trailing,
   });
@@ -208,7 +204,7 @@ class BrandHeader extends StatelessWidget {
             ],
           ),
         ),
-        if (trailing != null) trailing!,
+        ?trailing,
       ],
     );
   }

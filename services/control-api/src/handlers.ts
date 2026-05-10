@@ -12,10 +12,18 @@ import { createWorkItem, createWorkItemRun, getWorkItem, listWorkItemEvents, lis
 import { createUserRunner, getUserRunner, heartbeatHostNode, heartbeatUserRunner, listAdminRunnerState, registerHostNode, updateUserRunnerDesiredState } from "./user-runners.js";
 import { createApproval, decideApproval, getApproval, listApprovalsForRun } from "./approvals.js";
 import { createSurface, getSurface, listSurfacesForRun, listSurfacesForWorkItem, publishSurface, updateSurface } from "./surfaces.js";
-import type { AuthenticatedUser } from "./ports.js";
+import { DispatcherExecutionStarter } from "./runner-dispatcher-aws.js";
+import type { AuthenticatedUser, ExecutionStarter } from "./ports.js";
 
 const store = DynamoControlApiStore.fromEnvironment();
-const executions = StepFunctionsExecutionStarter.fromEnvironment();
+// Prefer the resident-runner dispatcher when its env is configured; fall back
+// to the legacy SFN smoke worker path otherwise.
+const executions: ExecutionStarter = DispatcherExecutionStarter.isConfigured()
+  ? DispatcherExecutionStarter.fromEnvironment({
+      store,
+      resolveUser: ({ userId }) => ({ userId })
+    })
+  : StepFunctionsExecutionStarter.fromEnvironment();
 const profileBundles = S3AgentProfileBundleStore.fromEnvironment();
 const artifactPresigner = S3ArtifactPresigner.fromEnvironment();
 
@@ -208,7 +216,10 @@ export async function runnerStateHandler(event: APIGatewayProxyEventV2WithJWTAut
         status: optionalStringField(body, "status"),
         hostId: optionalStringField(body, "hostId"),
         placementTarget: optionalStringField(body, "placementTarget"),
-        health: optionalRecordField(body, "health")
+        health: optionalRecordField(body, "health"),
+        privateIp: optionalStringField(body, "privateIp"),
+        runnerEndpoint: optionalStringField(body, "runnerEndpoint"),
+        taskArn: optionalStringField(body, "taskArn")
       }
     });
     return json(result.statusCode, result.body);

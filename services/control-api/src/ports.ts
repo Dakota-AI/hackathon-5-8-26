@@ -65,6 +65,16 @@ export interface UserRunnerRecord {
   readonly lastHeartbeatAt: string;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** Private IP the resident container reports during its first heartbeat after launch. */
+  readonly privateIp?: string;
+  /** Resolved HTTP endpoint (e.g. http://10.40.1.23:8787). Derived from privateIp when absent. */
+  readonly runnerEndpoint?: string;
+  /** ARN of the most recent ECS task that materialized this runner. */
+  readonly taskArn?: string;
+  /** Last error reported by the dispatcher (e.g. RunTask failure). */
+  readonly lastErrorMessage?: string;
+  /** Wall-clock when the dispatcher last ran a launch attempt. */
+  readonly launchedAt?: string;
 }
 
 export interface RunRecord {

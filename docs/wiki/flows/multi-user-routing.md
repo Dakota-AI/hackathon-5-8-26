@@ -104,16 +104,49 @@ The resident runner is built (image, TaskDef, in-process server, HTTP API, tests
 - ✅ `1deaf57` hardening: `assertSafeId(runId)` and `assertSafeId(taskId)` in `wake()` close a path-traversal hole; `ResidentRunnerApiToken` Secret is provisioned in CDK.
 - ✅ **Live ECS proof**: `agents-cloud-dev-resident-runner:4` was launched manually via `aws ecs run-task` on 2026-05-10. Hermes child reached the OpenAI Codex backend and got `HTTP 429 usage_limit_reached` — proving the container/auth path works end-to-end.
 
-### What's missing
+### What's now wired (dispatcher landed in code)
 
-- ❌ **Placement scheduler / dispatcher.** Nothing reads `UserRunnersTable.desiredState` and calls `ecs:RunTask` against the resident family. The `ResidentRunnerTaskDefinition` is registered, IAM is granted, image is pushed, manual launch is proven — but no automated caller exists. (Verified by directory listing 2026-05-10: no `runner-dispatcher.ts` in `services/control-api/src/`, no `EcsService` / `FargateService` / Cloud Map registration anywhere.)
-- ❌ **Reachability layer.** Even after a task launches, no Cloud Map / Service Discovery / internal ALB target maps `userId → runner endpoint`, so Lambda has no way to call `/wake`.
-- ❌ **Durable state mirroring.** Resident runner persists events/artifacts to local task disk (`/runner/state/events.ndjson`, `/runner/artifacts/...`); needs ports for `EventSink → EventsTable`, `ArtifactSink → S3 + ArtifactsTable`, `RunnerStateStore → UserRunnersTable heartbeats`, `SnapshotStore → S3 + RunnerSnapshotsTable`.
-- ❌ **userId → runner routing in `createRun`.** `createRun` always launches the stateless ECS task via SFN. No lookup of "does this user have a runner; if not, start one; route this objective to that runner's `/wake`."
+- ✅ **Placement dispatcher.** `services/control-api/src/runner-dispatcher.ts` — pure logic; `services/control-api/src/runner-dispatcher-aws.ts` — AWS SDK adapter. Implements `ExecutionStarter`, so when `RESIDENT_RUNNER_TASK_DEFINITION_ARN` env is set the createRun Lambda boots a per-user resident runner via `ecs:RunTask` instead of starting the SFN smoke worker.
+- ✅ **userId → runner routing in `createRun`.** `handlers.ts` auto-picks `DispatcherExecutionStarter` over `StepFunctionsExecutionStarter` when the env is configured. No change needed to `create-run.ts`.
+- ✅ **Auto-create UserRunner row.** If a user has no runner, `dispatchRunnerWake` creates one with sensible defaults (`status: "starting"`, `desiredState: "running"`, `placementTarget: "ecs-fargate"`).
+- ✅ **Reachability layer (observer-based, no runner code change needed).** `EcsTaskObserver` polls `ecs:DescribeTasks` and pulls the running task's `privateIp` from `containers[].networkInterfaces[].privateIpv4Address` (or attachment ENI details fallback). Writes `privateIp`, `runnerEndpoint = http://<ip>:8787`, `status: "running"` into `UserRunnersTable`.
+- ✅ **`UserRunnerRecord` extended** with optional `privateIp`, `runnerEndpoint`, `taskArn`, `lastErrorMessage`, `launchedAt`. Heartbeat route accepts these fields too (via `POST /user-runners/{runnerId}/heartbeat`).
+- ✅ **CDK wires the dispatcher**: `ControlApiStack.residentDispatch` props takes `cluster + network + runtime`; createRun Lambda gets `RESIDENT_RUNNER_*` env vars, `ecs:RunTask` IAM (scoped to resident family ARN), `ecs:DescribeTasks/StopTask`, `iam:PassRole` to the resident task role, and read access to the `ResidentRunnerApiToken` Secrets Manager secret.
+- ✅ **Tests:** 8-case `runner-dispatcher.test.ts` covering existing-running runner reuse, auto-create + launch, failed-runner relaunch, ENDPOINT_TIMEOUT, LAUNCH_FAILED, WAKE_FAILED, observer-based privateIp discovery, observer STOPPED → UNHEALTHY_RUNNER. All 65 control-api tests + 9 CDK assertion tests pass.
+
+### What's still missing
+
+- ❌ **Durable state mirroring.** Resident runner still persists events/artifacts to local task disk (`/runner/state/events.ndjson`, `/runner/artifacts/...`); needs ports for `EventSink → EventsTable`, `ArtifactSink → S3 + ArtifactsTable`, `RunnerStateStore → UserRunnersTable heartbeats`, `SnapshotStore → S3 + RunnerSnapshotsTable`. The dispatcher launches the runner; persistence is the next slice.
 - ❌ `RunnerSnapshotsTable` and `AgentInstancesTable` are provisioned but not written by any code.
 - ❌ `createUserRunner` accepts arbitrary `placementTarget` strings without validating `local-docker | ecs-fargate | ecs-ec2` or reserving capacity on a `HostNode`.
-- ⚠️ `RUNNER_API_TOKEN` is now backed by a CDK Secrets Manager secret (`ResidentRunnerApiToken`) — but the dispatcher that injects it per task still doesn't exist.
 - ⚠️ Provider quota: the proof run hit OpenAI Codex `429 usage_limit_reached`. A real demo needs a billing account with quota.
+
+### Dispatcher flow (end-to-end)
+
+```
+POST /runs (Cognito-authed)
+   │  createRunHandler
+   ▼
+DispatcherExecutionStarter.startExecution({runId, taskId, workspaceId, userId, objective})
+   │
+   ▼
+dispatchRunnerWake(deps, {objective, runId, taskId})
+   │
+   ├─ ensureRunnerRow: lookup UserRunner by userId; auto-create if none
+   ├─ markRunnerStarting (if previously failed/stopped)
+   ├─ launcher.launchRunner: ECS RunTask with overrides {USER_ID, RUNNER_ID, WORKSPACE_ID, ORG_ID}
+   │     and secrets {RUNNER_API_TOKEN, HERMES_AUTH_JSON_BOOTSTRAP}
+   ├─ poll loop until deadline:
+   │     a. observer.describeRunner(taskArn) via ecs:DescribeTasks
+   │     b. on RUNNING + privateIp: write {privateIp, runnerEndpoint, status:"running"} to UserRunnersTable
+   │     c. on STOPPED: write {status:"failed", lastErrorMessage} → throw UNHEALTHY_RUNNER
+   ├─ tokenProvider.getToken: cached secretsmanager:GetSecretValue
+   └─ wakeClient.postWake: fetch POST http://<privateIp>:8787/wake with Bearer token
+   │
+   ▼
+returns {executionArn: taskArn} for ledger compatibility
+```
+
 
 ### What needs to happen for hackathon
 

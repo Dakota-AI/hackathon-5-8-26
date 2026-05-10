@@ -13,8 +13,7 @@ import '../ui/streaming_text.dart';
 import '../ui/tokens.dart';
 import 'voice_mode_screen.dart';
 
-/// Text chat surface — message list + composer + chat-specific actions
-/// (proactive ping, voice escalation, clear history).
+/// Text chat surface — message list + composer + voice escalation.
 ///
 /// Sign-out and other global actions live in the outer agents-cloud
 /// shell `_TopBar`, not here.
@@ -28,14 +27,10 @@ class ChatScreen extends StatelessWidget {
 class AgentChatSurface extends StatefulWidget {
   const AgentChatSurface({
     super.key,
-    this.agentName = 'Agent',
-    this.showTopBar = false,
     this.showVoiceAction = true,
     this.compact = false,
   });
 
-  final String agentName;
-  final bool showTopBar;
   final bool showVoiceAction;
   final bool compact;
 
@@ -53,17 +48,8 @@ class _AgentChatSurfaceState extends State<AgentChatSurface>
   StreamSubscription<Turn>? _newTurnSub;
   StreamSubscription<String?>? _notifTapSub;
   StreamSubscription<String>? _notifReplySub;
-  Timer? _pingCountdown;
   Timer? _diskPoll;
   DateTime? _lastDiskMtime;
-  int _pingSecondsLeft = 0;
-  bool _pingGenerating = false;
-
-  /// Delay between scheduling the ping (after LLM completes) and the
-  /// banner actually firing. Scheduled at OS level via zonedSchedule, so
-  /// it survives backgrounding / app kill. The countdown UI is purely
-  /// decorative — iOS is the source of truth for the fire time.
-  static const _pingDelay = Duration(seconds: 5);
 
   @override
   void initState() {
@@ -128,7 +114,6 @@ class _AgentChatSurfaceState extends State<AgentChatSurface>
     _newTurnSub?.cancel();
     _notifTapSub?.cancel();
     _notifReplySub?.cancel();
-    _pingCountdown?.cancel();
     _diskPoll?.cancel();
     _inbox.dispose();
     _store.dispose();
@@ -169,72 +154,12 @@ class _AgentChatSurfaceState extends State<AgentChatSurface>
     }
   }
 
-  Future<void> _ping() async {
-    if (_pingGenerating || _pingCountdown != null) return;
-    HapticFeedback.selectionClick();
-    setState(() => _pingGenerating = true);
-    try {
-      // Generates LLM text in foreground, then schedules the banner at
-      // OS level for now+_pingDelay. Survives app suspension.
-      await _inbox.manualPing(delay: _pingDelay);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _pingGenerating = false;
-          _pingSecondsLeft = _pingDelay.inSeconds;
-        });
-      }
-    }
-    if (!mounted) return;
-    // Decorative countdown so the user knows when to background the app.
-    _pingCountdown = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      setState(() => _pingSecondsLeft -= 1);
-      if (_pingSecondsLeft <= 0) {
-        timer.cancel();
-        _pingCountdown = null;
-        if (mounted) setState(() {});
-      }
-    });
-  }
-
   Future<void> _send() async {
     final text = _composer.text.trim();
     if (text.isEmpty || _store.isResponding) return;
     _composer.clear();
     _focus.requestFocus();
     await _store.sendUser(text: text);
-  }
-
-  Future<void> _clearHistory() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        leading: const Icon(RadixIcons.trash, color: Palette.danger),
-        title: const Text('Clear conversation?'),
-        content: const Text(
-          'Removes every message from this device. The agent loses all '
-          'context for the next reply.',
-        ),
-        actions: [
-          GhostButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          DestructiveButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Clear'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      HapticFeedback.mediumImpact();
-      _store.clear();
-    }
   }
 
   Future<void> _startConversation() async {
@@ -254,19 +179,6 @@ class _AgentChatSurfaceState extends State<AgentChatSurface>
             false, // Composer handles its own bottom inset via SafeArea below.
         child: Column(
           children: [
-            if (widget.showTopBar)
-              _ChatTopBar(
-                providerLabel: _store.providerLabel,
-                title: widget.agentName,
-                onConversation: widget.showVoiceAction
-                    ? _startConversation
-                    : null,
-                onPing: _ping,
-                pingCountdown: _pingCountdown != null ? _pingSecondsLeft : 0,
-                pingGenerating: _pingGenerating,
-                onClearHistory: _store.turns.isEmpty ? null : _clearHistory,
-              ),
-            if (widget.showTopBar) Container(height: 1, color: Palette.border),
             Expanded(
               child: _store.turns.isEmpty
                   ? const _EmptyState()
@@ -301,174 +213,16 @@ class _AgentChatSurfaceState extends State<AgentChatSurface>
   }
 }
 
-class _ChatTopBar extends StatelessWidget {
-  const _ChatTopBar({
-    required this.title,
-    required this.providerLabel,
-    required this.onConversation,
-    required this.onPing,
-    required this.pingCountdown,
-    required this.pingGenerating,
-    required this.onClearHistory,
-  });
-
-  final String title;
-  final String providerLabel;
-  final VoidCallback? onConversation;
-  final VoidCallback onPing;
-  final int pingCountdown; // 0 when idle, >0 while counting down to OS banner
-  final bool pingGenerating; // true while LLM is producing the proactive text
-  final VoidCallback? onClearHistory; // null when history is empty
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 50,
-      color: Palette.background,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: Palette.text,
-                    letterSpacing: -0.2,
-                    height: 1.1,
-                  ),
-                ),
-                Text(
-                  providerLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Palette.muted,
-                    fontSize: 11,
-                    height: 1.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onLongPress: () => NotificationService.instance.testFireNow(),
-            child: GhostButton(
-              density: (pingGenerating || pingCountdown > 0)
-                  ? ButtonDensity.compact
-                  : ButtonDensity.icon,
-              onPressed: (pingGenerating || pingCountdown > 0) ? null : onPing,
-              child: pingGenerating
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        SizedBox.square(
-                          dimension: 12,
-                          child: CircularProgressIndicator(),
-                        ),
-                        Gap(6),
-                        Text(
-                          'Generating…',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: Palette.text,
-                          ),
-                        ),
-                      ],
-                    )
-                  : pingCountdown > 0
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(RadixIcons.bell, size: 13),
-                        const Gap(6),
-                        Text(
-                          'Banner in ${pingCountdown}s',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: Palette.text,
-                          ),
-                        ),
-                      ],
-                    )
-                  : const Icon(RadixIcons.bell, size: 14),
-            ),
-          ),
-          if (onConversation != null) ...[
-            const Gap(4),
-            GhostButton(
-              density: ButtonDensity.compact,
-              onPressed: onConversation,
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(LucideIcons.audioLines, size: 13),
-                  Gap(6),
-                  Text('Conversation'),
-                ],
-              ),
-            ),
-          ],
-          const Gap(4),
-          GhostButton(
-            density: ButtonDensity.icon,
-            onPressed: onClearHistory,
-            child: Icon(
-              RadixIcons.trash,
-              size: 14,
-              color: onClearHistory == null ? Palette.subtle : Palette.muted,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text(
-                'Start the conversation.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: Palette.text,
-                  letterSpacing: -0.4,
-                  height: 1.2,
-                ),
-              ),
-              Gap(8),
-              Text(
-                'Type a message, or tap Conversation to talk in voice.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Palette.muted,
-                  fontSize: 12,
-                  height: 1.45,
-                ),
-              ),
-            ],
-          ),
-        ),
+      child: Icon(
+        RadixIcons.chatBubble,
+        size: 24,
+        color: Palette.muted.withValues(alpha: 0.42),
       ),
     );
   }
@@ -554,6 +308,7 @@ class _TurnViewState extends State<_TurnView>
                       ),
                     ),
                   Container(
+                    width: hasGenui ? double.infinity : null,
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                     decoration: BoxDecoration(
                       color: bg,
@@ -773,6 +528,7 @@ class _Composer extends StatelessWidget {
             children: [
               if (onConversation != null) ...[
                 SizedBox(
+                  width: 44,
                   height: 44,
                   child: GhostButton(
                     density: ButtonDensity.icon,
@@ -796,9 +552,10 @@ class _Composer extends StatelessWidget {
               ),
               const Gap(8),
               SizedBox(
+                width: 48,
                 height: 44,
                 child: PrimaryButton(
-                  density: ButtonDensity.compact,
+                  density: ButtonDensity.icon,
                   onPressed: busy ? null : onSubmit,
                   child: busy
                       ? const SizedBox.square(

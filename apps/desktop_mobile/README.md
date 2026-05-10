@@ -1,6 +1,6 @@
-# Agents Cloud Desktop/Mobile Console
+# Desktop/Mobile Console
 
-Flutter app for the native Agents Cloud command center.
+Flutter app for the native command center.
 
 Current status:
 

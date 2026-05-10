@@ -4,6 +4,8 @@ import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ResidentRunner, residentRunnerConfigFromPartial, type ResidentAdapterKind, type ResidentAgentProfile, type ResidentWakeRequest } from "./resident-runner.js";
 
+await bootstrapHermesHome();
+
 const runner = new ResidentRunner(residentRunnerConfigFromPartial({
   rootDir: process.env.AGENTS_RUNNER_ROOT ?? "/runner",
   orgId: process.env.ORG_ID ?? "org-local-001",
@@ -135,6 +137,55 @@ async function storeHermesAuth(payload: HermesAuthUpload): Promise<void> {
   await chmod(authPath, 0o600);
 }
 
+async function bootstrapHermesHome(): Promise<void> {
+  const hermesHome = process.env.HERMES_HOME ?? join(process.env.AGENTS_RUNNER_ROOT ?? "/runner", "hermes");
+  await mkdir(hermesHome, { recursive: true });
+  const configPath = join(hermesHome, "config.yaml");
+  await writeFile(configPath, renderDefaultHermesConfig(), { mode: 0o600 });
+  await chmod(configPath, 0o600);
+
+  if (process.env.HERMES_AUTH_JSON_BOOTSTRAP) {
+    const authPath = join(hermesHome, "auth.json");
+    await writeFile(authPath, serializeHermesAuth(process.env.HERMES_AUTH_JSON_BOOTSTRAP), { mode: 0o600 });
+    await chmod(authPath, 0o600);
+  }
+}
+
+function renderDefaultHermesConfig(): string {
+  const provider = process.env.AGENTS_MODEL_PROVIDER ?? "openai-codex";
+  const model = process.env.AGENTS_MODEL && process.env.AGENTS_MODEL.trim().length > 0 ? process.env.AGENTS_MODEL : "gpt-5.5";
+  const maxTurns = Number(process.env.AGENTS_HERMES_MAX_TURNS ?? "8");
+  const toolsets = (process.env.HERMES_TOOLSETS ?? "file,terminal,web,delegation,skills,session_search")
+    .split(",")
+    .map((toolset) => toolset.trim())
+    .filter(Boolean);
+  return [
+    "model:",
+    `  provider: ${yamlString(provider)}`,
+    `  default: ${yamlString(model)}`,
+    "delegation:",
+    `  provider: ${yamlString(provider)}`,
+    `  model: ${yamlString(model)}`,
+    "agent:",
+    `  max_turns: ${Number.isFinite(maxTurns) && maxTurns > 0 ? maxTurns : 8}`,
+    "terminal:",
+    "  backend: local",
+    "approvals:",
+    "  mode: manual",
+    "platform_toolsets:",
+    "  cli:",
+    ...toolsets.map((toolset) => `    - ${yamlString(toolset)}`),
+    "display:",
+    "  tool_progress: false",
+    "  show_cost: false",
+    ""
+  ].join("\n");
+}
+
+function yamlString(value: string): string {
+  return JSON.stringify(value);
+}
+
 function serializeHermesAuth(value: unknown): string {
   let parsed = value;
   if (typeof value === "string") {
@@ -156,13 +207,14 @@ function defaultProfilesFromEnvironment(): ResidentAgentProfile[] {
   }
   return [
     {
-      agentId: process.env.AGENT_ID ?? "agent-default",
-      profileId: process.env.AGENT_PROFILE_ID ?? "default-resident-agent",
-      profileVersion: process.env.AGENT_PROFILE_VERSION ?? "local-dev",
-      role: process.env.AGENT_ROLE ?? "Resident Agent",
+      agentId: process.env.AGENT_ID ?? "agent-delegator-codex-55",
+      profileId: process.env.AGENT_PROFILE_ID ?? "codex-55-agent-delegator",
+      profileVersion: process.env.AGENT_PROFILE_VERSION ?? "codex-55-agent-delegator-v1",
+      role: process.env.AGENT_ROLE ?? "Agent Delegator",
       provider: providerFromEnv(),
-      model: process.env.AGENTS_MODEL,
-      toolsets: process.env.HERMES_TOOLSETS ?? "file,terminal,web",
+      model: process.env.AGENTS_MODEL && process.env.AGENTS_MODEL.trim().length > 0 ? process.env.AGENTS_MODEL : "gpt-5.5",
+      toolsets: process.env.HERMES_TOOLSETS ?? "file,terminal,web,delegation,skills,session_search",
+      promptTemplate: process.env.AGENT_PROMPT_TEMPLATE ?? defaultDelegatorPromptTemplate(),
       tenant: {
         orgId: process.env.ORG_ID ?? "org-local-001",
         userId: process.env.USER_ID ?? "user-local-001",
@@ -170,6 +222,18 @@ function defaultProfilesFromEnvironment(): ResidentAgentProfile[] {
       }
     }
   ];
+}
+
+function defaultDelegatorPromptTemplate(): string {
+  return [
+    "You are the user's Codex 5.5 resident Agent Delegator inside Agents Cloud.",
+    "Decompose the objective, delegate focused work to specialist subagents when useful, synthesize their results, and keep the user-facing answer concise and action-oriented.",
+    "When a durable new specialist is needed, describe the profile to create and register it through the platform agent APIs rather than only discussing it.",
+    "Make logical agents visible as dashboard agent instances by using the resident runner agent registry and delegated-agent events.",
+    "Tenant boundary: org={{orgId}}, user={{userId}}, workspace={{workspaceId}}, runner={{runnerId}}.",
+    "Objective: {{objective}}",
+    "Run: {{runId}} Task: {{taskId}}"
+  ].join("\n");
 }
 
 function providerFromEnv(): ResidentAgentProfile["provider"] {

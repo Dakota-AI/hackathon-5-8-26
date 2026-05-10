@@ -28,6 +28,8 @@ export class RuntimeStack extends AgentsCloudStack {
   public readonly agentRuntimeContainer: ContainerDefinition;
   public readonly residentRunnerTaskDefinition: FargateTaskDefinition;
   public readonly residentRunnerContainer: ContainerDefinition;
+  public readonly residentRunnerContainerName: string = "resident-runner";
+  public readonly residentRunnerApiToken: Secret;
 
   public constructor(scope: Construct, id: string, props: RuntimeStackProps) {
     super(scope, id, props);
@@ -231,6 +233,7 @@ export class RuntimeStack extends AgentsCloudStack {
         passwordLength: 48
       }
     });
+    this.residentRunnerApiToken = residentRunnerApiToken;
     const residentRunnerHermesAuth = Secret.fromSecretNameV2(
       this,
       "ResidentRunnerHermesAuthJson",
@@ -254,7 +257,8 @@ export class RuntimeStack extends AgentsCloudStack {
         AGENTS_RESIDENT_ADAPTER: process.env.AGENTS_CLOUD_RESIDENT_ADAPTER ?? "hermes-cli",
         AGENTS_RUNNER_ROOT: "/runner",
         AGENTS_MODEL_PROVIDER: process.env.AGENTS_CLOUD_RESIDENT_MODEL_PROVIDER ?? "openai-codex",
-        AGENTS_MODEL: process.env.AGENTS_CLOUD_RESIDENT_MODEL ?? "",
+        AGENTS_MODEL: process.env.AGENTS_CLOUD_RESIDENT_MODEL ?? "gpt-5.5",
+        HERMES_TOOLSETS: process.env.AGENTS_CLOUD_RESIDENT_TOOLSETS ?? "file,terminal,web,delegation,skills,session_search",
         AGENTS_HERMES_MAX_TURNS: process.env.AGENTS_CLOUD_RESIDENT_HERMES_MAX_TURNS ?? "8",
         HERMES_COMMAND: "/opt/hermes/.venv/bin/hermes",
         HERMES_HOME: "/runner/hermes",

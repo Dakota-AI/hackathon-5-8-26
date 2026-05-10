@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { mock } from "node:test";
 
 import {
   buildWorkItemDetailView,
@@ -91,4 +91,63 @@ test("rejectUnsafeSurfacePayload fails closed for unvalidated generated UI", () 
     }),
     true
   );
+});
+
+// Real-data path: when NEXT_PUBLIC_AGENTS_CLOUD_API_URL is set and a Cognito
+// session is available, listControlApiWorkItems() must call the right URL with
+// a bearer token. This is what powers the WorkDashboard for an authed user
+// in the live app.
+test("listControlApiWorkItems hits /work-items with bearer token (real-data path)", async (t) => {
+  if (typeof (t.mock as { module?: unknown }).module !== "function") {
+    t.skip("node:test module mocks unavailable; rerun with --experimental-test-module-mocks");
+    return;
+  }
+
+  process.env.NEXT_PUBLIC_AGENTS_CLOUD_API_URL = "https://example.invalid/api";
+  delete process.env.NEXT_PUBLIC_AGENTS_CLOUD_API_MOCK;
+
+  t.mock.module("aws-amplify/auth", {
+    namedExports: {
+      fetchAuthSession: async () => ({
+        tokens: { idToken: { toString: () => "test-id-token" } }
+      })
+    }
+  });
+
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    calls.push({ url: String(url), init });
+    return new Response(
+      JSON.stringify({
+        workItems: [
+          {
+            workspaceId: "ws-test",
+            workItemId: "wi-1",
+            objective: "Track competitor pricing",
+            status: "needs_review"
+          }
+        ]
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+  }) as typeof fetch;
+
+  try {
+    const mod = await import("../lib/control-api.ts");
+    assert.equal(mod.getControlApiHealth().configured, true);
+
+    const response = await mod.listControlApiWorkItems({ workspaceId: "ws-test", limit: 5 });
+    assert.equal(response.workItems.length, 1);
+    assert.equal(response.workItems[0]!.workItemId, "wi-1");
+
+    assert.equal(calls.length, 1);
+    assert.match(calls[0]!.url, /\/work-items\?/);
+    assert.match(calls[0]!.url, /workspaceId=ws-test/);
+    const headers = calls[0]!.init?.headers as Record<string, string> | undefined;
+    assert.equal(headers?.authorization, "Bearer test-id-token");
+  } finally {
+    globalThis.fetch = originalFetch;
+    mock.restoreAll();
+  }
 });

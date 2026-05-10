@@ -3,6 +3,8 @@
 import { Authenticator } from "@aws-amplify/ui-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { artifacts, metrics, runs, teams } from "../lib/fixtures";
+import { readAmplifyEnv } from "../lib/amplify-config";
+import { resetAmplifyAuthSession } from "../lib/auth-session-reset";
 import {
   createControlApiRun,
   getControlApiHealth,
@@ -34,10 +36,10 @@ export function CommandCenter() {
 
   return (
     <Authenticator variation="modal" hideSignUp={false}>
-      {({ signOut, user }) => (
+      {({ user }) => (
         <CommandCenterApp
           userLabel={user?.signInDetails?.loginId || user?.username || "Amplify Auth session active"}
-          onSignOut={signOut}
+          onSignOut={() => void resetAmplifyAuthSession({ clientId: readAmplifyEnv().userPoolClientId })}
         />
       )}
     </Authenticator>

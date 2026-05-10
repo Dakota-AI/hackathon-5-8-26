@@ -64,6 +64,22 @@ textarea {
   color: var(--muted);
 }
 
+.banner-link-button {
+  border: 0;
+  background: transparent;
+  color: var(--soft);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.banner-link-button:hover {
+  color: white;
+}
+
 .dot {
   width: 8px;
   height: 8px;

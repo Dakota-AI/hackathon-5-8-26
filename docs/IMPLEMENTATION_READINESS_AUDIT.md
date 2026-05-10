@@ -74,6 +74,13 @@ contract-correct.
   approvals, and status panels remain mostly fixture-backed.
 - Flutter configures Amplify and contains a Control API client, but the user
   experience does not yet perform a real authenticated run workflow.
+- GenUI/Markdown/artifact/browser reference audit is captured in
+  `docs/roadmap/GENUI_MARKDOWN_CHAT_BROWSER_AUDIT.md`.
+- Paperclip/Hermes reference audit is captured in
+  `docs/roadmap/PAPERCLIP_KANBAN_UI_UX_AUDIT.md`; it identifies a missing
+  durable Work Item layer above Runs. Board/Kanban, inbox, approvals, run
+  ledgers, transcripts, artifacts, and GenUI surfaces should hang off Work
+  Items rather than free-floating chat/run fixtures.
 
 ### Not Complete
 
@@ -85,6 +92,13 @@ contract-correct.
 - Production agent runtime with model/provider secrets, workspace policy, and
   isolation.
 - Human approval workflow.
+- Durable Work Item / issue model above Runs for Kanban, inbox, work detail,
+  comments, run ledgers, and artifact/work-product attachment.
+- Workspace/entity event envelope or separate WorkItemEvents stream for
+  non-run-centric board/workspace events; current canonical events are still
+  primarily run-ledger shaped.
+- Work Item execution locks, wake coalescing, deferred wakeups, and stale-lock
+  repair semantics.
 - Cancel/resume/retry semantics.
 - Artifact listing/download APIs.
 - Observability, alarms, access logs, and operational runbooks.

@@ -26,6 +26,7 @@ Current state:
 - The Next.js command center now has the first product run loop: create a run from the objective panel, poll the deployed Control API event ledger, render ordered `run.status`/`artifact.created` events, stop on terminal status, and show artifact cards. It has unit coverage for ledger merging/view-model behavior and was browser-dogfooded in local self-test mode.
 - A real authenticated HTTP e2e smoke now exists and passed with a temporary Cognito user: `scripts/smoke-web-http-e2e.sh` created run `run-idem-40e5c2eeae1183234f86c187`, Step Functions returned `SUCCEEDED`, Control API returned run status `succeeded`, four canonical events, and an artifact event.
 - A real WebSocket e2e smoke now exists and passed with a temporary Cognito user: `scripts/smoke-websocket-e2e.sh` created run `run-idem-32b971ea09ad7c024e8cd6ee` and received live `run.status/running`, `artifact.created`, and `run.status/succeeded` messages from the deployed WebSocket API.
+- Reference UI/UX audits now exist for GenUI/Markdown/artifacts/browser surfaces and for Paperclip/Hermes-style Kanban/work-item control-plane UX. The key product gap is a durable Work Item layer above Runs so Board, Inbox, Run Ledger, Approvals, Artifacts, and GenUI surfaces share one auditable work object.
 
 Approximate progress:
 

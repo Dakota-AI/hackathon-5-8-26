@@ -129,6 +129,7 @@ Use these docs in this order:
 12. `docs/roadmap/WEB_APP_STATUS.md`
 13. `docs/roadmap/SHADCN_FLUTTER_UI_SYSTEM.md`
 14. `docs/roadmap/GENUI_MARKDOWN_CHAT_BROWSER_AUDIT.md`
+15. `docs/roadmap/PAPERCLIP_KANBAN_UI_UX_AUDIT.md`
 
 The long roadmap and architecture docs are still useful, but this master
 document and `PROJECT_STATUS.md` reflect the current implementation position.

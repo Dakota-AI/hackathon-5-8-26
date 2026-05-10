@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -52,6 +54,8 @@ class AuthState {
 }
 
 class AuthController extends Notifier<AuthState> {
+  static const _authTimeout = Duration(seconds: 20);
+
   @override
   AuthState build() => const AuthState();
 
@@ -61,12 +65,15 @@ class AuthController extends Notifier<AuthState> {
       return;
     }
     try {
-      final session = await Amplify.Auth.fetchAuthSession();
+      final session = await Amplify.Auth.fetchAuthSession().timeout(
+        _authTimeout,
+        onTimeout: () => throw TimeoutException(
+          'Timed out while checking your saved sign-in session.',
+          _authTimeout,
+        ),
+      );
       if (!session.isSignedIn) {
-        state = state.copyWith(
-          status: AuthStatus.signedOut,
-          clearError: true,
-        );
+        state = state.copyWith(status: AuthStatus.signedOut, clearError: true);
         return;
       }
       final cognito = session as CognitoAuthSession;
@@ -103,10 +110,17 @@ class AuthController extends Notifier<AuthState> {
       clearInfoMessage: true,
     );
     try {
-      final result = await Amplify.Auth.signIn(
-        username: email,
-        password: password,
-      );
+      final result =
+          await Amplify.Auth.signIn(
+            username: email,
+            password: password,
+          ).timeout(
+            _authTimeout,
+            onTimeout: () => throw TimeoutException(
+              'Timed out while signing in. Please try again.',
+              _authTimeout,
+            ),
+          );
       if (result.isSignedIn) {
         await bootstrap();
         return;
@@ -140,7 +154,7 @@ class AuthController extends Notifier<AuthState> {
         status: AuthStatus.error,
         errorMessage: _friendlyAuthError(error),
       );
-    } on Exception catch (error) {
+    } catch (error) {
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: _friendlyError(error),
@@ -155,13 +169,20 @@ class AuthController extends Notifier<AuthState> {
       clearInfoMessage: true,
     );
     try {
-      final result = await Amplify.Auth.signUp(
-        username: email,
-        password: password,
-        options: SignUpOptions(
-          userAttributes: {CognitoUserAttributeKey.email: email},
-        ),
-      );
+      final result =
+          await Amplify.Auth.signUp(
+            username: email,
+            password: password,
+            options: SignUpOptions(
+              userAttributes: {CognitoUserAttributeKey.email: email},
+            ),
+          ).timeout(
+            _authTimeout,
+            onTimeout: () => throw TimeoutException(
+              'Timed out while creating the account. Please try again.',
+              _authTimeout,
+            ),
+          );
       final next = result.nextStep.signUpStep;
       if (next == AuthSignUpStep.confirmSignUp) {
         state = state.copyWith(
@@ -192,7 +213,7 @@ class AuthController extends Notifier<AuthState> {
         status: AuthStatus.error,
         errorMessage: _friendlyAuthError(error),
       );
-    } on Exception catch (error) {
+    } catch (error) {
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: _friendlyError(error),
@@ -207,10 +228,17 @@ class AuthController extends Notifier<AuthState> {
       clearInfoMessage: true,
     );
     try {
-      final result = await Amplify.Auth.confirmSignUp(
-        username: email,
-        confirmationCode: code,
-      );
+      final result =
+          await Amplify.Auth.confirmSignUp(
+            username: email,
+            confirmationCode: code,
+          ).timeout(
+            _authTimeout,
+            onTimeout: () => throw TimeoutException(
+              'Timed out while verifying the code. Please try again.',
+              _authTimeout,
+            ),
+          );
       if (result.isSignUpComplete) {
         state = state.copyWith(
           status: AuthStatus.signedOut,
@@ -230,7 +258,7 @@ class AuthController extends Notifier<AuthState> {
         status: AuthStatus.error,
         errorMessage: _friendlyAuthError(error),
       );
-    } on Exception catch (error) {
+    } catch (error) {
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: _friendlyError(error),
@@ -241,14 +269,20 @@ class AuthController extends Notifier<AuthState> {
   Future<void> resendConfirmationCode(String email) async {
     state = state.copyWith(clearError: true, clearInfoMessage: true);
     try {
-      await Amplify.Auth.resendSignUpCode(username: email);
+      await Amplify.Auth.resendSignUpCode(username: email).timeout(
+        _authTimeout,
+        onTimeout: () => throw TimeoutException(
+          'Timed out while resending the code. Please try again.',
+          _authTimeout,
+        ),
+      );
       state = state.copyWith(infoMessage: 'Verification code sent.');
     } on AuthException catch (error) {
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: _friendlyAuthError(error),
       );
-    } on Exception catch (error) {
+    } catch (error) {
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: _friendlyError(error),
@@ -268,7 +302,7 @@ class AuthController extends Notifier<AuthState> {
   Future<void> signOut() async {
     try {
       await Amplify.Auth.signOut();
-    } on Exception {
+    } catch (_) {
       // ignore
     }
     state = const AuthState(status: AuthStatus.signedOut);
@@ -276,12 +310,14 @@ class AuthController extends Notifier<AuthState> {
 
   Future<String?> idToken() async {
     try {
-      final session = await Amplify.Auth.fetchAuthSession();
+      final session = await Amplify.Auth.fetchAuthSession().timeout(
+        _authTimeout,
+      );
       if (!session.isSignedIn) return null;
       final cognito = session as CognitoAuthSession;
       final tokens = cognito.userPoolTokensResult.value;
       return tokens.idToken.raw;
-    } on Exception {
+    } catch (_) {
       return null;
     }
   }
@@ -296,6 +332,9 @@ String _friendlyAuthError(AuthException error) {
 }
 
 String _friendlyError(Object error) {
+  if (error is TimeoutException) {
+    return error.message ?? 'The auth request timed out. Please try again.';
+  }
   final str = error.toString();
   // Strip leading "Exception: " noise that Dart adds.
   return str.replaceFirst(RegExp(r'^Exception:\s*'), '');

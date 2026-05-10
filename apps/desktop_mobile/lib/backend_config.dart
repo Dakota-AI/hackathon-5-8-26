@@ -78,7 +78,18 @@ class AgentsCloudBackend {
   static Future<AgentsCloudBackendStatus> configureAmplify() async {
     try {
       if (!Amplify.isConfigured) {
-        await Amplify.addPlugin(AmplifyAuthCognito());
+        // macOS debug builds in this repo are intentionally unsigned/ad-hoc so
+        // they can be launched locally without an Apple provisioning profile.
+        // Cognito's default secure storage requires Keychain Sharing, which
+        // fails in that unsigned shape and leaves sign-in stuck loading. Use a
+        // process-local store for the desktop debug console so sign-in can
+        // complete; production signed builds can swap this for keychain-backed
+        // storage when provisioning is configured.
+        await Amplify.addPlugin(
+          AmplifyAuthCognito(
+            secureStorageFactory: (scope) => _InMemorySecureStorage(scope.name),
+          ),
+        );
         await Amplify.configure(agentsCloudAmplifyConfig);
       }
       return const AgentsCloudBackendStatus(
@@ -92,6 +103,29 @@ class AgentsCloudBackend {
         message: error.toString(),
       );
     }
+  }
+}
+
+class _InMemorySecureStorage extends SecureStorageInterface {
+  _InMemorySecureStorage(this.scope);
+
+  static final Map<String, Map<String, String>> _stores = {};
+
+  final String scope;
+
+  Map<String, String> get _store => _stores.putIfAbsent(scope, () => {});
+
+  @override
+  Future<void> write({required String key, required String value}) async {
+    _store[key] = value;
+  }
+
+  @override
+  Future<String?> read({required String key}) async => _store[key];
+
+  @override
+  Future<void> delete({required String key}) async {
+    _store.remove(key);
   }
 }
 

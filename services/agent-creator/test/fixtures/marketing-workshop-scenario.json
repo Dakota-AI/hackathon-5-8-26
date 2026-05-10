@@ -1,0 +1,56 @@
+{
+  "workspaceId": "workspace-demo",
+  "requestedByUserId": "user-demo",
+  "requestedRole": "Marketing Strategist",
+  "projectContext": {
+    "name": "Solo CEO launch",
+    "goals": [
+      "Create a launch plan",
+      "Research channels before recommending paid tools",
+      "Produce concise weekly PDF-style reports"
+    ],
+    "constraints": [
+      "Avoid expensive APIs without approval",
+      "Ask before sending email or posting publicly"
+    ]
+  },
+  "userPreferences": {
+    "communicationCadence": "end_of_day_report",
+    "reportStyle": "concise_pdf_brief",
+    "verbosity": "concise",
+    "approvalPreference": "ask_before_expensive_or_external_side_effects"
+  },
+  "feedback": [
+    {
+      "source": "user",
+      "message": "The agent should not call me all the time. It should batch non-critical updates into the end of day report."
+    },
+    {
+      "source": "user",
+      "message": "If information is out of date, research first and explain source quality."
+    }
+  ],
+  "candidateTools": [
+    {
+      "id": "apify.search-actors",
+      "name": "Apify Actor Search",
+      "category": "research",
+      "risk": "low",
+      "description": "Search Apify Store for actors without running them."
+    },
+    {
+      "id": "apify.call-actor",
+      "name": "Apify Actor Run",
+      "category": "external_action",
+      "risk": "high",
+      "description": "Run selected Apify actors and spend credits."
+    },
+    {
+      "id": "email.send",
+      "name": "Send Email",
+      "category": "external_action",
+      "risk": "high",
+      "description": "Send emails to external recipients."
+    }
+  ]
+}

@@ -106,6 +106,15 @@ importers:
         specifier: ^4.0.0
         version: 4.90.0(@cloudflare/workers-types@4.20260509.1)
 
+  packages/agent-profile:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.7
+        version: 22.19.18
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
   packages/protocol:
     devDependencies:
       '@types/node':
@@ -119,6 +128,19 @@ importers:
         version: 3.0.1(ajv@8.20.0)
       typescript:
         specifier: ^5.7.2
+        version: 5.9.3
+
+  services/agent-creator:
+    dependencies:
+      '@agents-cloud/agent-profile':
+        specifier: workspace:*
+        version: link:../../packages/agent-profile
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.7
+        version: 22.19.18
+      typescript:
+        specifier: ^5.7.3
         version: 5.9.3
 
   services/agent-runtime:

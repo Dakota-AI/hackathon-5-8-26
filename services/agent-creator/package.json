@@ -1,0 +1,27 @@
+{
+  "name": "@agents-cloud/agent-creator",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Adaptive Agent Workshop service for drafting, testing, and tuning specialist agent profiles.",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm --filter @agents-cloud/agent-profile run build && tsc -p tsconfig.json",
+    "test": "pnpm build && node --test dist/test/**/*.test.js",
+    "smoke": "pnpm build && node dist/src/cli.js --scenario test/fixtures/marketing-workshop-scenario.json"
+  },
+  "dependencies": {
+    "@agents-cloud/agent-profile": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "typescript": "^5.7.3"
+  }
+}

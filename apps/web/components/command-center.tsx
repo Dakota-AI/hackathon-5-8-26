@@ -21,7 +21,7 @@ import {
   serializeSubscribeRunMessage,
   serializeUnsubscribeRunMessage
 } from "../lib/realtime-client";
-import { deriveRunLedgerView, mergeRunEvents } from "../lib/run-ledger";
+import { deriveRunLedgerView, isSmokeWorkerArtifact, mergeRunEvents } from "../lib/run-ledger";
 
 const defaultObjective = "";
 
@@ -100,6 +100,10 @@ function CreateRunPanel({ apiConfigured, mockMode }: { apiConfigured: boolean; m
   const ledgerView = useMemo(
     () => deriveRunLedgerView({ initialStatus: createdRun?.status || "queued", events }),
     [createdRun?.status, events]
+  );
+  const visibleArtifacts = useMemo(
+    () => ledgerView.artifacts.filter((artifact) => !isSmokeWorkerArtifact(artifact)),
+    [ledgerView.artifacts]
   );
 
   const messages = useMemo(
@@ -267,9 +271,9 @@ function CreateRunPanel({ apiConfigured, mockMode }: { apiConfigured: boolean; m
               <p>Ask for a report, a prototype, research, a plan, or a generated UI draft.</p>
             </div>
           )}
-          {ledgerView.artifacts.length ? (
+          {visibleArtifacts.length ? (
             <div className="generated-ui-stack" aria-label="Generated UI">
-              {ledgerView.artifacts.map((artifact) => (
+              {visibleArtifacts.map((artifact) => (
                 <article className="generated-card" key={artifact.id}>
                   <span>Generated output</span>
                   <strong>{artifact.name}</strong>
@@ -322,6 +326,8 @@ function buildChatMessages(input: {
   error: string | null;
 }): ChatMessage[] {
   const messages: ChatMessage[] = [];
+  const artifacts = deriveRunLedgerView({ initialStatus: "queued", events: input.events }).artifacts;
+  const hasSmokeWorkerArtifact = artifacts.some((artifact) => isSmokeWorkerArtifact(artifact));
   if (input.objective) {
     messages.push({ id: "user-objective", role: "user", text: input.objective });
   }
@@ -331,7 +337,7 @@ function buildChatMessages(input: {
 
   const seen = new Set<string>();
   for (const event of input.events) {
-    const message = friendlyMessageForEvent(event);
+    const message = friendlyMessageForEvent(event, { hasSmokeWorkerArtifact });
     if (!message || seen.has(message)) {
       continue;
     }
@@ -346,12 +352,19 @@ function buildChatMessages(input: {
   return messages;
 }
 
-function friendlyMessageForEvent(event: RunEvent): string | null {
+function friendlyMessageForEvent(event: RunEvent, context: { hasSmokeWorkerArtifact: boolean }): string | null {
   if (event.type === "run.status" && typeof event.payload?.status === "string") {
+    if (event.payload.status === "succeeded" && context.hasSmokeWorkerArtifact) {
+      return "The request reached the worker successfully, but the deployed worker is still only a test runner. It did not build the web app yet.";
+    }
     return friendlyStatusLabels[event.payload.status] || "I’m updating the work status.";
   }
   if (event.type === "artifact.created") {
     const name = typeof event.payload?.name === "string" ? event.payload.name : "the result";
+    const kind = typeof event.payload?.kind === "string" ? event.payload.kind : "artifact";
+    if (isSmokeWorkerArtifact({ name, kind })) {
+      return "This produced a worker test report, not the requested app. The next step is connecting the real app-generation/local LLM worker.";
+    }
     return `I created ${name}.`;
   }
   return null;

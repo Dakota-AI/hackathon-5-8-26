@@ -82,6 +82,12 @@ export function extractArtifactCards(events: RunEventLike[]): ArtifactCard[] {
     });
 }
 
+export function isSmokeWorkerArtifact(artifact: Pick<ArtifactCard, "name" | "kind">): boolean {
+  const normalizedName = artifact.name.toLowerCase();
+  const normalizedKind = artifact.kind.toLowerCase();
+  return normalizedKind === "report" && (normalizedName.includes("hermes worker report") || normalizedName.includes("hermes smoke report"));
+}
+
 export function isTerminalRunStatus(status: string): boolean {
   return terminalStatuses.has(status.toLowerCase());
 }

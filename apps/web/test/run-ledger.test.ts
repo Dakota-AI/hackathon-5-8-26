@@ -5,6 +5,7 @@ import {
   deriveRunLedgerView,
   extractArtifactCards,
   formatRunEventSource,
+  isSmokeWorkerArtifact,
   isTerminalRunStatus,
   mergeRunEvents,
   type RunEventLike
@@ -102,4 +103,11 @@ test("formatRunEventSource renders canonical source objects as text", () => {
   assert.equal(formatRunEventSource({ source: { name: "agents-cloud-worker" } }), "agents-cloud-worker");
   assert.equal(formatRunEventSource({ source: { kind: "worker" } }), "worker");
   assert.equal(formatRunEventSource({}), "durable ledger");
+});
+
+test("isSmokeWorkerArtifact identifies placeholder worker reports", () => {
+  assert.equal(isSmokeWorkerArtifact({ name: "Hermes worker report", kind: "report" }), true);
+  assert.equal(isSmokeWorkerArtifact({ name: "Hermes smoke report", kind: "report" }), true);
+  assert.equal(isSmokeWorkerArtifact({ name: "Stock tracker web app", kind: "website" }), false);
+  assert.equal(isSmokeWorkerArtifact({ name: "Market analysis report", kind: "report" }), false);
 });

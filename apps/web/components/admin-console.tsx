@@ -4,7 +4,15 @@ import { Authenticator } from "@aws-amplify/ui-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { readAmplifyEnv } from "../lib/amplify-config";
 import { resetAmplifyAuthSession } from "../lib/auth-session-reset";
-import { getControlApiHealth, listControlApiAdminRuns, type AdminRunSummary, type AdminRunsResponse } from "../lib/control-api";
+import { describeAdminLineageEvent, summarizePipelinePosition } from "../lib/admin-lineage";
+import {
+  getControlApiHealth,
+  listControlApiAdminRunEvents,
+  listControlApiAdminRuns,
+  type AdminRunSummary,
+  type AdminRunsResponse,
+  type RunEvent
+} from "../lib/control-api";
 
 const defaultAdminState: AdminRunsResponse = {
   runs: [],
@@ -37,6 +45,9 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
   const api = getControlApiHealth();
   const [data, setData] = useState<AdminRunsResponse>(defaultAdminState);
   const [selectedRunId, setSelectedRunId] = useState<string | undefined>();
+  const [lineageEvents, setLineageEvents] = useState<RunEvent[]>([]);
+  const [lineageLoading, setLineageLoading] = useState(false);
+  const [lineageError, setLineageError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [lastLoadedAt, setLastLoadedAt] = useState<string | undefined>();
@@ -59,6 +70,38 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!selectedRunId || !api.configured) {
+      setLineageEvents([]);
+      return;
+    }
+
+    let cancelled = false;
+    setLineageLoading(true);
+    setLineageError(undefined);
+    void listControlApiAdminRunEvents(selectedRunId, { limit: 100 })
+      .then((response) => {
+        if (!cancelled) {
+          setLineageEvents(response.events);
+        }
+      })
+      .catch((caught) => {
+        if (!cancelled) {
+          setLineageError(caught instanceof Error ? caught.message : "Unable to load run lineage.");
+          setLineageEvents([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLineageLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api.configured, selectedRunId]);
 
   const selectedRun = useMemo(() => data.runs.find((run) => run.runId === selectedRunId), [data.runs, selectedRunId]);
   const recentFailures = useMemo(() => data.runs.filter((run) => run.failureCount > 0 || run.status === "failed").slice(0, 5), [data.runs]);
@@ -128,7 +171,11 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
         </div>
 
         <div className="admin-panel detail-panel">
-          {selectedRun ? <RunDetail run={selectedRun} /> : <div className="empty-state">Select a run to inspect it.</div>}
+          {selectedRun ? (
+            <RunDetail run={selectedRun} events={lineageEvents} lineageLoading={lineageLoading} lineageError={lineageError} />
+          ) : (
+            <div className="empty-state">Select a run to inspect it.</div>
+          )}
         </div>
       </section>
 
@@ -166,7 +213,17 @@ function MetricCard({ label, value, danger = false }: { label: string; value: nu
   );
 }
 
-function RunDetail({ run }: { run: AdminRunSummary }) {
+function RunDetail({
+  run,
+  events,
+  lineageLoading,
+  lineageError
+}: {
+  run: AdminRunSummary;
+  events: RunEvent[];
+  lineageLoading: boolean;
+  lineageError?: string;
+}) {
   return (
     <div className="run-detail">
       <div className="panel-heading">
@@ -190,6 +247,40 @@ function RunDetail({ run }: { run: AdminRunSummary }) {
         <Detail label="Failures" value={String(run.failureCount)} />
         <Detail label="Execution ARN" value={run.executionArn || "not started"} code wide />
       </dl>
+
+      <section className="lineage-section">
+        <div className="lineage-summary">
+          <span className="eyebrow">Lineage</span>
+          <strong>{lineageLoading ? "Loading request pipeline..." : summarizePipelinePosition(events)}</strong>
+          <p>User asked: {run.objective || "unknown request"}</p>
+        </div>
+        {lineageError ? <div className="admin-alert danger">{lineageError}</div> : null}
+        {events.length ? (
+          <ol className="lineage-list">
+            {events.map((event) => {
+              const step = describeAdminLineageEvent(event);
+              return (
+                <li className={step.hasError ? "lineage-step error" : "lineage-step"} key={event.id || `${event.runId}-${event.seq}`}>
+                  <div className="lineage-marker">{step.seq}</div>
+                  <div className="lineage-body">
+                    <div className="lineage-step-head">
+                      <strong>{step.summary}</strong>
+                      <time>{formatDate(step.createdAt)}</time>
+                    </div>
+                    <p>{step.type} · {step.source}</p>
+                    <details className="payload-details">
+                      <summary>Payload</summary>
+                      <pre>{JSON.stringify(event.payload ?? {}, null, 2)}</pre>
+                    </details>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        ) : (
+          <div className="empty-state">{lineageLoading ? "Loading lineage events..." : "No lineage events found for this run."}</div>
+        )}
+      </section>
 
       <details className="json-details">
         <summary>Raw admin summary</summary>

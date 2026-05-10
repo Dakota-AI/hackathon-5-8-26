@@ -63,6 +63,12 @@ export type AdminRunsResponse = {
   };
 };
 
+export type AdminRunEventsResponse = {
+  run: AdminRunSummary;
+  events: RunEvent[];
+  nextSeq?: number;
+};
+
 const mockRuns = new Map<string, { createdAt: number; objective: string; workspaceId: string; taskId: string }>();
 
 export function getControlApiHealth(): ControlApiHealth {
@@ -200,6 +206,43 @@ export async function listControlApiAdminRuns(options: { limit?: number } = {}):
   });
 
   return parseJsonResponse<AdminRunsResponse>(response);
+}
+
+export async function listControlApiAdminRunEvents(runId: string, options: { limit?: number } = {}): Promise<AdminRunEventsResponse> {
+  if (isMockMode()) {
+    const run = requireMockRun(runId);
+    const events = await listMockRunEvents(runId);
+    return {
+      run: {
+        runId,
+        workspaceId: run.workspaceId,
+        userId: "local-user",
+        ownerEmail: "local@example.com",
+        objective: run.objective,
+        status: String([...events].reverse().find((event) => event.type === "run.status")?.payload?.status ?? "queued"),
+        createdAt: new Date(run.createdAt).toISOString(),
+        updatedAt: new Date().toISOString(),
+        eventCount: events.length,
+        latestEventType: events.at(-1)?.type,
+        latestEventAt: events.at(-1)?.createdAt,
+        artifactCount: events.filter((event) => event.type === "artifact.created").length,
+        failureCount: 0
+      },
+      events: events.slice(0, options.limit ?? 100),
+      nextSeq: events.at(-1)?.seq
+    };
+  }
+
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const params = new URLSearchParams({ limit: String(options.limit ?? 100) });
+  const response = await fetch(`${baseUrl}/admin/runs/${encodeURIComponent(runId)}/events?${params.toString()}`, {
+    headers: {
+      "authorization": `Bearer ${token}`
+    }
+  });
+
+  return parseJsonResponse<AdminRunEventsResponse>(response);
 }
 
 export async function requireIdToken(): Promise<string> {

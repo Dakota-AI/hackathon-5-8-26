@@ -72,7 +72,7 @@ export class ControlApiStack extends AgentsCloudStack {
       AGENT_PROFILES_TABLE_NAME: props.state.agentProfilesTable.tableName,
       PROFILE_BUNDLES_BUCKET_NAME: props.storage.workspaceLiveArtifactsBucket.bucketName,
       STATE_MACHINE_ARN: props.orchestration.simpleRunStateMachine.stateMachineArn,
-      ADMIN_EMAILS: "seb4594@gmail.com"
+      ADMIN_EMAILS: "seb4594@gmail.com,dakotastpierre0@gmail.com"
     };
 
     const createRunFunction = new NodejsFunction(this, "CreateRunFunction", {

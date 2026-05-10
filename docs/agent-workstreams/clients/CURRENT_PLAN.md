@@ -154,8 +154,8 @@ Current implementation shape:
 
 Current Flutter limitations:
 
-- WorkItems are not modeled or shown as the primary object.
-- No repository/domain-model split exists yet; UI is mostly hardcoded fixture widgets in `main.dart`.
+- WorkItems now have a tested client-side domain model and fixture repository under `apps/desktop_mobile/lib/src/`, but they are not yet rendered as the primary object in the Flutter UI.
+- A first repository/domain-model split exists for WorkItem groundwork; the visible UI is still mostly hardcoded fixture widgets in `main.dart`.
 - No real authenticated session flow is exposed to the user despite backend config constants being present.
 - Control API integration is only a minimal helper and not wired into UI state.
 - Realtime is not wired.
@@ -236,11 +236,11 @@ Expected web files for the recommended next slice:
 
 Potential later Flutter files:
 
-- Create: `apps/desktop_mobile/lib/src/domain/work_item_models.dart`
-- Create: `apps/desktop_mobile/lib/src/data/fixture_work_repository.dart`
-- Create: `apps/desktop_mobile/test/domain/work_item_models_test.dart`
-- Create: `apps/desktop_mobile/test/data/fixture_work_repository_test.dart`
-- Modify: `apps/desktop_mobile/lib/main.dart` only after a small tested model/repository boundary exists
+- Create: `apps/desktop_mobile/lib/src/domain/work_item_models.dart` ✅ implemented
+- Create: `apps/desktop_mobile/lib/src/data/fixture_work_repository.dart` ✅ implemented
+- Create: `apps/desktop_mobile/test/domain/work_item_models_test.dart` ✅ implemented
+- Create: `apps/desktop_mobile/test/data/fixture_work_repository_test.dart` ✅ implemented
+- Modify later: `apps/desktop_mobile/lib/main.dart` only after the tested model/repository boundary exists
 - Modify: `apps/desktop_mobile/test/widget_test.dart`
 
 Files to avoid in this workstream unless a handoff explicitly requests a contract change:
@@ -377,6 +377,8 @@ Then open local web, inspect the browser console, and verify the first screen pr
 - 2026-05-10: Implemented the first fixture-backed web WorkItem slice in client-owned files only: `apps/web/lib/work-items.ts`, `apps/web/test/work-items.test.ts`, `apps/web/components/work-dashboard.tsx`, `apps/web/components/command-center.tsx`, and `apps/web/app/globals.css`.
 - 2026-05-10: Added TDD coverage for WorkItem ordering, summary/detail aggregation, loading/empty/denied/offline/stale view states, status labels, and fail-closed generated-surface validation.
 - 2026-05-10: Verified the web slice with `pnpm web:typecheck`, `pnpm web:test`, and `pnpm web:build`. Also dogfooded locally with dev auth bypass at `http://localhost:3002`; page title was `Agents Cloud`, first screen showed the WorkItem dashboard, and browser console reported 0 JavaScript errors.
+- 2026-05-10: Used subagents to audit Flutter `shadcn_flutter` conventions and confirm the safest next slice should preserve the current dark neutral shadcn shell with no major visual changes.
+- 2026-05-10: Added Flutter WorkItem domain models and a fixture repository under `apps/desktop_mobile/lib/src/` with tests under `apps/desktop_mobile/test/domain/` and `apps/desktop_mobile/test/data/`. No visible Flutter UI or navigation changes were made in this groundwork slice.
 
 ## Completion Criteria
 

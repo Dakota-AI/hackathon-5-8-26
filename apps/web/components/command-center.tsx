@@ -2,7 +2,6 @@
 
 import { Authenticator } from "@aws-amplify/ui-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { artifacts, metrics, runs, teams } from "../lib/fixtures";
 import { readAmplifyEnv } from "../lib/amplify-config";
 import { resetAmplifyAuthSession } from "../lib/auth-session-reset";
 import {
@@ -22,32 +21,38 @@ import {
   serializeSubscribeRunMessage,
   serializeUnsubscribeRunMessage
 } from "../lib/realtime-client";
-import { deriveRunLedgerView, formatRunEventSource, mergeRunEvents } from "../lib/run-ledger";
+import { deriveRunLedgerView, mergeRunEvents } from "../lib/run-ledger";
 
-const statusLabels: Record<string, string> = {
-  queued: "Queued",
-  planning: "Planning",
-  running: "Running",
-  awaiting_approval: "Approval",
-  succeeded: "Succeeded",
-  failed: "Failed",
-  cancelled: "Cancelled",
-  complete: "Complete"
+const defaultObjective = "";
+
+const friendlyStatusLabels: Record<string, string> = {
+  queued: "I’ve got it. I’m setting up the work now.",
+  planning: "I’m breaking this into the right steps.",
+  running: "I’m working on it now.",
+  testing: "I’m checking the result before I show it to you.",
+  archiving: "I’m saving the final output.",
+  succeeded: "Done — I generated the result.",
+  failed: "Something went wrong while doing the work.",
+  cancelled: "This run was cancelled."
 };
 
-const defaultObjective =
-  "Build a launch page, research competitors, draft the report, and publish a preview.";
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant" | "system";
+  text: string;
+  muted?: boolean;
+};
 
 export function CommandCenter() {
   if (process.env.NEXT_PUBLIC_AGENTS_CLOUD_DEV_AUTH_BYPASS === "1") {
-    return <CommandCenterApp userLabel="Local self-test session" />;
+    return <CommandCenterApp userLabel="Local session" />;
   }
 
   return (
     <Authenticator variation="modal" hideSignUp={false}>
       {({ user }) => (
         <CommandCenterApp
-          userLabel={user?.signInDetails?.loginId || user?.username || "Amplify Auth session active"}
+          userLabel={user?.signInDetails?.loginId || user?.username || "Signed in"}
           onSignOut={() => void resetAmplifyAuthSession({ clientId: readAmplifyEnv().userPoolClientId })}
         />
       )}
@@ -57,147 +62,24 @@ export function CommandCenter() {
 
 function CommandCenterApp({ userLabel, onSignOut }: { userLabel: string; onSignOut?: () => void }) {
   const api = getControlApiHealth();
-  const realtime = getRealtimeApiHealth({ mockMode: api.mockMode });
 
   return (
-    <main className="shell">
-      <aside className="sidebar" aria-label="Agents Cloud navigation">
-        <div className="brand-mark">AC</div>
-        <nav>
-          <a href="#command">Command</a>
-          <a href="#runs">Runs</a>
-          <a href="#agents">Agents</a>
-          <a href="#artifacts">Artifacts</a>
-          <a href="#approvals">Approvals</a>
-        </nav>
-        <div className="sidebar-card">
-          <strong>Signed in</strong>
+    <main className="chat-shell">
+      <header className="chat-header">
+        <div>
+          <strong>Agents Cloud</strong>
+          <span>Ask for work. Review the result.</span>
+        </div>
+        <div className="account-menu">
           <span>{userLabel}</span>
           {onSignOut ? (
-            <button className="secondary-button" type="button" onClick={onSignOut}>
+            <button type="button" onClick={onSignOut}>
               Sign out
             </button>
           ) : null}
         </div>
-      </aside>
-
-      <section className="workspace">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Agents Cloud / Web</p>
-            <h1>CEO command center for autonomous agent teams.</h1>
-          </div>
-          <div className="topbar-status">
-            <div className="status-pill">Amplify Auth configured</div>
-            <div className="status-pill">
-              {api.mockMode ? "Control API self-test mode" : api.configured ? "Control API configured" : "Control API missing env"}
-            </div>
-            <div className="status-pill">
-              {realtime.configured ? "Realtime WebSocket configured" : api.mockMode ? "Realtime disabled in self-test" : "Realtime missing env"}
-            </div>
-          </div>
-        </header>
-
-        <section id="command" className="hero-card">
-          <div>
-            <p className="eyebrow">Agent-team orchestration</p>
-            <h2>Give the system an objective; watch the durable run ledger update.</h2>
-            <p>
-              The web client signs in with Amplify Auth, creates Control API runs with the Cognito JWT, subscribes over
-              the realtime WebSocket for live events, and uses Control API event queries as the replay/backfill path after reconnects.
-            </p>
-          </div>
-          <CreateRunPanel apiConfigured={api.configured} mockMode={api.mockMode} />
-        </section>
-
-        <section className="metric-grid" aria-label="Platform metrics">
-          {metrics.map((metric) => (
-            <article className="metric-card" key={metric.label}>
-              <span>{metric.label}</span>
-              <strong>{metric.value}</strong>
-              <p>{metric.detail}</p>
-            </article>
-          ))}
-        </section>
-
-        <section className="content-grid">
-          <article id="runs" className="panel panel-large">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Live run ledger</p>
-                <h3>Recent autonomous runs</h3>
-              </div>
-              <span>fixtures until list-runs lands</span>
-            </div>
-            <div className="run-list">
-              {runs.map((run) => (
-                <div className="run-row" key={run.id}>
-                  <div>
-                    <strong>{run.title}</strong>
-                    <p>{run.summary}</p>
-                  </div>
-                  <div className="run-meta">
-                    <span className={`run-status status-${run.status}`}>{statusLabels[run.status]}</span>
-                    <span>{run.updatedAt}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </article>
-
-          <article id="agents" className="panel">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Agent org chart</p>
-                <h3>Teams</h3>
-              </div>
-            </div>
-            <div className="compact-list">
-              {teams.map((team) => (
-                <div key={team.name}>
-                  <strong>{team.name}</strong>
-                  <span>{team.role}</span>
-                  <em>{team.state}</em>
-                </div>
-              ))}
-            </div>
-          </article>
-
-          <article id="artifacts" className="panel">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Artifacts and previews</p>
-                <h3>Outputs</h3>
-              </div>
-            </div>
-            <div className="compact-list">
-              {artifacts.map((artifact) => (
-                <div key={artifact.name}>
-                  <strong>{artifact.name}</strong>
-                  <span>{artifact.type}</span>
-                  <em>{artifact.state}</em>
-                </div>
-              ))}
-            </div>
-          </article>
-        </section>
-
-        <section id="approvals" className="genui-panel">
-          <div>
-            <p className="eyebrow">Generated UI stream</p>
-            <h3>Future A2UI patches render here</h3>
-            <p>
-              Hermes/Codex workers should emit canonical `genui.patch` events. The server validates those patches, then
-              web and desktop/mobile render the same safe component catalog.
-            </p>
-          </div>
-          <div className="genui-preview">
-            <span>metric.tile</span>
-            <strong>Preview router</strong>
-            <p>Ready for host-header registry lookup after router implementation.</p>
-          </div>
-        </section>
-      </section>
+      </header>
+      <CreateRunPanel apiConfigured={api.configured} mockMode={api.mockMode} />
     </main>
   );
 }
@@ -205,18 +87,24 @@ function CommandCenterApp({ userLabel, onSignOut }: { userLabel: string; onSignO
 function CreateRunPanel({ apiConfigured, mockMode }: { apiConfigured: boolean; mockMode: boolean }) {
   const realtime = getRealtimeApiHealth({ mockMode });
   const [objective, setObjective] = useState(defaultObjective);
+  const [submittedObjective, setSubmittedObjective] = useState<string | null>(null);
   const [createdRun, setCreatedRun] = useState<CreatedRun | null>(null);
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [pollError, setPollError] = useState<string | null>(null);
-  const [realtimeState, setRealtimeState] = useState<"idle" | "connecting" | "live" | "reconnecting" | "closed">("idle");
+  const [, setRealtimeState] = useState<"idle" | "connecting" | "live" | "reconnecting" | "closed">("idle");
   const [realtimeError, setRealtimeError] = useState<string | null>(null);
   const lastSeqRef = useRef(0);
 
   const ledgerView = useMemo(
     () => deriveRunLedgerView({ initialStatus: createdRun?.status || "queued", events }),
     [createdRun?.status, events]
+  );
+
+  const messages = useMemo(
+    () => buildChatMessages({ objective: submittedObjective, events, submitting, error: error || pollError || realtimeError }),
+    [submittedObjective, events, submitting, error, pollError, realtimeError]
   );
 
   useEffect(() => {
@@ -239,7 +127,7 @@ function CreateRunPanel({ apiConfigured, mockMode }: { apiConfigured: boolean; m
         setCreatedRun((current) => (current ? { ...current, status: run.status, executionArn: run.executionArn } : current));
         setEvents((current) => mergeRunEvents(current, nextEvents));
       } catch (err) {
-        setPollError(err instanceof Error ? err.message : "Unable to refresh run ledger.");
+        setPollError(err instanceof Error ? err.message : "Unable to refresh the conversation.");
       }
     },
     [createdRun?.runId]
@@ -281,7 +169,7 @@ function CreateRunPanel({ apiConfigured, mockMode }: { apiConfigured: boolean; m
         socket = new WebSocket(buildRealtimeWebSocketUrl(requireRealtimeApiUrl(), token));
       } catch (err) {
         if (!cancelled) {
-          setRealtimeError(err instanceof Error ? err.message : "Unable to start realtime connection.");
+          setRealtimeError(err instanceof Error ? err.message : "Unable to start live updates.");
           setRealtimeState("reconnecting");
           reconnectTimer = window.setTimeout(connect, 3000);
         }
@@ -317,7 +205,7 @@ function CreateRunPanel({ apiConfigured, mockMode }: { apiConfigured: boolean; m
 
       socket.addEventListener("error", () => {
         if (!cancelled) {
-          setRealtimeError("Realtime connection interrupted; backfilling from the durable ledger.");
+          setRealtimeError("Live updates paused; I’m checking the saved conversation instead.");
         }
       });
     }
@@ -338,119 +226,135 @@ function CreateRunPanel({ apiConfigured, mockMode }: { apiConfigured: boolean; m
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const trimmedObjective = objective.trim();
+    if (trimmedObjective.length < 2) {
+      return;
+    }
+
     setError(null);
     setPollError(null);
     setRealtimeError(null);
     setRealtimeState("idle");
     setCreatedRun(null);
     setEvents([]);
+    setSubmittedObjective(trimmedObjective);
     setSubmitting(true);
 
     try {
       const run = await createControlApiRun({
         workspaceId: "workspace-web",
-        objective
+        objective: trimmedObjective
       });
       setCreatedRun(run);
       setEvents(await listControlApiRunEvents(run.runId, { limit: 50 }));
+      setObjective("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to create run.");
+      setError(err instanceof Error ? err.message : "Unable to start the work.");
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <form className="command-box" onSubmit={onSubmit}>
-      <div className="command-heading">
-        <div>
-          <label htmlFor="objective">Objective</label>
-          <p>Creates a durable Control API run and follows the event ledger.</p>
-        </div>
-        {mockMode ? <span className="status-pill">Self-test</span> : null}
-      </div>
-      <textarea
-        id="objective"
-        value={objective}
-        onChange={(event) => setObjective(event.target.value)}
-        placeholder="Build a launch page, research competitors, draft the report, and publish a preview..."
-      />
-      <button type="submit" disabled={!apiConfigured || submitting || objective.trim().length < 8}>
-        {submitting ? "Creating durable run..." : "Create run"}
-      </button>
-      {!apiConfigured ? <p className="form-note form-error">Control API env var is missing.</p> : null}
-      {error ? <p className="form-note form-error">{error}</p> : null}
-      {createdRun ? (
-        <div className="run-result" aria-live="polite">
-          <span>Run created</span>
-          <strong>{createdRun.runId}</strong>
-          <div className="ledger-summary">
-            <span className={`run-status status-${ledgerView.status}`}>{statusLabels[ledgerView.status] || ledgerView.status}</span>
-            <span>{ledgerView.pollingLabel}</span>
-            <span>{realtimeStatusLabel(realtimeState, realtime.configured)}</span>
-            <span>Last event #{ledgerView.lastSeq || "—"}</span>
-          </div>
-          {realtimeError ? <p className="form-note form-error">Realtime issue: {realtimeError}</p> : null}
-          {pollError ? <p className="form-note form-error">Ledger backfill issue: {pollError}</p> : null}
-          {events.length ? (
-            <ol className="event-timeline" aria-label="Run event timeline">
-              {events.map((runEvent) => (
-                <li key={runEvent.id || `${runEvent.runId}-${runEvent.seq}`}>
-                  <span>#{runEvent.seq}</span>
-                  <strong>{formatEventType(runEvent)}</strong>
-                  <em>{formatEventSource(runEvent)}</em>
-                </li>
-              ))}
-            </ol>
+    <section className="chat-product" aria-label="Agents Cloud chat">
+      <div className="conversation-card">
+        <div className="message-list" aria-live="polite">
+          {messages.length ? (
+            messages.map((message) => <ChatBubble key={message.id} message={message} />)
           ) : (
-            <p className="form-note">Waiting for the first event...</p>
+            <div className="empty-state">
+              <strong>What should we work on?</strong>
+              <p>Ask for a report, a prototype, research, a plan, or a generated UI draft.</p>
+            </div>
           )}
           {ledgerView.artifacts.length ? (
-            <div className="artifact-cards" aria-label="Run artifacts">
+            <div className="generated-ui-stack" aria-label="Generated UI">
               {ledgerView.artifacts.map((artifact) => (
-                <article key={artifact.id}>
-                  <span>{artifact.kind}</span>
+                <article className="generated-card" key={artifact.id}>
+                  <span>Generated output</span>
                   <strong>{artifact.name}</strong>
-                  {artifact.uri ? <p>{artifact.uri}</p> : null}
+                  <p>Ready to review.</p>
                 </article>
               ))}
             </div>
           ) : null}
         </div>
-      ) : null}
-    </form>
+
+        <form className="composer" onSubmit={onSubmit}>
+          <textarea
+            aria-label="Message Agents Cloud"
+            value={objective}
+            onChange={(event) => setObjective(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
+            placeholder="Message Agents Cloud..."
+            rows={1}
+          />
+          <button className="send-button" type="submit" disabled={!apiConfigured || submitting || objective.trim().length < 2}>
+            {submitting ? "…" : "↑"}
+          </button>
+          <button className="call-button" type="button" aria-label="Start voice call" title="Voice call prototype next">
+            ☎
+          </button>
+        </form>
+      </div>
+
+    </section>
   );
 }
 
-function realtimeStatusLabel(state: "idle" | "connecting" | "live" | "reconnecting" | "closed", configured: boolean): string {
-  if (!configured) {
-    return "HTTP polling mode";
-  }
-  if (state === "live") {
-    return "Realtime live";
-  }
-  if (state === "connecting") {
-    return "Realtime connecting...";
-  }
-  if (state === "reconnecting") {
-    return "Realtime reconnecting; backfilling";
-  }
-  if (state === "closed") {
-    return "Realtime closed";
-  }
-  return "Realtime standby";
+function ChatBubble({ message }: { message: ChatMessage }) {
+  return (
+    <article className={`chat-bubble ${message.role} ${message.muted ? "muted" : ""}`}>
+      <p>{message.text}</p>
+    </article>
+  );
 }
 
-function formatEventType(event: RunEvent): string {
+function buildChatMessages(input: {
+  objective: string | null;
+  events: RunEvent[];
+  submitting: boolean;
+  error: string | null;
+}): ChatMessage[] {
+  const messages: ChatMessage[] = [];
+  if (input.objective) {
+    messages.push({ id: "user-objective", role: "user", text: input.objective });
+  }
+  if (input.submitting) {
+    messages.push({ id: "assistant-starting", role: "assistant", text: "I’m starting that now." });
+  }
+
+  const seen = new Set<string>();
+  for (const event of input.events) {
+    const message = friendlyMessageForEvent(event);
+    if (!message || seen.has(message)) {
+      continue;
+    }
+    seen.add(message);
+    messages.push({ id: event.id || `${event.runId}-${event.seq}-${event.type}`, role: "assistant", text: message });
+  }
+
+  if (input.error) {
+    messages.push({ id: "system-error", role: "system", text: input.error, muted: true });
+  }
+
+  return messages;
+}
+
+function friendlyMessageForEvent(event: RunEvent): string | null {
   if (event.type === "run.status" && typeof event.payload?.status === "string") {
-    return `Status ${statusLabels[event.payload.status] || event.payload.status}`;
+    return friendlyStatusLabels[event.payload.status] || "I’m updating the work status.";
   }
   if (event.type === "artifact.created") {
-    return "Artifact created";
+    const name = typeof event.payload?.name === "string" ? event.payload.name : "the result";
+    return `I created ${name}.`;
   }
-  return event.type;
+  return null;
 }
 
-function formatEventSource(event: RunEvent): string {
-  return formatRunEventSource(event);
-}
+

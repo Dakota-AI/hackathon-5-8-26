@@ -92,6 +92,12 @@ contract-correct.
   real web Work page, WorkItem-linked run creation, artifact APIs,
   DataSourceRef/Surface validation, the first scraper/tracker dashboard demo,
   Flutter native review, approvals/notifications, and worker/provider hardening.
+- Implementation-level task planning is captured in
+  `docs/roadmap/WORKITEM_GENUI_IMPLEMENTATION_PLAN.md`; it breaks the product
+  spine into strict TDD phases for protocol contracts, CDK state/routes,
+  Control API ports/use cases, runtime artifact linkage, DataSourceRefs,
+  Surface validation, web Work pages, Flutter native review, approvals, and
+  final validation gates.
 
 ### Not Complete
 

@@ -28,6 +28,7 @@ Current state:
 - A real WebSocket e2e smoke now exists and passed with a temporary Cognito user: `scripts/smoke-websocket-e2e.sh` created run `run-idem-32b971ea09ad7c024e8cd6ee` and received live `run.status/running`, `artifact.created`, and `run.status/succeeded` messages from the deployed WebSocket API.
 - Reference UI/UX audits now exist for GenUI/Markdown/artifacts/browser surfaces, Paperclip/Hermes-style Kanban/work-item control-plane UX, Flutter Kanban/package alternatives, and the broader agent-created interface/product vision. The highest-ROI next product slice remains a durable Work Item layer above Runs so Board, Inbox, Run Ledger, Approvals, Artifacts, DataSources, Surfaces, and GenUI dashboards/tools share one auditable work object.
 - `docs/roadmap/BEST_NEXT_STEPS_EXECUTION_PLAN.md` now consolidates the recommended execution order: WorkItem v0, real web Work page, WorkItem-linked run creation, artifact APIs, DataSourceRef v0, Surface v0/GenUI validator, first scraper/tracker dashboard demo, Flutter WorkBoard/Surface renderer, notifications/approvals, and production worker/provider hardening.
+- `docs/roadmap/WORKITEM_GENUI_IMPLEMENTATION_PLAN.md` expands that roadmap into an implementation-ready TDD plan with protocol, CDK, Control API, artifact, DataSourceRef, Surface validator, web, Flutter, approvals, validation, and subagent execution tasks.
 
 Approximate progress:
 

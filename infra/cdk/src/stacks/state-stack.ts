@@ -16,6 +16,10 @@ export class StateStack extends AgentsCloudStack {
   public readonly approvalsTable: Table;
   public readonly previewDeploymentsTable: Table;
   public readonly realtimeConnectionsTable: Table;
+  public readonly hostNodesTable: Table;
+  public readonly userRunnersTable: Table;
+  public readonly runnerSnapshotsTable: Table;
+  public readonly agentInstancesTable: Table;
 
   public constructor(scope: Construct, id: string, props: AgentsCloudStackProps) {
     super(scope, id, props);
@@ -161,6 +165,73 @@ export class StateStack extends AgentsCloudStack {
       projectionType: ProjectionType.ALL
     });
 
+    this.hostNodesTable = this.createTable("HostNodesTable", "hostId", AttributeType.STRING, "hostRecordType", AttributeType.STRING, props);
+    this.hostNodesTable.addGlobalSecondaryIndex({
+      indexName: "by-status-last-heartbeat",
+      partitionKey: { name: "status", type: AttributeType.STRING },
+      sortKey: { name: "lastHeartbeatAt", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+    this.hostNodesTable.addGlobalSecondaryIndex({
+      indexName: "by-placement-target-status",
+      partitionKey: { name: "placementTargetStatus", type: AttributeType.STRING },
+      sortKey: { name: "updatedAt", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+
+    this.userRunnersTable = this.createTable("UserRunnersTable", "userId", AttributeType.STRING, "runnerId", AttributeType.STRING, props);
+    this.userRunnersTable.addGlobalSecondaryIndex({
+      indexName: "by-runner-id",
+      partitionKey: { name: "runnerId", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+    this.userRunnersTable.addGlobalSecondaryIndex({
+      indexName: "by-host-status",
+      partitionKey: { name: "hostStatus", type: AttributeType.STRING },
+      sortKey: { name: "updatedAt", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+    this.userRunnersTable.addGlobalSecondaryIndex({
+      indexName: "by-status-last-heartbeat",
+      partitionKey: { name: "status", type: AttributeType.STRING },
+      sortKey: { name: "lastHeartbeatAt", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+    this.userRunnersTable.addGlobalSecondaryIndex({
+      indexName: "by-desired-state-updated-at",
+      partitionKey: { name: "desiredState", type: AttributeType.STRING },
+      sortKey: { name: "updatedAt", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+
+    this.runnerSnapshotsTable = this.createTable("RunnerSnapshotsTable", "runnerId", AttributeType.STRING, "snapshotId", AttributeType.STRING, props);
+    this.runnerSnapshotsTable.addGlobalSecondaryIndex({
+      indexName: "by-user-created-at",
+      partitionKey: { name: "userId", type: AttributeType.STRING },
+      sortKey: { name: "createdAt", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+    this.runnerSnapshotsTable.addGlobalSecondaryIndex({
+      indexName: "by-workspace-created-at",
+      partitionKey: { name: "workspaceId", type: AttributeType.STRING },
+      sortKey: { name: "createdAt", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+
+    this.agentInstancesTable = this.createTable("AgentInstancesTable", "runnerId", AttributeType.STRING, "agentId", AttributeType.STRING, props);
+    this.agentInstancesTable.addGlobalSecondaryIndex({
+      indexName: "by-user-status-updated-at",
+      partitionKey: { name: "userStatus", type: AttributeType.STRING },
+      sortKey: { name: "updatedAt", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+    this.agentInstancesTable.addGlobalSecondaryIndex({
+      indexName: "by-next-wake-at",
+      partitionKey: { name: "wakeBucket", type: AttributeType.STRING },
+      sortKey: { name: "nextWakeAt", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+
     this.outputTable("WorkItemsTableName", "work-items-table-name", this.workItemsTable, props);
     this.outputTable("RunsTableName", "runs-table-name", this.runsTable, props);
     this.outputTable("TasksTableName", "tasks-table-name", this.tasksTable, props);
@@ -171,6 +242,10 @@ export class StateStack extends AgentsCloudStack {
     this.outputTable("ApprovalsTableName", "approvals-table-name", this.approvalsTable, props);
     this.outputTable("PreviewDeploymentsTableName", "preview-deployments-table-name", this.previewDeploymentsTable, props);
     this.outputTable("RealtimeConnectionsTableName", "realtime-connections-table-name", this.realtimeConnectionsTable, props);
+    this.outputTable("HostNodesTableName", "host-nodes-table-name", this.hostNodesTable, props);
+    this.outputTable("UserRunnersTableName", "user-runners-table-name", this.userRunnersTable, props);
+    this.outputTable("RunnerSnapshotsTableName", "runner-snapshots-table-name", this.runnerSnapshotsTable, props);
+    this.outputTable("AgentInstancesTableName", "agent-instances-table-name", this.agentInstancesTable, props);
   }
 
   private createTable(

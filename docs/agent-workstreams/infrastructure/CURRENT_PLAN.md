@@ -2,7 +2,7 @@
 
 Date: 2026-05-10
 Owner: Infrastructure Workstream
-Status: WorkItem handler slice completed/validated; next infra slice queued
+Status: WorkItem handler deployed; user-runner state model slice deployed
 
 ## Session Goal
 
@@ -137,16 +137,16 @@ Implemented in `infra/cdk` and documented as deployed/synthesizing:
 
 Missing state model resources:
 
-- `HostNode`
-- `UserRunner`
-- `RunnerPlacement`
-- `RunnerHeartbeat`
-- `RunnerSnapshot`
-- `AgentInstance`
+- `HostNode` - implemented in state-only CDK slice
+- `UserRunner` - implemented in state-only CDK slice
+- `RunnerPlacement` - represented as current-state fields/indexes in v0
+- `RunnerHeartbeat` - represented as current-state fields/indexes in v0
+- `RunnerSnapshot` - implemented in state-only CDK slice
+- `AgentInstance` - implemented in state-only CDK slice
 
 Missing placement/deployment resources:
 
-- local Docker host registration/placement records,
+- local Docker host registration/placement APIs and supervisor behavior,
 - ECS Fargate user-runner task definition or resident service shape,
 - runner-placement scheduler infrastructure,
 - runner heartbeat/stale detection alarms,
@@ -276,17 +276,11 @@ Recommended next slice after WorkItem handler deployment: add user-runner state 
 
 Scope:
 
-1. Add DynamoDB tables and indexes for:
-   - HostNodes,
-   - UserRunners,
-   - RunnerSnapshots,
-   - AgentInstances.
-2. Model RunnerPlacement and RunnerHeartbeat as either:
-   - separate tables if query patterns require history, or
-   - current-state fields/GSIs on HostNodes/UserRunners for first slice.
-3. Add CDK assertion tests for table keys, GSIs, PITR/deletion protection conventions, and stack outputs.
-4. Add outputs/env references only where needed for future Control API/runtime wiring.
-5. Document the state model and explicitly mark APIs/placement scheduler as not implemented.
+1. Add DynamoDB tables and indexes for HostNodes, UserRunners, RunnerSnapshots, and AgentInstances. - in progress
+2. Model RunnerPlacement and RunnerHeartbeat as current-state fields/GSIs on HostNodes/UserRunners for v0. - in progress
+3. Add CDK assertion tests for table keys, GSIs, and stack outputs. - passing locally
+4. Add outputs only for future Control API/runtime wiring. - in progress
+5. Document the state model and explicitly mark APIs/placement scheduler as not implemented. - in progress
 
 Why this is the smallest coherent infra slice:
 
@@ -376,6 +370,50 @@ Notes:
 - Deployment completed for `agents-cloud-dev-control-api` after rebuilding CDK from the repo root.
 - Before commit, stage selectively and avoid unrelated working-tree docs/ADR/frontend changes.
 
+## User-Runner State Slice Progress
+
+Implemented locally in this session:
+
+- `HostNodesTable` keyed by `hostId + hostRecordType` with status/heartbeat and placement target/status indexes.
+- `UserRunnersTable` keyed by `userId + runnerId` with runner-id, host/status, status/heartbeat, and desired-state indexes.
+- `RunnerSnapshotsTable` keyed by `runnerId + snapshotId` with user/workspace created-at indexes.
+- `AgentInstancesTable` keyed by `runnerId + agentId` with user/status and next-wake indexes.
+- Table outputs for all four resources.
+- CDK assertions in `infra/cdk/src/test/user-runner-state.test.ts`.
+- Handoffs to Agent Harness and Realtime Streaming.
+- Deployed `agents-cloud-dev-state`; all four new DynamoDB tables are ACTIVE with expected GSIs.
+
+Not included in this slice:
+
+- local Docker supervisor,
+- ECS resident runner service,
+- runner token broker,
+- heartbeat API,
+- placement scheduler,
+- realtime runner-status relay.
+
+
+Latest user-runner state validation/deploy:
+
+```bash
+pnpm infra:build                                      # passed
+pnpm infra:synth                                      # passed, same CDK deprecation warnings
+pnpm --filter @agents-cloud/infra-cdk test            # passed, 8/8 tests
+pnpm --filter @agents-cloud/infra-amplify run typecheck # passed
+find infra/cdk/cdk.out \( -name '.env' -o -name '.env.*' -o -name '.research' -o -name '.vibecode' \) -print # no output
+du -sh infra/cdk/cdk.out                              # 2.1M
+```
+
+Deployed:
+
+```text
+agents-cloud-dev-state UPDATE_COMPLETE
+HostNodesTable ACTIVE
+UserRunnersTable ACTIVE
+RunnerSnapshotsTable ACTIVE
+AgentInstancesTable ACTIVE
+```
+
 ## Definition Of Done For This Work Session
 
 This WorkItem-first infrastructure session is done when:
@@ -390,4 +428,4 @@ This WorkItem-first infrastructure session is done when:
 
 ## Current Recommendation
 
-Proceed next with deployment of the completed WorkItem handler slice. After that, start user-runner state model CDK tables and tests as an infrastructure-only slice, with handoffs for Agent Harness and Realtime Streaming before adding APIs, heartbeats, ECS services, or local placement behavior.
+WorkItem handler deployment is complete. User-runner state model CDK tables/tests are now deployed as an infrastructure-only slice, with handoffs created for Agent Harness and Realtime Streaming. Next recommended slice: implement Control API/admin read/write endpoints for host registration and runner heartbeat only after Agent Harness confirms payload/status contracts.

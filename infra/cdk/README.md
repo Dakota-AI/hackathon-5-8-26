@@ -32,6 +32,10 @@ Implemented, deployed, and synthesizing:
   - DataSources table for durable DataSourceRef records.
   - Surfaces table for validated GenUI/A2UI surface records.
   - Approvals table.
+  - HostNodes table for local Docker / ECS placement hosts.
+  - UserRunners table for resident per-user runner current state, desired state, placement, and heartbeat fields.
+  - RunnerSnapshots table for runner recovery/checkpoint metadata.
+  - AgentInstances table for logical agents hosted inside user runners.
   - PAY_PER_REQUEST billing.
   - PITR enabled outside `dev`.
   - Deletion protection enabled in `prod`.
@@ -138,6 +142,21 @@ New product routes:
 - `/data-source-refs` and `/surfaces` creation/detail/update/publish paths.
 
 Regression coverage lives in `infra/cdk/src/test/workitem-genui-infra.test.ts` and should be run with `pnpm infra:test` before every infra deploy.
+
+## User Runner State Infrastructure Slice
+
+The current CDK app also includes the first state-only slice for ADR 0008 resident user runners. This slice creates durable state tables and exports only; it does not create a local supervisor, runner token broker, ECS resident service, heartbeat API, or realtime runner-status relay.
+
+New state resources:
+
+- `HostNodesTable` keyed by `hostId + hostRecordType`, with indexes for host status/last heartbeat and placement target/status.
+- `UserRunnersTable` keyed by `userId + runnerId`, with indexes for runner id lookup, host/status placement, runner status/last heartbeat, and desired-state scheduling.
+- `RunnerSnapshotsTable` keyed by `runnerId + snapshotId`, with user/workspace created-at indexes for recovery/audit lookup.
+- `AgentInstancesTable` keyed by `runnerId + agentId`, with user/status and next-wake indexes for logical agents inside the resident runner.
+
+RunnerPlacement and RunnerHeartbeat are represented as current-state fields/indexes in this v0 slice. If Agent Harness or Realtime Streaming need historical placement/heartbeat queries, those should be added as a later explicit table/API slice.
+
+Regression coverage lives in `infra/cdk/src/test/user-runner-state.test.ts`.
 
 ## Configuration
 

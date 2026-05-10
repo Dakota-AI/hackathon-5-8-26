@@ -13,6 +13,7 @@ export type ArtifactCard = {
   name: string;
   kind: string;
   uri?: string;
+  previewUrl?: string;
 };
 
 export type RunLedgerView = {
@@ -77,7 +78,8 @@ export function extractArtifactCards(events: RunEventLike[]): ArtifactCard[] {
         id: artifactId,
         name: readString(event.payload, "name") || "Generated artifact",
         kind: readString(event.payload, "kind") || readString(event.payload, "type") || "artifact",
-        uri: readString(event.payload, "uri") || readString(event.payload, "s3Uri")
+        uri: readString(event.payload, "uri") || readString(event.payload, "s3Uri"),
+        previewUrl: readString(event.payload, "previewUrl")
       };
     });
 }

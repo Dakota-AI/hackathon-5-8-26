@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 const agentsCloudRegion = 'us-east-1';
@@ -78,18 +79,7 @@ class AgentsCloudBackend {
   static Future<AgentsCloudBackendStatus> configureAmplify() async {
     try {
       if (!Amplify.isConfigured) {
-        // macOS debug builds in this repo are intentionally unsigned/ad-hoc so
-        // they can be launched locally without an Apple provisioning profile.
-        // Cognito's default secure storage requires Keychain Sharing, which
-        // fails in that unsigned shape and leaves sign-in stuck loading. Use a
-        // process-local store for the desktop debug console so sign-in can
-        // complete; production signed builds can swap this for keychain-backed
-        // storage when provisioning is configured.
-        await Amplify.addPlugin(
-          AmplifyAuthCognito(
-            secureStorageFactory: (scope) => _InMemorySecureStorage(scope.name),
-          ),
-        );
+        await Amplify.addPlugin(_authPluginForPlatform());
         await Amplify.configure(agentsCloudAmplifyConfig);
       }
       return const AgentsCloudBackendStatus(
@@ -104,6 +94,20 @@ class AgentsCloudBackend {
       );
     }
   }
+}
+
+AmplifyAuthCognito _authPluginForPlatform() {
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
+    // macOS debug builds in this repo are intentionally unsigned/ad-hoc so
+    // they can be launched locally without an Apple provisioning profile.
+    // Cognito's default secure storage requires Keychain Sharing, which fails
+    // in that unsigned shape and leaves sign-in stuck loading. Keep that
+    // workaround scoped to macOS only; iOS should use the normal keychain path.
+    return AmplifyAuthCognito(
+      secureStorageFactory: (scope) => _InMemorySecureStorage(scope.name),
+    );
+  }
+  return AmplifyAuthCognito();
 }
 
 class _InMemorySecureStorage extends SecureStorageInterface {

@@ -522,6 +522,7 @@ export type WorkItemArtifactRecord = {
   state?: string;
   uri?: string;
   s3Uri?: string;
+  previewUrl?: string;
   contentType?: string;
   sizeBytes?: number;
   createdAt?: string;
@@ -722,8 +723,17 @@ export async function listControlApiRunArtifacts(runId: string): Promise<{
 function normalizeWorkItemArtifactRecord(artifact: WorkItemArtifactRecord): WorkItemArtifactRecord {
   return {
     ...artifact,
-    s3Uri: artifact.s3Uri ?? artifact.uri
+    s3Uri: artifact.s3Uri ?? (isS3Uri(artifact.uri) ? artifact.uri : undefined),
+    previewUrl: artifact.previewUrl ?? (isHttpUrl(artifact.uri) ? artifact.uri : undefined)
   };
+}
+
+function isS3Uri(value: string | undefined): boolean {
+  return typeof value === "string" && value.startsWith("s3://");
+}
+
+function isHttpUrl(value: string | undefined): boolean {
+  return typeof value === "string" && /^https?:\/\//.test(value);
 }
 
 export async function getControlApiArtifactDownloadUrl(input: {

@@ -241,6 +241,11 @@ export class RuntimeStack extends AgentsCloudStack {
       "ResidentRunnerHermesAuthJson",
       process.env.AGENTS_CLOUD_HERMES_AUTH_SECRET_NAME ?? `agents-cloud/${props.config.envName}/resident-runner/hermes-auth-json`
     );
+    const previewTunnelApiToken = Secret.fromSecretNameV2(
+      this,
+      "PreviewTunnelApiToken",
+      process.env.AGENTS_CLOUD_PREVIEW_TUNNEL_API_TOKEN_SECRET_NAME ?? `agents-cloud/${props.config.envName}/preview-tunnels/api-token`
+    );
 
     this.residentRunnerContainer = this.residentRunnerTaskDefinition.addContainer("resident-runner", {
       image: ContainerImage.fromDockerImageAsset(residentRunnerImage),
@@ -250,7 +255,8 @@ export class RuntimeStack extends AgentsCloudStack {
       }),
       secrets: {
         RUNNER_API_TOKEN: EcsSecret.fromSecretsManager(residentRunnerApiToken),
-        HERMES_AUTH_JSON_BOOTSTRAP: EcsSecret.fromSecretsManager(residentRunnerHermesAuth)
+        HERMES_AUTH_JSON_BOOTSTRAP: EcsSecret.fromSecretsManager(residentRunnerHermesAuth),
+        AGENTS_CLOUD_PREVIEW_TUNNEL_API_TOKEN: EcsSecret.fromSecretsManager(previewTunnelApiToken)
       },
       portMappings: [{ containerPort: 8787 }],
       environment: {
@@ -263,6 +269,7 @@ export class RuntimeStack extends AgentsCloudStack {
         HERMES_TOOLSETS: process.env.AGENTS_CLOUD_RESIDENT_TOOLSETS ?? "file,terminal,web,delegation,skills,session_search",
         AGENTS_HERMES_MAX_TURNS: process.env.AGENTS_CLOUD_RESIDENT_HERMES_MAX_TURNS ?? "8",
         AGENTS_USER_ENGAGEMENT_URL: "http://127.0.0.1:8787/engagement",
+        AGENTS_CLOUD_PREVIEW_TUNNEL_API_URL: process.env.AGENTS_CLOUD_PREVIEW_TUNNEL_API_URL ?? "https://preview.solo-ceo.ai",
         HERMES_COMMAND: "/opt/hermes/.venv/bin/hermes",
         HERMES_HOME: "/runner/hermes",
         PORT: "8787",

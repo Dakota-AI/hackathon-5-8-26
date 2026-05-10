@@ -1,5 +1,6 @@
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
+import 'brand_mark.dart';
 import 'tokens.dart';
 
 /// Filled card with the agents-cloud panel background, border, and radius.
@@ -133,8 +134,7 @@ class SectionHeader extends StatelessWidget {
   }
 }
 
-/// 34x34 brand mark — same shape and proportions as agents-cloud `_LogoMark`,
-/// adjusted to call surface (mobile glyph instead of cube).
+/// 34x34 brand mark using the shared Agents Cloud logo asset.
 class LogoMark extends StatelessWidget {
   const LogoMark({super.key, this.size = 34});
 
@@ -150,7 +150,7 @@ class LogoMark extends StatelessWidget {
         borderRadius: BorderRadius.circular(size * 0.3),
         border: Border.all(color: Palette.accent.withValues(alpha: 0.25)),
       ),
-      child: Icon(RadixIcons.mobile, color: Palette.accent, size: size * 0.55),
+      child: BrandMark(size: size * 0.55),
     );
   }
 }

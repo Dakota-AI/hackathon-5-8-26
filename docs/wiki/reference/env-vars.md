@@ -131,6 +131,8 @@ Read by `services/agent-runtime/src/resident-runner.ts` and `resident-runner-ser
 | `AGENTS_MODEL_PROVIDER` | `openai-codex` | provider for adapter |
 | `AGENTS_MODEL` | `""` | model name |
 | `AGENTS_HERMES_MAX_TURNS` | `8` | max iterations |
+| `AGENTS_USER_ENGAGEMENT_URL` | `http://127.0.0.1:8787/engagement` | Local resident-runner API used by `agents-cloud-user notify/call` |
+| `AGENTS_USER_ENGAGEMENT_TOKEN` | derived from `RUNNER_API_TOKEN` | Bearer token exposed only to the contact-user CLI tool environment |
 | `AGENTS_RESIDENT_PROFILES_JSON` | `[]` | JSON array of seeded profiles |
 | `AGENTS_ALLOW_RAW_PROVIDER_KEYS_TO_AGENT` | unset | ⚠️ if `"1"`, do NOT strip provider keys |
 | `AGENTS_HERMES_YOLO` | unset | ⚠️ disable safety checks |

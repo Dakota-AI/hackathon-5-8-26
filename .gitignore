@@ -30,6 +30,7 @@ infra/amplify/amplify_outputs.*
 .asc/config.json
 **/.asc/config.json
 **/.asc/export-options-app-store.plist
+**/.asc/artifacts/
 *.p8
 tools/App-Store-Connect-CLI/
 tools/shadcn_flutter/

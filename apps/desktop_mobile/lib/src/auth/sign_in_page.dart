@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 import 'package:desktop_mobile/src/auth/auth_controller.dart';
+import 'package:desktop_mobile/src/ui/brand_mark.dart';
 import 'package:desktop_mobile/src/widgets/squares_loader.dart';
 
 /// When set to true, the app skips the sign-in gate and uses local
 /// fixture data instead of a real backend session.
-final authBypassProvider = StateProvider<bool>((ref) => false);
+const _authBypassDefault = bool.fromEnvironment('AGENTS_CLOUD_AUTH_BYPASS');
+
+final authBypassProvider = StateProvider<bool>((ref) => _authBypassDefault);
 
 class _Palette {
   static const background = Color(0xFF050505);
@@ -276,7 +279,7 @@ class _SignInPageState extends ConsumerState<SignInPage> {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: _Palette.border),
             ),
-            child: const Icon(RadixIcons.cube, size: 18, color: _Palette.text),
+            child: const BrandMark(size: 20),
           ),
         ),
         const SizedBox(height: 14),

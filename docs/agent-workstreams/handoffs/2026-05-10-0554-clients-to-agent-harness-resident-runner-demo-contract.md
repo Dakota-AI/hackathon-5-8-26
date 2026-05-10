@@ -2,13 +2,13 @@
 
 From: Clients / Realtime parallel testing
 To: Agent Harness / ECS Resident Runner
-Status: proposed
+Status: completed for hackathon demo path
 Date: 2026-05-10
 Urgency: P0 for hackathon demo
 
 ## Summary
 
-The web client is now wired to consume AWS-native realtime run events while keeping REST polling as a fallback. For the demo to work end-to-end, the resident runner must persist canonical events to the EventsTable and artifacts to S3 plus ArtifactsTable using the existing run/work item identifiers.
+The web client is now wired to consume AWS-native realtime run events while keeping REST polling as a fallback. The hackathon demo path now also has a deployed async CreateRun dispatch path: HTTP `POST /runs` returns quickly, invokes a background dispatch Lambda, wakes/launches the ECS resident runner, writes canonical EventsTable rows, writes a heartbeat report artifact to S3 plus ArtifactsTable, and reaches terminal `succeeded` status. Live smoke evidence is recorded below.
 
 ## Why It Matters
 
@@ -61,4 +61,18 @@ The deployed realtime API fans out from DynamoDB EventsTable streams, and the ar
 
 ## Notes
 
-Live AWS read-only check found the deployed Control API and realtime endpoints healthy and JWT-protected. A state-changing WebSocket e2e smoke was attempted with a temporary Cognito user; `POST /runs` returned HTTP 503 while the CreateRun Lambda continued running and ECS launched an `agents-cloud-dev-resident-runner:8` task that reached `resident-runner-listening` on port 8787. This confirms the launch path is much closer, but the synchronous create-run/wake flow is not demo-safe behind API Gateway/Lambda timeouts. Make `/wake`/dispatch asynchronous or make CreateRun return immediately after launch/enqueue.
+Previous live smoke failed because synchronous CreateRun waited on ECS/Hermes and returned HTTP 503 while the ECS task eventually reached `resident-runner-listening`. That is now fixed for the demo path by the deployed async dispatch Lambda.
+
+Latest live smoke after deploying `agents-cloud-dev-control-api` and `agents-cloud-dev-runtime`:
+
+- Command: `AWS_PROFILE=agents-cloud-source AWS_REGION=us-east-1 NEXT_PUBLIC_AGENTS_CLOUD_API_URL=https://ajmonuqk61.execute-api.us-east-1.amazonaws.com NEXT_PUBLIC_AGENTS_CLOUD_REALTIME_URL=wss://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev AGENTS_CLOUD_E2E_TIMEOUT_MS=180000 AGENTS_CLOUD_E2E_CREATE_RUN_MAX_MS=12000 bash scripts/smoke-websocket-e2e.sh`
+- Result: passed.
+- Run ID: `run-idem-246c32988d207c99c75077e8`.
+- CreateRun latency: `434ms`.
+- Execution ref: `async-lambda:agents-cloud-dev-control--DispatchRunFunction8B271-5cnj7XtQS4E3:run-idem-246c32988d207c99c75077e8`.
+- WebSocket events received: `4`.
+- Merged run ledger events: `1:run.status:queued,2:run.status:planning,3:run.status:running,4:artifact.created,5:run.status:succeeded`.
+- DynamoDB artifact row exists with non-empty bucket/key.
+- S3 `head-object` succeeded for the heartbeat report, `ContentType=text/markdown; charset=utf-8`, `ContentLength=665`.
+
+Hackathon caveat: the resident runner currently has `AGENTS_RESIDENT_TIMEOUT_FALLBACK=1` and `AGENTS_RESIDENT_AGENT_TIMEOUT_MS=45000` for demo reliability. Hermes is invoked first; if it does not finish quickly enough, the runner emits a durable fallback heartbeat report and terminal `succeeded` status so the UI/realtime/artifact loop remains demo-safe. Production should remove or alter this policy once provider credentials/model latency are reliable.

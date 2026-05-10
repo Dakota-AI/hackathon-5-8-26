@@ -1,0 +1,39 @@
+#:schema node_modules/wrangler/config-schema.json
+
+name = "agents-cloud-preview-tunnels"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Dynamic live preview tunnels for agent-created local/dev servers.
+# Public viewers hit wildcard hosts; resident runners connect outbound over WSS.
+routes = [
+  { pattern = "preview.solo-ceo.ai/*", zone_name = "solo-ceo.ai" },
+  { pattern = "*.solo-ceo.ai/*", zone_name = "solo-ceo.ai" }
+]
+
+[[durable_objects.bindings]]
+name = "TUNNEL_SESSIONS"
+class_name = "TunnelSessionDO"
+
+[[kv_namespaces]]
+binding = "TUNNEL_REGISTRY"
+id = "7190a118c4e243a5bfbde0f750c4f42c"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TunnelSessionDO"]
+
+[vars]
+BASE_DOMAIN = "solo-ceo.ai"
+HOST_PREFIX = "preview"
+DEFAULT_TTL_MINUTES = "60"
+MAX_TTL_MINUTES = "180"
+MAX_TUNNELS_PER_RUN = "10"
+LOG_LEVEL = "INFO"
+
+# Secrets to set before live deploy:
+#   pnpm --filter @agents-cloud/cloudflare-preview-tunnels exec wrangler kv namespace create TUNNEL_REGISTRY
+#   pnpm --filter @agents-cloud/cloudflare-preview-tunnels exec wrangler secret put PREVIEW_API_TOKEN
+#   pnpm --filter @agents-cloud/cloudflare-preview-tunnels exec wrangler secret put TUNNEL_JWT_SECRET
+# Optional Cognito validation can be added later; v0 runner CLI uses PREVIEW_API_TOKEN.

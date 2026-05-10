@@ -1,5 +1,4 @@
 import * as React from "react";
-import { CubeIcon } from "@radix-ui/react-icons";
 import { cn } from "../../lib/utils";
 
 type LogoMarkProps = {
@@ -24,7 +23,26 @@ export function LogoMark({ size = "md", className }: LogoMarkProps) {
         className
       )}
     >
-      <CubeIcon className={cn(s.icon, "text-app-accent")} />
+      <svg
+        viewBox="0 0 64 64"
+        fill="none"
+        aria-hidden="true"
+        className={cn(s.icon, "text-app-text")}
+      >
+        <path
+          d="M32 4 C 47.4641 4 60 16.5359 60 32 C 60 47.4641 47.4641 60 32 60 C 16.5359 60 4 47.4641 4 32 C 4 19 13 9 26 5"
+          stroke="currentColor"
+          strokeWidth="3.25"
+          strokeLinecap="round"
+        />
+        <circle cx="27" cy="36" r="7" fill="currentColor" />
+        <path
+          d="M40 38 L52 46"
+          stroke="currentColor"
+          strokeWidth="3.25"
+          strokeLinecap="round"
+        />
+      </svg>
     </div>
   );
 }

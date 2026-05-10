@@ -84,7 +84,8 @@ test("extractArtifactCards returns user-facing artifact cards without raw payloa
       id: "artifact-1",
       name: "Hermes Smoke Report",
       kind: "report",
-      uri: "s3://bucket/workspaces/workspace-web/runs/run-1/artifacts/artifact-1/hermes-report.md"
+      uri: "s3://bucket/workspaces/workspace-web/runs/run-1/artifacts/artifact-1/hermes-report.md",
+      previewUrl: undefined
     }
   ]);
 });

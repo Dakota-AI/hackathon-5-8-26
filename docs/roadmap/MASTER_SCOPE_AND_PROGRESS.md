@@ -204,6 +204,9 @@ validated for the exact deployment mode.
 - [x] Amplify Next.js frontend plan documented.
 - [x] Flutter console exists under `apps/desktop_mobile`
   with a command-center shell, planning pages, and local GenUI/A2UI preview.
+- [x] Flutter Browser page has a hidden local DOM-first WKWebView
+  agent-control probe for observe/find/scroll/click/fill commands plus a
+  dev-only loopback WebSocket/CLI smoke probe behind an explicit dart-define.
 - [x] Flutter app widget tests pass locally.
 - [x] `ControlApiStack` deployed with API Gateway, Cognito JWT authorizer, and
   Lambda handlers for creating/querying runs.

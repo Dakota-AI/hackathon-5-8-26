@@ -1,0 +1,21 @@
+{
+  "name": "@agents-cloud/cloudflare-preview-tunnels",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Cloudflare Worker and Durable Objects dynamic port tunnel preview plane for Agents Cloud.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "pnpm build && node --test dist/test/**/*.test.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260509.1",
+    "@types/node": "^22.19.18",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.90.0"
+  }
+}

@@ -4,7 +4,7 @@ import 'openai_client.dart';
 
 const _provider = String.fromEnvironment(
   'LLM_PROVIDER',
-  defaultValue: 'openai',
+  defaultValue: 'hermes',
 );
 
 const _openAiBase = String.fromEnvironment(
@@ -28,7 +28,16 @@ const _ollamaModel = String.fromEnvironment(
 
 const _hermesBase = String.fromEnvironment(
   'HERMES_BASE_URL',
+  defaultValue: _controlApiBase,
+);
+const _controlApiBase = String.fromEnvironment(
+  'CONTROL_API_URL',
   defaultValue: '',
+);
+const _hermesToken = String.fromEnvironment('HERMES_AUTH_TOKEN');
+const _hermesCallId = String.fromEnvironment(
+  'HERMES_TEXT_CALL_ID',
+  defaultValue: 'mobile-chat',
 );
 
 /// System prompt for the *text* surface — markdown OK, GenUI blocks OK.
@@ -126,7 +135,18 @@ LlmClient resolveLlmClient() {
       );
 
     case 'hermes':
-      return HermesLlmClient(baseUrl: _hermesBase);
+      if (_hermesBase.isEmpty) {
+        return const UnconfiguredLlmClient(
+          'Agent backend is not configured. Pass '
+          '--dart-define=HERMES_BASE_URL=https://<runner-host> or wire the '
+          'signed-in Control API chat adapter.',
+        );
+      }
+      return HermesLlmClient(
+        baseUrl: _hermesBase,
+        authToken: _hermesToken,
+        callId: _hermesCallId,
+      );
 
     default:
       return UnconfiguredLlmClient(

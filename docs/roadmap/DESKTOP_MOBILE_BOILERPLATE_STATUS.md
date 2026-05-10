@@ -33,6 +33,9 @@ apps/desktop_mobile
 - [x] Local GenUI/A2UI preview surface added.
 - [x] First shadcn-native chat/command surface boilerplate added.
 - [x] First artifact workspace, Markdown document viewer, browser preview shell, and approval queue boilerplate added.
+- [x] Embedded WKWebView browser has a local DOM-first agent-control probe for
+  observe/find/scroll/click/fill commands. WebSocket/CLI transport is still
+  intentionally stubbed.
 - [x] Widget tests added and passing for boot/navigation/mobile/artifact-preview surfaces.
 - [x] `flutter analyze` passes.
 - [x] `flutter test` passes.
@@ -64,6 +67,7 @@ The Command Center includes:
 - first artifact workspace cards,
 - Markdown document viewer,
 - embedded browser preview shell,
+- hidden local WKWebView agent-control probe with opt-in CLI smoke bridge,
 - approval queue cards.
 
 ## Design direction
@@ -165,6 +169,25 @@ notification.created
 ```
 
 The app should first support polling against the Control API, then swap to realtime once the Durable Object bridge is built.
+
+## Embedded browser-control direction
+
+The browser page now uses the official `webview_flutter` stack with a local
+`webview_flutter_wkwebview` fork at
+`apps/desktop_mobile/packages/webview_flutter_wkwebview`.
+
+The first control layer is DOM-first:
+
+```text
+Flutter Browser page
+  -> WKWebView user-script bootstrap
+  -> structured page snapshot / markdown-ish text
+  -> visible control metadata
+  -> bounded scroll/find/click/fill commands
+```
+
+This is a foreground app feature for the embedded browser only. It is not yet a
+WebSocket/CLI transport and is not an iOS background/system automation layer.
 
 ## Auth direction
 

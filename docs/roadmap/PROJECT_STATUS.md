@@ -375,9 +375,12 @@ Partially built locally, not connected to the backend yet.
 Research/planning exists at `docs/roadmap/AMPLIFY_NEXT_FRONTEND_PLAN.md` after reviewing current Amplify Gen 2/Next.js guidance.
 
 A Flutter command-center app exists under `apps/desktop_mobile`
-with planning pages and a local GenUI/A2UI preview surface. It currently passes
-`flutter analyze` and `flutter test`, but it is not wired to Amplify Auth, the
-Control API, Cloudflare realtime, push notifications, Miro, or real agent event
+with planning pages, a local GenUI/A2UI preview surface, and a hidden
+DOM-first WKWebView agent-control probe in the Browser page. A dev-only
+loopback WebSocket bridge and CLI probe can exercise the hidden browser bridge
+when explicitly enabled with a dart-define. It currently passes
+`flutter analyze` and `flutter test`, but it is not wired to the full
+authenticated product workflow, Cloudflare realtime, Miro, or real agent event
 streams.
 
 Needed first screens:

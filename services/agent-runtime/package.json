@@ -9,7 +9,8 @@
     "test": "pnpm build && node --test dist/test/**/*.test.js",
     "start": "node dist/src/index.js",
     "local:harness": "pnpm build && node dist/src/local-runner-cli.js",
-    "resident:server": "pnpm build && node dist/src/resident-runner-server.js"
+    "resident:server": "pnpm build && node dist/src/resident-runner-server.js",
+    "preview:expose": "pnpm build && node bin/agents-cloud-preview.mjs expose"
   },
   "dependencies": {
     "@agents-cloud/protocol": "workspace:*",

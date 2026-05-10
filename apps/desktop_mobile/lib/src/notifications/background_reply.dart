@@ -22,6 +22,16 @@ const _openAiModel = String.fromEnvironment(
   'OPENAI_MODEL',
   defaultValue: 'gpt-4o-mini',
 );
+const _provider = String.fromEnvironment(
+  'LLM_PROVIDER',
+  defaultValue: 'hermes',
+);
+const _hermesBase = String.fromEnvironment('HERMES_BASE_URL');
+const _hermesToken = String.fromEnvironment('HERMES_AUTH_TOKEN');
+const _hermesCallId = String.fromEnvironment(
+  'HERMES_TEXT_CALL_ID',
+  defaultValue: 'mobile-chat',
+);
 
 const _replyActionId = 'reply_inline';
 const _agentCategory = 'agent_reply';
@@ -55,10 +65,6 @@ Future<void> backgroundReplyHandler(NotificationResponse response) async {
 
   final reply = response.input?.trim() ?? '';
   if (reply.isEmpty) return;
-  if (_openAiKey.isEmpty) {
-    _log('background reply: OPENAI_API_KEY missing — abort');
-    return;
-  }
 
   _log('background reply received (${reply.length} chars)');
 
@@ -68,7 +74,7 @@ Future<void> backgroundReplyHandler(NotificationResponse response) async {
     history.add(userTurn);
     await _saveHistory(history);
 
-    final agentText = await _openAiCompletion(history);
+    final agentText = await _complete(history);
     if (agentText.trim().isEmpty) {
       _log('background reply: empty completion');
       return;
@@ -206,6 +212,64 @@ Future<String> _openAiCompletion(List<_Turn> history) async {
   final content =
       ((choices.first as Map)['message'] as Map?)?['content'] as String?;
   return content?.trim() ?? '';
+}
+
+Future<String> _complete(List<_Turn> history) async {
+  switch (_provider) {
+    case 'hermes':
+      if (_hermesBase.isEmpty) {
+        _log('background reply: HERMES_BASE_URL missing');
+        return '';
+      }
+      return _hermesCompletion(history);
+    case 'openai':
+      if (_openAiKey.isEmpty) {
+        _log('background reply: OPENAI_API_KEY missing');
+        return '';
+      }
+      return _openAiCompletion(history);
+    default:
+      _log('background reply: unsupported LLM_PROVIDER=$_provider');
+      return '';
+  }
+}
+
+Future<String> _hermesCompletion(List<_Turn> history) async {
+  final prompt = history.reversed
+      .firstWhere(
+        (turn) => turn.role == 'user' && turn.text.trim().isNotEmpty,
+        orElse: () => _Turn.user('', 0),
+      )
+      .text
+      .trim();
+  if (prompt.isEmpty) return '';
+
+  final base = _hermesBase.replaceFirst(RegExp(r'/+$'), '');
+  final uri = Uri.parse(
+    '$base/v1/calls/${Uri.encodeComponent(_hermesCallId)}/messages',
+  );
+  final headers = <String, String>{
+    'content-type': 'application/json',
+    if (_hermesToken.isNotEmpty) 'authorization': 'Bearer $_hermesToken',
+  };
+
+  final response = await http
+      .post(
+        uri,
+        headers: headers,
+        body: jsonEncode({
+          'text': prompt,
+          'clientMessageId': DateTime.now().microsecondsSinceEpoch.toString(),
+        }),
+      )
+      .timeout(const Duration(seconds: 20));
+
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    _log('hermes bg ${response.statusCode}: ${response.body}');
+    return '';
+  }
+  final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+  return (decoded['text'] as String? ?? '').trim();
 }
 
 Future<void> _showFollowupBanner(String body) async {

@@ -305,6 +305,7 @@ function RealArtifactTile({ artifact }: { artifact: WorkItemArtifactRecord }) {
         <StatusPill label={artifact.kind || "artifact"} />
         <StatusPill label={artifact.state || "ready"} tone="success" />
         {artifact.s3Uri ? <StatusPill label="S3" tone="warning" /> : null}
+        {artifact.previewUrl ? <StatusPill label="Preview" tone="success" /> : null}
       </div>
       <div className="text-sm font-black text-app-text truncate">
         {artifact.name || artifact.artifactId}
@@ -313,7 +314,13 @@ function RealArtifactTile({ artifact }: { artifact: WorkItemArtifactRecord }) {
         {artifact.contentType || ""}
         {artifact.sizeBytes ? ` · ${formatBytes(artifact.sizeBytes)}` : ""}
         {artifact.s3Uri ? `\n${artifact.s3Uri}` : ""}
+        {artifact.previewUrl ? `\n${artifact.previewUrl}` : ""}
       </div>
+      {artifact.previewUrl ? (
+        <Button variant="primary" size="sm" onClick={() => window.open(artifact.previewUrl, "_blank", "noopener,noreferrer")}>
+          Open preview
+        </Button>
+      ) : null}
       <Button variant="outline" size="sm" onClick={onDownload} disabled={downloading}>
         <DownloadIcon /> {downloading ? "Preparing…" : "Download"}
       </Button>

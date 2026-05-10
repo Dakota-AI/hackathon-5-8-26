@@ -1,30 +1,99 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:amplify_flutter/amplify_flutter.dart' show safePrint;
+import 'package:http/http.dart' as http;
+
 import 'llm_client.dart';
 
-/// Placeholder adapter for the Hermes harness
-/// (https://github.com/nousresearch/hermes-agent).
+/// Text adapter for a Hermes/runner HTTP shim.
 ///
-/// The end-state is: phone speaks WebRTC to the Cloudflare relay, the
-/// Hermes runner claims the call as `role=agent`, runs STT→LLM→TTS, and
-/// pushes audio back. This adapter is reserved for the *non-realtime* text
-/// path (when the phone wants to send a text query and get an answer
-/// without opening the call). It will become functional once the Hermes
-/// HTTP shim ships.
+/// The mobile client should not carry model-provider keys. It sends text to
+/// the runner/control plane, and the runner owns actual model selection.
 class HermesLlmClient implements LlmClient {
-  const HermesLlmClient({required this.baseUrl});
+  HermesLlmClient({
+    required this.baseUrl,
+    this.authToken = '',
+    this.callId = 'mobile-chat',
+    http.Client? httpClient,
+  }) : _http = httpClient ?? http.Client();
 
   final String baseUrl;
+  final String authToken;
+  final String callId;
+  final http.Client _http;
 
   @override
-  String get label => 'Hermes (not yet wired)';
+  String get label {
+    final host = Uri.tryParse(baseUrl)?.host ?? 'runner';
+    return 'Hermes · $host';
+  }
 
   @override
   Stream<LlmDelta> chat(List<LlmMessage> history) async* {
-    yield LlmDelta(
-      text:
-          'Hermes harness adapter is reserved for production. For now, '
-          'switch to LLM_PROVIDER=openai or LLM_PROVIDER=ollama.\n\n'
-          'Target endpoint: $baseUrl',
-      done: true,
+    final prompt = _lastUserText(history);
+    if (prompt.isEmpty) {
+      yield const LlmDelta(text: '', done: true);
+      return;
+    }
+
+    final base = baseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final uri = Uri.parse(
+      '$base/v1/calls/${Uri.encodeComponent(callId)}/messages',
     );
+    final headers = <String, String>{
+      'content-type': 'application/json',
+      if (authToken.isNotEmpty) 'authorization': 'Bearer $authToken',
+    };
+
+    late final http.Response response;
+    try {
+      safePrint('[llm] POST $uri backend=hermes');
+      response = await _http
+          .post(
+            uri,
+            headers: headers,
+            body: jsonEncode({
+              'text': prompt,
+              'clientMessageId': DateTime.now()
+                  .microsecondsSinceEpoch
+                  .toString(),
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+    } on TimeoutException {
+      yield const LlmDelta(
+        text: 'Hermes runner timed out after 30 seconds.',
+        done: true,
+      );
+      return;
+    } catch (e) {
+      yield LlmDelta(text: 'Hermes runner request failed: $e', done: true);
+      return;
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      yield LlmDelta(
+        text: 'Hermes runner error ${response.statusCode}: ${response.body}',
+        done: true,
+      );
+      return;
+    }
+
+    try {
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      yield LlmDelta(text: (decoded['text'] as String? ?? '').trim(), done: true);
+    } catch (e) {
+      yield LlmDelta(text: 'Hermes runner returned invalid JSON: $e', done: true);
+    }
   }
+}
+
+String _lastUserText(List<LlmMessage> history) {
+  for (final message in history.reversed) {
+    if (message.role == LlmRole.user && message.text.trim().isNotEmpty) {
+      return message.text.trim();
+    }
+  }
+  return '';
 }

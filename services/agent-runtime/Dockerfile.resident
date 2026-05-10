@@ -47,9 +47,12 @@ RUN apt-get update \
 
 COPY --from=build --chown=hermes:hermes /app /app
 COPY services/agent-runtime/docker/resident-entrypoint.sh /usr/local/bin/agents-cloud-resident-entrypoint
+COPY services/agent-runtime/skills /runner/hermes/skills
 RUN chmod 0755 /usr/local/bin/agents-cloud-resident-entrypoint \
   && chmod 0755 /app/services/agent-runtime/bin/agents-cloud-user.mjs \
-  && ln -sf /app/services/agent-runtime/bin/agents-cloud-user.mjs /usr/local/bin/agents-cloud-user
+  && chmod 0755 /app/services/agent-runtime/bin/agents-cloud-preview.mjs \
+  && ln -sf /app/services/agent-runtime/bin/agents-cloud-user.mjs /usr/local/bin/agents-cloud-user \
+  && ln -sf /app/services/agent-runtime/bin/agents-cloud-preview.mjs /usr/local/bin/agents-cloud-preview
 
 USER hermes
 WORKDIR /app/services/agent-runtime

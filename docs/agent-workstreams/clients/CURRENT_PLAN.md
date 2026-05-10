@@ -3,7 +3,7 @@
 Workstream: Clients
 Owner: Clients Workstream Agent
 Updated: 2026-05-10
-Status: first web WorkItem slice implemented; ready for backend adapter or Flutter parity next
+Status: Hidden Flutter WKWebView agent-control probe plus dev CLI bridge implemented
 
 ## Current Scope
 
@@ -24,6 +24,9 @@ Out of scope for this workstream:
 - realtime transport internals.
 - server-side authorization rules beyond documenting client expectations.
 - durable schema ownership except through agreed protocol changes.
+- Production WebSocket/CLI browser-control transport. The current WKWebView
+  control work has a development-only loopback WebSocket bridge and CLI probe;
+  production auth/session policy is still future work.
 
 ## Current State
 
@@ -246,6 +249,27 @@ Potential later Flutter files:
 - Modify later: `apps/desktop_mobile/lib/main.dart` only after the tested model/repository boundary exists
 - Modify: `apps/desktop_mobile/test/widget_test.dart`
 
+Current WKWebView browser-control files:
+
+- `apps/desktop_mobile/packages/webview_flutter_wkwebview/`: local fork of
+  `webview_flutter_wkwebview` v3.25.1.
+- `apps/desktop_mobile/pubspec.yaml` and `pubspec.lock`: override the endorsed
+  WKWebView package to the local fork.
+- `apps/desktop_mobile/lib/src/browser/agent_browser_control.dart`: typed
+  DOM-first control bridge and JS bootstrap.
+- `apps/desktop_mobile/lib/src/browser/agent_browser_protocol.dart`: wire-shaped
+  request/response/logging protocol shared by the hidden bridge and tests.
+- `apps/desktop_mobile/lib/src/browser/agent_browser_websocket_bridge.dart`:
+  opt-in loopback WebSocket bridge for development probes.
+- `apps/desktop_mobile/tool/agent_browser_bridge_probe.dart`: CLI smoke probe
+  for driving the hidden bridge.
+- `apps/desktop_mobile/test/browser/agent_browser_control_test.dart`: command
+  parsing/script-generation/protocol tests.
+- `apps/desktop_mobile/lib/main.dart`: Browser page keeps the bridge hidden,
+  installs it into the WKWebView, and optionally starts the dev loopback bridge.
+- `docs/roadmap/FLUTTER_WKWEBVIEW_AGENT_CONTROL_AUDIT_2026_05_10.md`: package
+  audit, fork delta, limits, and deferred native sidecar work.
+
 Files to avoid in this workstream unless a handoff explicitly requests a contract change:
 
 - `infra/cdk/**`
@@ -386,6 +410,13 @@ Then open local web, inspect the browser console, and verify the first screen pr
 - 2026-05-10: Verified the Flutter UI slice with `dart format lib test`, `flutter analyze`, `flutter test`, and `flutter build macos --debug`, then launched `apps/desktop_mobile/build/macos/Build/Products/Debug/desktop_mobile.app` for hands-on testing.
 - 2026-05-10: Applied a Paperclip-style Flutter shell cleanup based on user feedback: removed exposed auth/API/GenUI status clutter, removed the CEO command-center title, added a collapsible shadcn sidebar with tooltips, added first-class GenUI Lab, Browser, and UI Kit pages, embedded a WebView-backed preview browser for generated domains, and hid the macOS title text with a transparent full-size titlebar. Verified with `dart format lib test`, `flutter analyze`, `flutter test`, `plutil -lint macos/Runner/Info.plist`, and `flutter build macos --debug`, then relaunched the debug app.
 - 2026-05-10: Reworked the Flutter GenUI/browser slice from scaffold previews into working package-backed UI after package research. Added `fl_chart` and `webview_flutter_wkwebview`, wired a WKWebView-backed HTTPS browser with URL entry, load, reload, back, navigation status, widget-test fallback, and macOS network-client entitlements. Added real `fl_chart` line/bar/pie widgets to GenUI Lab and seeded an actual `genui.SurfaceController`/`genui.Surface` with local A2UI component messages. Updated widget tests to assert the working chart, GenUI, and browser controls. Verified with `dart format lib test`, `flutter analyze`, `flutter test`, `plutil -lint macos/Runner/DebugProfile.entitlements macos/Runner/Release.entitlements macos/Runner/Info.plist`, and `flutter build macos --debug`, then relaunched the debug app and captured `/tmp/agents_cloud_after_final.png` for visual audit. Remaining visible UX issues from screenshot audit: fixture copy still feels internal, compact icon rail depends on tooltips for discoverability, app preview was partially obstructed by a macOS local-network prompt, and the current viewport did not show charts/browser without navigation.
+- 2026-05-10: Audited upstream `webview_flutter_wkwebview` v3.25.1 from the Flutter packages repository, then vendored a minimal local fork under `apps/desktop_mobile/packages/webview_flutter_wkwebview`.
+- 2026-05-10: Added the fork-only `WebKitWebViewController.addUserScript(...)` helper so app code can install a document-start `WKUserScript` without importing generated WebKit internals.
+- 2026-05-10: Implemented `AgentBrowserControl`, a DOM-first command bridge for snapshot/markdown-ish extraction, visible element discovery, find, scroll, click, and fill. Raw eval remains intentionally absent.
+- 2026-05-10: Added then removed the visible Browser page "Agent browser bridge" panel after user feedback. The Browser page now keeps the control bridge hidden and preserves the normal embedded-browser UI.
+- 2026-05-10: Added structured command/protocol logging, an opt-in loopback WebSocket bridge behind `AGENTS_CLOUD_BROWSER_BRIDGE=true`, and `tool/agent_browser_bridge_probe.dart` for CLI smoke testing against the hidden bridge.
+- 2026-05-10: Verified the hidden bridge against a live compiled macOS app binary on port `48767`; the CLI probe loaded the smoke page and passed observe/find/fill/click/confirm/scroll plus `run_smoke` (`7/7`).
+- 2026-05-10: Verified the slice with `flutter analyze`, `flutter test`, `flutter build macos --debug`, `flutter build ios --release --config-only --no-codesign`, and targeted `git diff --check`.
 
 ## Completion Criteria
 

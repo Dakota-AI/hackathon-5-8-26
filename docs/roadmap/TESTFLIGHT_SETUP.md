@@ -3,13 +3,16 @@
 Status:
 
 - [x] Local `asc` command available for App Store Connect workflows.
-- [x] Desktop/mobile iOS bundle identifier normalized to `com.agentscloud.desktopmobile`.
-- [x] Desktop/mobile display name set to `Agents Cloud`.
+- [x] Desktop/mobile iOS bundle identifier normalized to `com.sebastianrincon.aicaller`.
+- [x] Desktop/mobile display name set to `Actions`.
 - [x] Draft TestFlight workflow added at `apps/desktop_mobile/.asc/workflow.json`.
 - [x] Export options template added at `apps/desktop_mobile/.asc/export-options-app-store.plist.example`.
+- [x] Local App Store export options created at `apps/desktop_mobile/.asc/export-options-app-store.plist` (ignored).
+- [x] Local archive/IPA export verified with Apple Distribution signing.
 - [ ] App Store Connect API key/profile configured.
+- [ ] App Store Connect app record exists for `com.sebastianrincon.aicaller`.
 - [ ] App Store Connect app record ID added to the workflow.
-- [ ] First signed archive exported and uploaded to TestFlight.
+- [ ] First signed archive uploaded to TestFlight.
 
 ## Local CLI
 
@@ -31,7 +34,7 @@ To actually upload to TestFlight, we still need Apple-side values that are not i
 2. App Store Connect app record ID, not the bundle ID.
 3. TestFlight beta group name or group ID.
 4. Apple Developer Team ID. Current generated Xcode project has `F2PY472TDT`; confirm this is the correct team.
-5. A valid Apple signing setup for bundle ID `com.agentscloud.desktopmobile`.
+5. A valid Apple signing setup for bundle ID `com.sebastianrincon.aicaller`.
 
 Do not commit `.p8` files or populated secret config.
 
@@ -110,12 +113,12 @@ apps/desktop_mobile/scripts/testflight_publish.sh \
 The workflow does:
 
 1. `flutter pub get`.
-2. `flutter build ios --release --config-only --build-name "$VERSION" --no-codesign`.
-3. Resolves the next App Store Connect build number.
+2. Resolves the next App Store Connect build number.
+3. `flutter build ios --release --config-only --build-name "$VERSION" --build-number "$BUILD_NUMBER" --no-codesign`.
 4. Archives `ios/Runner.xcworkspace` with scheme `Runner` for generic iOS.
 5. Exports an IPA using automatic signing.
 6. Uploads and attaches the build to the configured TestFlight group.
 
 ## Fast path remaining
 
-The fastest next step is to create or identify the App Store Connect app for bundle ID `com.agentscloud.desktopmobile`, generate an API key, then run the dry-run command above. Once auth validates, the real upload path is ready.
+The fastest next step is to create or identify the App Store Connect app for bundle ID `com.sebastianrincon.aicaller`, generate/configure an API key, then run the dry-run command above. Once auth validates, the real upload path is ready.

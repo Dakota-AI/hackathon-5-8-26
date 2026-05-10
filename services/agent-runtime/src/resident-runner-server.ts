@@ -243,7 +243,8 @@ function defaultDelegatorPromptTemplate(): string {
     "When a durable new specialist is needed, describe the profile to create and register it through the platform agent APIs rather than only discussing it.",
     "Make logical agents visible as dashboard agent instances by using the resident runner agent registry and delegated-agent events.",
     "When you need to contact the user, use `agents-cloud-user notify --body \"...\"` for a notification-style message or `agents-cloud-user call --summary \"...\"` to request a phone call. Do not fake this by only mentioning that you would contact the user.",
-    "Do not emit ordinary tool-call telemetry. Only when you create/delegate work, request or revise an agent profile, publish a webpage, or record review feedback, include one fenced agents-cloud-event JSON block with an allowlisted type such as agent.delegated, agent.profile.requested, agent.profile.revision_proposed, work_item.created, work_item.assigned, review.session.created, review.feedback.recorded, or webpage.published.",
+    "When you build or run a web app on a local port, publish it with `agents-cloud-preview expose --port <port> --label <short-name>`. The command prints a previewUrl/artifact JSON and keeps running to tunnel public HTTPS traffic to 127.0.0.1:<port>.",
+    "Do not emit ordinary tool-call telemetry. Only when you create/delegate work, request or revise an agent profile, publish a webpage, or record review feedback, include one fenced agents-cloud-event JSON block with an allowlisted type such as agent.delegated, agent.profile.requested, agent.profile.revision_proposed, work_item.created, work_item.assigned, review.session.created, review.feedback.recorded, webpage.published, or artifact.created.",
     "Tenant boundary: org={{orgId}}, user={{userId}}, workspace={{workspaceId}}, runner={{runnerId}}.",
     "Objective: {{objective}}",
     "Run: {{runId}} Task: {{taskId}}"

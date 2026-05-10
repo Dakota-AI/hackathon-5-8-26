@@ -1,7 +1,7 @@
 # Foundation Next Steps
 
 Date: 2026-05-09
-Status: Current post-Control API + minimal worker first-slice deployment plan
+Status: Current post-Control API + minimal worker first-slice deployment plan; realtime deploy WIP
 
 ## Current Foundation State
 
@@ -25,9 +25,9 @@ Still missing:
 
 - [x] Minimal real worker runtime first slice.
 - [x] Worker event/artifact writes first slice.
-- [ ] Event relay.
+- [~] Event relay: AWS-native DynamoDB Streams relay is implemented and tested, but not deployed yet.
 - [x] AWS-native realtime WebSocket first slice implemented and synth-validated.
-- [ ] Deploy AWS realtime WebSocket stack and wire clients.
+- [~] Deploy AWS realtime WebSocket stack and wire clients: StateStack support is deployed; WebSocket stack is blocked by runtime Docker asset build-context fix.
 - [ ] Deployed Cloudflare realtime plane and AWS relay integration, deferred unless edge fanout is needed.
 - [ ] Next.js command center.
 - [ ] Production desktop/mobile client integration.
@@ -66,7 +66,55 @@ contract, and worker lifecycle underneath them.
 5. Add true idempotency behavior for repeated `POST /runs`. First unit-tested slice is done; authenticated HTTP smoke and post-execution-ARN recovery are still pending.
 6. Exercise Control API with a real Cognito token from the first client.
 7. Enable real Hermes CLI/model execution with scoped provider secrets after the smoke path is stable.
-8. Add AWS-native realtime WebSocket streaming after the event ledger is stable; Cloudflare remains deferred unless edge fanout is needed.
+8. Add AWS-native realtime WebSocket streaming after the event ledger is stable; Cloudflare remains deferred unless edge fanout is needed. Current WIP: StateStack realtime support is deployed, but the WebSocket API stack still needs deployment after the runtime Docker asset build-context fix.
+
+## Active WIP: Realtime Deploy Resume Point
+
+The 2026-05-10 CDK deploy partially succeeded:
+
+- `agents-cloud-dev-state` updated successfully.
+- EventsTable stream is enabled.
+- RealtimeConnectionsTable exists.
+- RunsTable idempotency-scope GSI is deployed.
+
+The deploy stopped before `agents-cloud-dev-runtime`, `agents-cloud-dev-control-api`, and `agents-cloud-dev-realtime-api` finished because the ECS runtime Docker asset could not resolve the new `@agents-cloud/protocol` workspace dependency inside the Docker build context.
+
+Current local WIP files:
+
+- `.dockerignore`
+- `services/agent-runtime/Dockerfile`
+
+Before the next deploy attempt, verify the runtime image directly:
+
+```bash
+docker build --platform linux/amd64 \
+  -f services/agent-runtime/Dockerfile \
+  -t agents-cloud-agent-runtime:verify .
+```
+
+Then rerun:
+
+```bash
+pnpm agent-runtime:test
+pnpm infra:build
+pnpm infra:synth
+```
+
+After that, commit/push the Docker fix and deploy the remaining stacks:
+
+```bash
+cd infra/cdk
+AWS_PROFILE=agents-cloud-source \
+AWS_REGION=us-east-1 \
+AWS_DEFAULT_REGION=us-east-1 \
+AGENTS_CLOUD_AWS_REGION=us-east-1 \
+pnpm exec cdk deploy \
+  --app 'node dist/bin/agents-cloud-cdk.js' \
+  agents-cloud-dev-runtime \
+  agents-cloud-dev-control-api \
+  agents-cloud-dev-realtime-api \
+  --require-approval never
+```
 
 ## User Inputs Needed Soon
 
@@ -151,7 +199,7 @@ Build after durable event writes exist:
 - [x] `$connect`, `$disconnect`, and `$default` handlers.
 - [x] `subscribeRun`, `unsubscribeRun`, and `ping` actions.
 - [x] DynamoDB Streams relay publisher from run events to subscribed connections.
-- [ ] Deploy stack update.
+- [~] Deploy stack update: StateStack support deployed; WebSocket API stack still pending.
 - [ ] Real Cognito-token WebSocket smoke.
 - [ ] Client cursor/replay protocol.
 - [ ] Gap repair through Control API.

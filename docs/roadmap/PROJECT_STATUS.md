@@ -20,9 +20,9 @@ Current state:
 - A Step Functions -> ECS Fargate -> CloudWatch smoke test succeeded.
 - Amplify Gen 2 Auth sandbox is deployed and healthy.
 - Amplify Hosting app exists and deploys successfully with an explicit `amplify.yml` build spec.
-- The first Control API slice is deployed: create/query run endpoints, Cognito JWT authorizer, DynamoDB run/event writes, and Step Functions start.
+- The first Control API slice is deployed: create/query run endpoints, Cognito JWT authorizer, DynamoDB run/event writes, and Step Functions start. The latest transactional ledger/idempotency hardening is committed but still needs redeployment after the runtime Docker build-context fix below.
 - The first real worker slice is deployed: a Hermes-boundary ECS runtime writes `running`, `artifact.created`, and terminal status events plus one S3 report artifact. It currently defaults to `HERMES_RUNNER_MODE=smoke`; real CLI/model execution needs scoped provider secret brokering before enabling in ECS.
-- An AWS-native realtime WebSocket first slice is implemented locally and synth-validates: API Gateway WebSocket API, Cognito Lambda REQUEST authorizer, connection/subscription table, WebSocket handlers, and DynamoDB Streams relay from run events to subscribed clients.
+- An AWS-native realtime WebSocket first slice is implemented, tested, and synth-validates. The required `agents-cloud-dev-state` update has been deployed, including the EventsTable stream, RunsTable idempotency GSI, and RealtimeConnectionsTable. The `agents-cloud-dev-realtime-api` stack itself is still WIP/not deployed because the combined CDK deploy stopped while building the runtime Docker asset.
 
 Approximate progress:
 
@@ -49,7 +49,7 @@ The following CDK stacks are deployed and verified as `CREATE_COMPLETE`:
 | `agents-cloud-dev-foundation` | Complete | Environment metadata, tags, base SSM parameters. |
 | `agents-cloud-dev-network` | Complete | VPC, subnets, NAT, S3/DynamoDB endpoints, worker security group. |
 | `agents-cloud-dev-storage` | Complete | S3 buckets for live artifacts, audit logs, previews, and research datasets. |
-| `agents-cloud-dev-state` | Complete | DynamoDB run/task/event/artifact/approval tables plus preview deployment registry. |
+| `agents-cloud-dev-state` | Complete, updated 2026-05-10 | DynamoDB run/task/event/artifact/approval tables plus preview deployment registry, EventsTable stream, RunsTable idempotency GSI, and RealtimeConnectionsTable. |
 | `agents-cloud-dev-cluster` | Complete | ECS cluster and CloudWatch log group. |
 | `agents-cloud-dev-runtime` | Complete | Agent runtime Fargate task definition and IAM grants for the current smoke/Hermes worker path. |
 | `agents-cloud-dev-orchestration` | Complete | Step Functions state machine that launches the Fargate task. |
@@ -69,8 +69,85 @@ Important deployed resources:
 - Live artifacts bucket: `agents-cloud-dev-storage-workspaceliveartifactsbuc-8br4g70cte0m`
 - Preview static bucket: `agents-cloud-dev-storage-previewstaticbucket42b307-oyrfiakvhnf8`
 - Preview deployments table: `agents-cloud-dev-state-PreviewDeploymentsTable37B54DE6-WEG6QR56NMCX`
+- Realtime connections table: `agents-cloud-dev-state-RealtimeConnectionsTableD1B843C7-1NHZWIIGT5G91`
+- Events table stream: enabled on `agents-cloud-dev-state-EventsTableD24865E5-N2IHC3AJ25VW`
 - Runtime task definition: `arn:aws:ecs:us-east-1:625250616301:task-definition/agents-cloud-dev-agent-runtime:6`
 - Control API URL: `https://ajmonuqk61.execute-api.us-east-1.amazonaws.com`
+
+## WIP: 2026-05-10 Realtime Deployment Attempt
+
+The realtime implementation and supporting hardening have been committed and pushed to `origin/main`.
+
+Latest relevant commits:
+
+- `f782f2c feat: add event contracts and realtime API`
+- `74e5059 fix(control-api): make run ledger creation transactional`
+- `dc42d1c docs: capture realtime readiness hardening`
+- `8464da3 docs: clarify transactional run ledger`
+
+Validation before deployment attempt passed:
+
+- `pnpm install --frozen-lockfile`
+- `pnpm contracts:test`
+- `pnpm control-api:test`
+- `pnpm agent-runtime:test`
+- `pnpm realtime-api:test`
+- `pnpm cloudflare:test`
+- `pnpm web:typecheck`
+- `pnpm web:build`
+- `pnpm amplify:hosting:build`
+- `pnpm infra:build`
+- `pnpm infra:synth`
+
+Deploy command attempted from `infra/cdk` with profile `agents-cloud-source`:
+
+```bash
+AWS_PROFILE=agents-cloud-source \
+AWS_REGION=us-east-1 \
+AWS_DEFAULT_REGION=us-east-1 \
+AGENTS_CLOUD_AWS_REGION=us-east-1 \
+pnpm exec cdk deploy \
+  --app 'node dist/bin/agents-cloud-cdk.js' \
+  agents-cloud-dev-state \
+  agents-cloud-dev-runtime \
+  agents-cloud-dev-control-api \
+  agents-cloud-dev-realtime-api \
+  --require-approval never
+```
+
+Deployment result:
+
+- `agents-cloud-dev-state` updated successfully and is now `UPDATE_COMPLETE`.
+- The deploy then stopped at `agents-cloud-dev-runtime` while building the `AgentRuntimeImage` Docker asset.
+- `agents-cloud-dev-control-api` and `agents-cloud-dev-realtime-api` were not redeployed in that run.
+- No live WebSocket URL has been created yet.
+
+Docker asset failure:
+
+```text
+src/ports.ts: Cannot find module '@agents-cloud/protocol'
+src/worker.ts: Cannot find module '@agents-cloud/protocol'
+Failed to build asset AgentRuntimeImage
+```
+
+Cause:
+
+- `services/agent-runtime` now imports `@agents-cloud/protocol`.
+- `services/agent-runtime/Dockerfile` and `.dockerignore` still need a clean committed build-context update so the Docker image can copy/build the `packages/protocol` workspace package.
+
+Current local WIP files for that fix:
+
+- `.dockerignore`
+- `services/agent-runtime/Dockerfile`
+
+Next resume point:
+
+1. Finish and verify the Docker build-context fix.
+2. Run `docker build --platform linux/amd64 -f services/agent-runtime/Dockerfile -t agents-cloud-agent-runtime:verify .`.
+3. Re-run `pnpm agent-runtime:test`, `pnpm infra:build`, and `pnpm infra:synth`.
+4. Commit/push the Docker fix.
+5. Redeploy `agents-cloud-dev-runtime`, `agents-cloud-dev-control-api`, and `agents-cloud-dev-realtime-api`.
+6. Capture the WebSocket stack output and smoke-test with a real Cognito ID token.
 
 ## Completed and Deployed: Amplify Auth Sandbox
 
@@ -190,7 +267,7 @@ DynamoDB event/artifact writes are conditional. It still does not yet:
 
 ### AWS-Native Realtime WebSocket Plane
 
-Implemented locally and synth-validated, not deployed yet.
+Implemented locally and synth-validated. The supporting StateStack update is deployed; the WebSocket API stack is not deployed yet.
 
 Implemented under `services/realtime-api` plus `infra/cdk/src/stacks/realtime-api-stack.ts`:
 
@@ -207,13 +284,19 @@ Implemented under `services/realtime-api` plus `infra/cdk/src/stacks/realtime-ap
 
 Verified locally:
 
-- `pnpm realtime-api:test` passed: 9/9 tests.
+- `pnpm realtime-api:test` passed: 10/10 tests.
 - `pnpm infra:build` passed.
 - `pnpm infra:synth` passed and produced stack `agents-cloud-dev-realtime-api`.
 
+Deployed so far:
+
+- `agents-cloud-dev-state` update succeeded.
+- `RealtimeConnectionsTable` exists.
+- EventsTable DynamoDB stream is enabled.
+
 Still missing:
 
-- AWS deployment of `agents-cloud-dev-state` update and `agents-cloud-dev-realtime-api` stack.
+- AWS deployment of `agents-cloud-dev-realtime-api` stack.
 - Real Cognito-token WebSocket smoke test with `wscat` or app client.
 - Workspace membership authorization beyond current authenticated user context.
 - Client replay/gap repair using `GET /runs/{runId}/events?afterSeq=`.

@@ -57,6 +57,37 @@ pnpm infra:synth
 docker build -f services/agent-runtime/Dockerfile -t agents-cloud-agent-runtime:local .
 ```
 
+## Active WIP: Docker Build Context
+
+The latest runtime code imports `@agents-cloud/protocol` so runtime events can
+use the shared canonical event builders. Local TypeScript builds pass, but the
+2026-05-10 CDK deploy exposed a Docker build-context issue: the runtime image did
+not include the `packages/protocol` workspace package, and `.dockerignore`
+excluded `packages/` from the image build context.
+
+Observed deploy failure:
+
+```text
+src/ports.ts: Cannot find module '@agents-cloud/protocol'
+src/worker.ts: Cannot find module '@agents-cloud/protocol'
+Failed to build asset AgentRuntimeImage
+```
+
+Current local WIP files for the fix:
+
+- `.dockerignore`
+- `services/agent-runtime/Dockerfile`
+
+Before redeploying runtime, verify the image explicitly:
+
+```bash
+docker build --platform linux/amd64 \
+  -f services/agent-runtime/Dockerfile \
+  -t agents-cloud-agent-runtime:verify .
+```
+
+Only after that passes should the CDK runtime/control/realtime deploy be resumed.
+
 Deployed smoke evidence from 2026-05-10:
 
 - Step Functions execution: `run-hermes-ecs-smoke-1778376731`

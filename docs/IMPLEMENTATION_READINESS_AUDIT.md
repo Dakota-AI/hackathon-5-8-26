@@ -65,8 +65,9 @@ contract-correct.
 - Cloudflare realtime can accept WebSocket sessions and relay events to a
   Durable Object, but it does not yet do replay, gap repair, or signed relay.
 - AWS-native realtime can synthesize a WebSocket API, store connections/subscriptions,
-  and relay DynamoDB event stream records to subscribed clients, but it is not
-  deployed or client-smoke-tested yet.
+  and relay DynamoDB event stream records to subscribed clients. The required
+  StateStack update is deployed, but the WebSocket API stack is not deployed or
+  client-smoke-tested yet.
 - Web creates a Control API run when configured, but the run list, artifacts,
   approvals, and status panels remain mostly fixture-backed.
 - Flutter configures Amplify and contains a Control API client, but the user
@@ -87,6 +88,59 @@ contract-correct.
 - Observability, alarms, access logs, and operational runbooks.
 - Production deployment policy for live environment retention and deletion
   protection.
+
+## Active WIP / Resume Point: 2026-05-10 Realtime Deploy
+
+The latest realtime/control/runtime hardening is committed and pushed, but the
+deployment is intentionally incomplete.
+
+Deployed successfully:
+
+- `agents-cloud-dev-state` reached `UPDATE_COMPLETE` after the realtime deploy
+  attempt.
+- EventsTable DynamoDB Streams are enabled.
+- RunsTable has the idempotency-scope GSI.
+- `RealtimeConnectionsTable` exists.
+
+Not deployed yet:
+
+- `agents-cloud-dev-realtime-api` WebSocket stack.
+- Latest `agents-cloud-dev-control-api` Lambda code containing transactional run
+  ledger/idempotency hardening.
+- Latest `agents-cloud-dev-runtime` Docker image containing protocol-aligned
+  runtime event changes.
+
+Why deployment stopped:
+
+- The CDK deploy tried to rebuild `AgentRuntimeImage`.
+- The Docker build failed because `services/agent-runtime` now imports
+  `@agents-cloud/protocol`, but the Docker build context still excluded or did
+  not copy the `packages/protocol` workspace package.
+
+Current local WIP files for the build-context fix:
+
+- `.dockerignore`
+- `services/agent-runtime/Dockerfile`
+
+Before resuming deploy:
+
+1. Finish the Dockerfile/.dockerignore fix so the runtime image can copy and
+   build `packages/protocol`.
+2. Verify with:
+
+   ```bash
+   docker build --platform linux/amd64 \
+     -f services/agent-runtime/Dockerfile \
+     -t agents-cloud-agent-runtime:verify .
+   pnpm agent-runtime:test
+   pnpm infra:build
+   pnpm infra:synth
+   ```
+
+3. Commit and push the Docker fix.
+4. Redeploy `agents-cloud-dev-runtime`, `agents-cloud-dev-control-api`, and
+   `agents-cloud-dev-realtime-api`.
+5. Capture WebSocket outputs and perform a real Cognito-token WebSocket smoke.
 
 ## Locked Architecture Decisions
 

@@ -11,17 +11,18 @@ Start here:
 - [Implementation Readiness Audit](docs/IMPLEMENTATION_READINESS_AUDIT.md)
 - [AI Agent Engineering Quality Gates](docs/AI_AGENT_ENGINEERING_QUALITY_GATES.md)
 - [Current Project Status](docs/roadmap/PROJECT_STATUS.md)
+- [Project Remaining Work Audit](docs/roadmap/PROJECT_REMAINING_WORK_AUDIT_2026_05_10.md)
 - [Docs Index](docs/README.md)
 - [Repository Agent Instructions](AGENTS.md)
 - [Architecture Decision Records](docs/adr/)
+- [User Runner Local And ECS Architecture](docs/roadmap/USER_RUNNER_LOCAL_ECS_ARCHITECTURE.md)
 - [Protocol Schemas](packages/protocol/)
 - [Implementation Roadmap](docs/roadmap/AUTONOMOUS_AGENT_PLATFORM_IMPLEMENTATION_ROADMAP.md)
-- [Exa MCP Audit Addendum](docs/roadmap/AUTONOMOUS_AGENT_PLATFORM_EXA_AUDIT_ADDENDUM.md)
 
 Current next implementation slice:
 
-1. Make service-produced events match the canonical protocol envelope.
-2. Make `POST /runs` truly idempotent and failure-safe.
-3. Harden the worker event/artifact path for retries and partial failures.
-4. Exercise the durable run loop from real web/native Cognito sessions.
-5. Add realtime relay and client surfaces after durable run lifecycle works.
+1. Add the WorkItem layer above runs.
+2. Add the user-runner placement model for local Docker and ECS execution.
+3. Harden workspace membership and tenant authorization.
+4. Enable production-shaped worker/runtime execution with scoped secrets.
+5. Build artifact, approval, notification, and generated-UI product surfaces.

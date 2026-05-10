@@ -3,7 +3,7 @@
 This repository is building Agents Cloud: a CDK-backed autonomous AI agent
 platform for 24/7 agent teams, isolated ECS workers, durable AWS state,
 Cloudflare realtime sync, synchronized Next.js and Flutter clients, generated UI
-surfaces, Miro integration, and safe coding/build agents.
+surfaces, collaboration integrations, and safe coding/build agents.
 
 ## Read First
 
@@ -14,12 +14,15 @@ Before making implementation decisions, read these in order:
 3. `docs/IMPLEMENTATION_READINESS_AUDIT.md`
 4. `docs/AI_AGENT_ENGINEERING_QUALITY_GATES.md`
 5. `docs/roadmap/PROJECT_STATUS.md`
-6. `docs/roadmap/FOUNDATION_NEXT_STEPS.md`
-7. `docs/roadmap/CODEBASE_ORIENTATION.md`
-8. `docs/adr/README.md`
-9. `infra/cdk/README.md`
-10. `docs/roadmap/AMPLIFY_NEXT_FRONTEND_PLAN.md` when touching the web app.
-11. `docs/roadmap/WILDCARD_PREVIEW_HOSTING_STATUS.md` when touching previews.
+6. `docs/roadmap/PROJECT_REMAINING_WORK_AUDIT_2026_05_10.md`
+7. `docs/roadmap/FOUNDATION_NEXT_STEPS.md`
+8. `docs/roadmap/CODEBASE_ORIENTATION.md`
+9. `docs/adr/README.md`
+10. `docs/adr/0008-user-runner-placement.md`
+11. `docs/roadmap/USER_RUNNER_LOCAL_ECS_ARCHITECTURE.md`
+12. `infra/cdk/README.md`
+13. `docs/roadmap/AMPLIFY_NEXT_FRONTEND_PLAN.md` when touching the web app.
+14. `docs/roadmap/WILDCARD_PREVIEW_HOSTING_STATUS.md` when touching previews.
 
 The master scope document is the current source of truth. Supporting roadmap and
 architecture docs should stay aligned with current implementation status.
@@ -32,11 +35,13 @@ The system must support a CEO-style user experience:
 - executive/manager agents plan and delegate,
 - specialist agents work in parallel,
 - each agent or team can run in isolated ECS containers,
+- each user can have a dedicated resident runner container with many logical
+  agents inside that user boundary,
 - agents can research deeply, build software, create custom tools, commit code,
   run tests, produce artifacts, publish websites, and create reports,
 - clients show live messages, status, approvals, notifications, and generated
   UI consistently across web, desktop, and mobile,
-- Miro can become a first-class collaboration/artifact surface,
+- a collaborative canvas can become a first-class collaboration/artifact surface,
 - wildcard preview domains can serve many generated websites at once,
 - self-improvement must be gated by tests, evals, quarantine, and human approval.
 
@@ -54,7 +59,7 @@ Completed:
 - Preview deployment registry and optional preview ingress stack.
 - Next.js command center under `apps/web`.
 - Flutter console under `apps/desktop_mobile`.
-- Agent runtime smoke/Hermes adapter package under `services/agent-runtime`.
+- Agent runtime smoke adapter package under `services/agent-runtime`.
 - Cloudflare realtime Worker/Durable Object package under
   `infra/cloudflare/realtime`.
 
@@ -65,7 +70,7 @@ Not complete:
 - Event relay.
 - Deployed production Cloudflare realtime relay, replay, and client integration.
 - Production web and Flutter auth/API/realtime integration.
-- Codex/Hermes/Miro integrations.
+- advanced coding-agent and collaboration integrations.
 - Specialist-agent creation and self-improvement.
 
 ## Highest-Priority Build Rule
@@ -83,8 +88,8 @@ authenticated web/native command
   -> queryable ordered events
 ```
 
-Do not start by building advanced UI, Codex, Hermes, Miro, specialist agents, or
-full GenUI until the durable run lifecycle exists. Those features should plug
+Do not start by building advanced UI, specialist agents, collaboration surfaces,
+or full GenUI until the durable run lifecycle exists. Those features should plug
 into the run ledger, event schema, auth boundary, and worker lifecycle.
 
 ## Architecture Rules
@@ -94,14 +99,21 @@ into the run ledger, event schema, auth boundary, and worker lifecycle.
 - DynamoDB/S3/Step Functions/ECS own execution truth.
 - S3 stores durable per-user/per-workspace artifacts and large payloads.
 - EFS is optional and deferred until hot POSIX workspace semantics are required.
+- User runners are the resident execution boundary: one warm runner container per
+  user, many logical agents inside it.
+- Use one balanced runner class first; do not add basic, power, or GPU runner
+  classes until real usage data proves they are needed.
+- Local Docker hosts and ECS are placement targets for the same user-runner
+  contract.
+- Do not mount the Docker socket into user runner containers.
 - Clients render canonical events and generated UI; they do not own run truth.
 - A2UI/GenUI content must be server-validated against allowlisted catalogs.
 - Agent containers must receive scoped credentials only.
-- User-linked Codex/ChatGPT auth is optional private/trusted-runner work until
-  policy, terms, session handling, and isolation are verified. Production
+- User-linked third-party assistant auth is optional private/trusted-runner work
+  until policy, terms, session handling, and isolation are verified. Production
   default should be API-key/service-account style model auth.
-- Miro and GitHub credentials must be brokered and scoped; never expose refresh
-  tokens directly to arbitrary agent code.
+- External collaboration and source-control credentials must be brokered and
+  scoped; never expose refresh tokens directly to arbitrary agent code.
 
 ## Implementation Standards
 

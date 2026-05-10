@@ -7,6 +7,7 @@ Read first:
 - [Implementation Readiness Audit](IMPLEMENTATION_READINESS_AUDIT.md)
 - [AI Agent Engineering Quality Gates](AI_AGENT_ENGINEERING_QUALITY_GATES.md)
 - [Current Project Status](roadmap/PROJECT_STATUS.md)
+- [Project Remaining Work Audit](roadmap/PROJECT_REMAINING_WORK_AUDIT_2026_05_10.md)
 - [Repository Agent Instructions](../AGENTS.md)
 
 Main sections:
@@ -20,7 +21,8 @@ Core planning and audit docs:
 - [Implementation Readiness Audit](IMPLEMENTATION_READINESS_AUDIT.md)
 - [AI Agent Engineering Quality Gates](AI_AGENT_ENGINEERING_QUALITY_GATES.md)
 - [Autonomous Agent Platform Roadmap](roadmap/AUTONOMOUS_AGENT_PLATFORM_IMPLEMENTATION_ROADMAP.md)
-- [Exa MCP Audit Addendum](roadmap/AUTONOMOUS_AGENT_PLATFORM_EXA_AUDIT_ADDENDUM.md)
+- [User Runner Local And ECS Architecture](roadmap/USER_RUNNER_LOCAL_ECS_ARCHITECTURE.md)
+- [Project Remaining Work Audit](roadmap/PROJECT_REMAINING_WORK_AUDIT_2026_05_10.md)
 - [Foundation Next Steps](roadmap/FOUNDATION_NEXT_STEPS.md)
 - [Codebase Orientation](roadmap/CODEBASE_ORIENTATION.md)
 - [Desktop and Mobile Boilerplate Status](roadmap/DESKTOP_MOBILE_BOILERPLATE_STATUS.md)

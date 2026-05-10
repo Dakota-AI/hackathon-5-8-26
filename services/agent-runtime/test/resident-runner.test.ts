@@ -1,0 +1,493 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { createServer, type AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, it } from "node:test";
+import { ResidentRunner, residentRunnerConfigFromPartial, type ResidentAgentProfile } from "../src/resident-runner.js";
+
+const fixedNow = (): string => "2026-05-10T12:00:00.000Z";
+
+describe("ResidentRunner", () => {
+  it("runs multiple logical agents in one tenant-scoped resident runner", async () => {
+    const rootDir = await tempRoot();
+    const runner = new ResidentRunner(residentRunnerConfigFromPartial({
+      rootDir,
+      orgId: "org-test",
+      userId: "user-test",
+      workspaceId: "workspace-test",
+      runnerId: "runner-test",
+      runnerSessionId: "runner-session-test",
+      adapterKind: "smoke",
+      now: fixedNow
+    }));
+
+    await runner.initialize([
+      agentProfile("agent-coder", "Coder Agent"),
+      agentProfile("agent-researcher", "Research Agent")
+    ]);
+
+    const result = await runner.wake({
+      objective: "Build a stock dashboard and produce market context.",
+      runId: "run-resident",
+      taskId: "task-resident",
+      wakeReason: "assignment"
+    });
+
+    assert.equal(result.heartbeats.length, 2);
+    assert.equal(result.artifacts.length, 2);
+    assert.deepEqual(result.heartbeats.map((heartbeat) => heartbeat.agentId), ["agent-coder", "agent-researcher"]);
+
+    const state = runner.getState();
+    assert.equal(state.runner.status, "ready");
+    assert.equal(state.metrics.totalHeartbeats, 2);
+    assert.equal(state.metrics.totalArtifacts, 2);
+    assert.equal(state.metrics.durableEvents, 6);
+    assert.equal(state.agents.find((agent) => agent.agentId === "agent-coder")?.sessionId, "session-agent-coder");
+    assert.equal(state.agents.find((agent) => agent.agentId === "agent-researcher")?.sessionId, "session-agent-researcher");
+
+    const events = await runner.getEvents();
+    assert.deepEqual(events.map((event) => event.seq), [1, 2, 3, 4, 5, 6]);
+    assert.deepEqual(events.map((event) => event.type), [
+      "run.status",
+      "run.status",
+      "artifact.created",
+      "run.status",
+      "artifact.created",
+      "run.status"
+    ]);
+    assert.equal(events.some((event) => event.type === "tool.call"), false);
+
+    const report = await readFile(result.artifacts[0]?.path ?? "", "utf8");
+    assert.match(report, /Resident Runner Heartbeat/);
+    assert.match(report, /Build a stock dashboard and produce market context/);
+  });
+
+  it("rejects logical agents outside the runner tenant boundary", async () => {
+    const rootDir = await tempRoot();
+    const runner = new ResidentRunner(residentRunnerConfigFromPartial({
+      rootDir,
+      orgId: "org-test",
+      userId: "user-test",
+      workspaceId: "workspace-test",
+      runnerId: "runner-test",
+      runnerSessionId: "runner-session-test",
+      adapterKind: "smoke",
+      now: fixedNow
+    }));
+
+    await runner.initialize();
+
+    await assert.rejects(
+      () => runner.registerAgent(agentProfile("agent-wrong-tenant", "Research Agent", { orgId: "org-other" })),
+      /orgId does not match/
+    );
+  });
+
+  it("rejects unsafe agent identifiers and paths before writing runner files", async () => {
+    const rootDir = await tempRoot();
+    const runner = new ResidentRunner(residentRunnerConfigFromPartial({
+      rootDir,
+      orgId: "org-test",
+      userId: "user-test",
+      workspaceId: "workspace-test",
+      runnerId: "runner-test",
+      runnerSessionId: "runner-session-test",
+      adapterKind: "smoke",
+      now: fixedNow
+    }));
+
+    await runner.initialize();
+
+    await assert.rejects(
+      () => runner.registerAgent(agentProfile("../escape", "Research Agent")),
+      /agentId must be a safe identifier/
+    );
+    await assert.rejects(
+      () => runner.registerAgent({ ...agentProfile("agent-safe", "Research Agent"), cwd: "/tmp/outside-runner" }),
+      /cwd must stay within/
+    );
+  });
+
+  it("marks the wake failed when a selected agent heartbeat fails", async () => {
+    const rootDir = await tempRoot();
+    const runner = new ResidentRunner(residentRunnerConfigFromPartial({
+      rootDir,
+      orgId: "org-test",
+      userId: "user-test",
+      workspaceId: "workspace-test",
+      runnerId: "runner-test",
+      runnerSessionId: "runner-session-test",
+      adapterKind: "hermes-cli",
+      hermesCommand: "definitely-missing-hermes-command",
+      now: fixedNow
+    }));
+
+    await runner.initialize([agentProfile("agent-coder", "Coder Agent")]);
+    const result = await runner.wake({ objective: "fail safely", runId: "run-fail", taskId: "task-fail" });
+
+    assert.equal(result.heartbeats[0].status, "failed");
+    assert.equal(result.events.at(-1)?.type, "run.status");
+    assert.equal(result.events.at(-1)?.payload.status, "failed");
+  });
+
+  it("does not expose ECS/task credentials to Hermes adapter child processes by default", async () => {
+    const rootDir = await tempRoot();
+    const hermesCommand = join(rootDir, "fake-hermes.mjs");
+    await writeFile(hermesCommand, [
+      "#!/usr/bin/env node",
+      "console.log(JSON.stringify({",
+      "  aws: process.env.AWS_SECRET_ACCESS_KEY ?? null,",
+      "  runnerToken: process.env.RUNNER_API_TOKEN ?? null,",
+      "  providerKey: process.env.OPENROUTER_API_KEY ?? null,",
+      "  hermesHome: process.env.HERMES_HOME ?? null",
+      "}));",
+      "console.log('session_id: session-sandboxed-env');",
+      ""
+    ].join("\n"));
+    await chmod(hermesCommand, 0o755);
+
+    const previousEnv = snapshotEnv([
+      "AWS_SECRET_ACCESS_KEY",
+      "RUNNER_API_TOKEN",
+      "OPENROUTER_API_KEY",
+      "HERMES_HOME",
+      "AGENTS_ALLOW_RAW_PROVIDER_KEYS_TO_AGENT"
+    ]);
+    process.env.AWS_SECRET_ACCESS_KEY = "aws-secret-should-not-leak";
+    process.env.RUNNER_API_TOKEN = "runner-token-should-not-leak";
+    process.env.OPENROUTER_API_KEY = "provider-key-should-not-leak";
+    process.env.HERMES_HOME = join(rootDir, "hermes");
+    delete process.env.AGENTS_ALLOW_RAW_PROVIDER_KEYS_TO_AGENT;
+
+    try {
+      const runner = new ResidentRunner(residentRunnerConfigFromPartial({
+        rootDir,
+        orgId: "org-test",
+        userId: "user-test",
+        workspaceId: "workspace-test",
+        runnerId: "runner-test",
+        runnerSessionId: "runner-session-test",
+        adapterKind: "hermes-cli",
+        hermesCommand,
+        now: fixedNow
+      }));
+      await runner.initialize([agentProfile("agent-secure", "Secure Agent")]);
+
+      const result = await runner.wake({
+        objective: "Check adapter environment boundaries.",
+        agentId: "agent-secure",
+        runId: "run-secure",
+        taskId: "task-secure"
+      });
+
+      const report = await readFile(result.artifacts[0]?.path ?? "", "utf8");
+      assert.match(report, /"aws":null/);
+      assert.match(report, /"runnerToken":null/);
+      assert.match(report, /"providerKey":null/);
+      assert.match(report, /session_id: session-sandboxed-env/);
+      assert.doesNotMatch(report, /aws-secret-should-not-leak/);
+      assert.doesNotMatch(report, /runner-token-should-not-leak/);
+      assert.doesNotMatch(report, /provider-key-should-not-leak/);
+    } finally {
+      restoreEnv(previousEnv);
+    }
+  });
+});
+
+describe("resident runner HTTP API", () => {
+  it("supports authenticated register, wake, event query, and shutdown flow", async () => {
+    const rootDir = await tempRoot();
+    const port = await freePort();
+    const server = fileURLToPath(new URL("../src/resident-runner-server.js", import.meta.url));
+    const child = spawn(process.execPath, [server], {
+      env: {
+        ...process.env,
+        AGENTS_RUNNER_ROOT: rootDir,
+        AGENTS_RESIDENT_ADAPTER: "smoke",
+        AGENT_ID: "agent-default",
+        AGENT_ROLE: "Default Agent",
+        ORG_ID: "org-http",
+        USER_ID: "user-http",
+        WORKSPACE_ID: "workspace-http",
+        RUNNER_ID: "runner-http",
+        RUNNER_SESSION_ID: "runner-session-http",
+        RUNNER_API_TOKEN: "test-token",
+        PORT: String(port)
+      },
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+
+    try {
+      await waitForHealth(port);
+
+      const unauthorized = await fetchJson(port, "/health", { token: "wrong-token" });
+      assert.equal(unauthorized.status, 401);
+
+      const registered = await fetchJson(port, "/agents", {
+        method: "POST",
+        token: "test-token",
+        body: agentProfile("agent-operator", "Operator Agent", {
+          orgId: "org-http",
+          userId: "user-http",
+          workspaceId: "workspace-http"
+        })
+      });
+      assert.equal(registered.status, 201);
+      assert.equal(registered.body.agent.agentId, "agent-operator");
+
+      const wake = await fetchJson(port, "/wake", {
+        method: "POST",
+        token: "test-token",
+        body: {
+          objective: "Create an operator dashboard artifact.",
+          agentId: "agent-operator",
+          runId: "run-http",
+          taskId: "task-http",
+          wakeReason: "on_demand"
+        }
+      });
+      assert.equal(wake.status, 200);
+      assert.equal(wake.body.heartbeats.length, 1);
+
+      const events = await fetchJson(port, "/events", { token: "test-token" });
+      assert.equal(events.status, 200);
+      assert.deepEqual(events.body.events.map((event: { type: string }) => event.type), [
+        "run.status",
+        "run.status",
+        "artifact.created",
+        "run.status"
+      ]);
+
+      const state = await fetchJson(port, "/state", { token: "test-token" });
+      assert.equal(state.body.metrics.totalHeartbeats, 1);
+      assert.equal(state.body.agents.length, 2);
+
+      const shutdown = await fetchJson(port, "/shutdown", { method: "POST", token: "test-token" });
+      assert.equal(shutdown.status, 202);
+      await waitForExit(child);
+    } finally {
+      if (child.exitCode === null) {
+        child.kill("SIGTERM");
+      }
+    }
+
+    assert.match(stdout, /resident-runner-listening/);
+    assert.equal(stderr, "");
+  });
+
+  it("returns 400 for malformed JSON instead of crashing the runner server", async () => {
+    const rootDir = await tempRoot();
+    const port = await freePort();
+    const child = spawnResidentServer(rootDir, port, { RUNNER_API_TOKEN: "test-token" });
+    try {
+      await waitForHealth(port);
+      const response = await fetch(`http://127.0.0.1:${port}/agents`, {
+        method: "POST",
+        headers: { authorization: "Bearer test-token", "content-type": "application/json" },
+        body: "{not-json"
+      });
+      assert.equal(response.status, 400);
+      const body = await response.json() as { error: string };
+      assert.equal(body.error, "BadRequest");
+      const shutdown = await fetchJson(port, "/shutdown", { method: "POST", token: "test-token" });
+      assert.equal(shutdown.status, 202);
+      await waitForExit(child);
+    } finally {
+      if (child.exitCode === null) {
+        child.kill("SIGTERM");
+      }
+    }
+  });
+
+  it("fails closed when ecs-resident mode starts without a runner API token", async () => {
+    const rootDir = await tempRoot();
+    const port = await freePort();
+    const child = spawnResidentServer(rootDir, port, { AGENTS_RUNTIME_MODE: "ecs-resident", RUNNER_API_TOKEN: undefined });
+    const { code, stderr } = await waitForExitWithOutput(child);
+    assert.notEqual(code, 0);
+    assert.match(stderr, /RUNNER_API_TOKEN is required/);
+  });
+});
+
+async function tempRoot(): Promise<string> {
+  return await mkdtemp(join(tmpdir(), "agents-cloud-resident-runner-"));
+}
+
+function agentProfile(
+  agentId: string,
+  role: string,
+  tenant: NonNullable<ResidentAgentProfile["tenant"]> = {
+    orgId: "org-test",
+    userId: "user-test",
+    workspaceId: "workspace-test"
+  }
+): ResidentAgentProfile {
+  return {
+    agentId,
+    profileId: `${agentId}-profile`,
+    profileVersion: "v1",
+    role,
+    provider: "openrouter",
+    model: "openrouter/test-model",
+    toolsets: "file,terminal,web",
+    tenant
+  };
+}
+
+function snapshotEnv(keys: string[]): Record<string, string | undefined> {
+  return Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+}
+
+function restoreEnv(snapshot: Record<string, string | undefined>): void {
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+}
+
+function spawnResidentServer(rootDir: string, port: number, overrides: Record<string, string | undefined> = {}): ReturnType<typeof spawn> {
+  const server = fileURLToPath(new URL("../src/resident-runner-server.js", import.meta.url));
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    AGENTS_RUNNER_ROOT: rootDir,
+    AGENTS_RESIDENT_ADAPTER: "smoke",
+    AGENT_ID: "agent-default",
+    AGENT_ROLE: "Default Agent",
+    ORG_ID: "org-http",
+    USER_ID: "user-http",
+    WORKSPACE_ID: "workspace-http",
+    RUNNER_ID: "runner-http",
+    RUNNER_SESSION_ID: "runner-session-http",
+    PORT: String(port)
+  };
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined) {
+      delete env[key];
+    } else {
+      env[key] = value;
+    }
+  }
+  return spawn(process.execPath, [server], { env, stdio: ["ignore", "pipe", "pipe"] });
+}
+
+async function freePort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolvePromise) => {
+    server.listen(0, "127.0.0.1", resolvePromise);
+  });
+  const address = server.address();
+  if (!isAddressInfo(address)) {
+    throw new Error("Expected TCP server address.");
+  }
+  const port = address.port;
+  await new Promise<void>((resolvePromise, reject) => {
+    server.close((error) => error ? reject(error) : resolvePromise());
+  });
+  return port;
+}
+
+function isAddressInfo(address: string | AddressInfo | null): address is AddressInfo {
+  return typeof address === "object" && address !== null && "port" in address;
+}
+
+async function waitForHealth(port: number): Promise<void> {
+  const deadline = Date.now() + 5000;
+  let lastError: unknown;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/health`, {
+        headers: { authorization: "Bearer test-token" }
+      });
+      if (response.ok) {
+        return;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 50));
+  }
+  throw new Error(`resident runner did not become healthy: ${String(lastError)}`);
+}
+
+async function fetchJson(
+  port: number,
+  path: string,
+  options: {
+    readonly method?: string;
+    readonly token?: string;
+    readonly body?: unknown;
+  } = {}
+): Promise<{ status: number; body: any }> {
+  const headers: Record<string, string> = {};
+  if (options.token) {
+    headers.authorization = `Bearer ${options.token}`;
+  }
+  if (options.body !== undefined) {
+    headers["content-type"] = "application/json";
+  }
+  const response = await fetch(`http://127.0.0.1:${port}${path}`, {
+    method: options.method ?? "GET",
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body)
+  });
+  return { status: response.status, body: await response.json() };
+}
+
+function waitForExitWithOutput(child: ReturnType<typeof spawn>): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolvePromise, reject) => {
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk: string) => { stdout += chunk; });
+    child.stderr?.on("data", (chunk: string) => { stderr += chunk; });
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("resident runner server did not exit"));
+    }, 5000);
+    child.once("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.once("exit", (code) => {
+      clearTimeout(timeout);
+      resolvePromise({ code, stdout, stderr });
+    });
+  });
+}
+
+function waitForExit(child: ReturnType<typeof spawn>): Promise<void> {
+  return new Promise((resolvePromise, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("resident runner server did not exit after shutdown"));
+    }, 5000);
+    child.once("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.once("exit", (code) => {
+      clearTimeout(timeout);
+      if (code === 0) {
+        resolvePromise();
+      } else {
+        reject(new Error(`resident runner server exited with ${code}`));
+      }
+    });
+  });
+}

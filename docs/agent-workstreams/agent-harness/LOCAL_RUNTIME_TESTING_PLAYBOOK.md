@@ -75,6 +75,50 @@ pnpm agent-runtime:docker:harness -- run \
 The image default command remains the deployed one-shot worker entrypoint. The
 local CLI is intentionally explicit so it does not change ECS smoke behavior.
 
+## Resident Container API
+
+The resident ECS-shaped image is separate from the one-shot smoke image:
+
+```bash
+pnpm agent-runtime:resident:docker:build
+
+docker run --rm \
+  -p 127.0.0.1:18787:8787 \
+  -e RUNNER_API_TOKEN=test-token \
+  -e ORG_ID=org-local \
+  -e USER_ID=user-local \
+  -e WORKSPACE_ID=workspace-local \
+  -e RUNNER_ID=runner-local \
+  agents-cloud-agent-runtime-resident:local
+```
+
+Basic API checks:
+
+```bash
+curl -sS http://127.0.0.1:18787/health \
+  -H 'authorization: Bearer test-token'
+
+curl -sS http://127.0.0.1:18787/wake \
+  -H 'authorization: Bearer test-token' \
+  -H 'content-type: application/json' \
+  -d '{
+    "objective": "Create a stock dashboard artifact plan.",
+    "runId": "run-local-resident",
+    "taskId": "task-local-resident",
+    "wakeReason": "on_demand"
+  }'
+
+curl -sS http://127.0.0.1:18787/state \
+  -H 'authorization: Bearer test-token'
+
+curl -sS -X POST http://127.0.0.1:18787/shutdown \
+  -H 'authorization: Bearer test-token'
+```
+
+The resident image currently defaults to `AGENTS_RESIDENT_ADAPTER=smoke`.
+`AGENTS_RESIDENT_ADAPTER=hermes-cli` is wired in code but requires a future
+Hermes-enabled image layer.
+
 ## What To Inspect
 
 Each local run writes:
@@ -91,10 +135,12 @@ The most important checks:
 - `events.ndjson` has ordered canonical events with deterministic sequence
   numbers.
 - `runner-state.json` shows runner mode `resident-dev`, logical agents, tasks,
-  tools, approvals, wait states, artifacts, and final status.
+  tools, aggregate tool metrics, approvals, wait states, artifacts, autonomy
+  policy, and final status.
 - `transcript.md` shows the user-facing conversation flow.
 - report artifacts are always created after approval handling.
 - website artifacts are created only when preview approval is approved.
+- routine internal tools do not emit canonical durable events.
 
 ## User Scenarios
 
@@ -113,6 +159,7 @@ Expected:
 - `tool.approval` request and approved decision events,
 - report artifact,
 - website artifact with preview URL,
+- aggregate local tool calls greater than durable tool events,
 - no wait states.
 
 ### Pending Approval
@@ -129,6 +176,7 @@ Expected:
 - final status `waiting_for_approval`,
 - `tool.approval` request event,
 - one persisted wait state,
+- aggregate tool metrics retained in local state,
 - no artifacts created after the blocked approval point.
 
 ### Rejected Approval
@@ -146,6 +194,7 @@ Expected:
 - `tool.approval` request and rejected decision events,
 - report artifact,
 - no website artifact,
+- no `workspace.generate_static_site` tool metric,
 - transcript explains preview publishing was skipped.
 
 ## Validation
@@ -157,6 +206,7 @@ pnpm contracts:test
 pnpm agent-runtime:test
 pnpm agent-runtime:build
 docker build -f services/agent-runtime/Dockerfile -t agents-cloud-agent-runtime:local .
+docker build -f services/agent-runtime/Dockerfile.resident -t agents-cloud-agent-runtime-resident:local .
 ```
 
 The runtime tests cover:
@@ -165,6 +215,9 @@ The runtime tests cover:
 - pending approval wait state,
 - rejected approval behavior,
 - CLI run and inspect commands.
+- resident runner multi-agent wake behavior,
+- resident runner tenant mismatch rejection,
+- resident runner authenticated HTTP API register/wake/events/shutdown flow.
 
 ## Current Limits
 
@@ -177,6 +230,9 @@ The runtime tests cover:
 - It does not yet process multiple inbox items.
 - It does not yet materialize real Agent Workshop profile bundles.
 - It does not yet test actual MCP/Apify/Miro/GitHub adapters.
+- The resident container does not yet include the Hermes CLI.
+- The resident container still uses local JSON/NDJSON files instead of S3 and
+  DynamoDB snapshot/event/artifact adapters.
 
 These are intentional limits for the first executable slice. The next slices
 should replace deterministic internals one boundary at a time while preserving

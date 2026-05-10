@@ -3,7 +3,7 @@
 Workstream: Agent Harness
 Owner: Agent Harness Workstream
 Updated: 2026-05-10
-Status: deep planning complete; next implementation slice can start with pure runtime contracts and local Docker runtime adapters
+Status: resident ECS-shaped container slice implemented locally; production runner launch and durable adapters still pending
 
 ## Startup Checks
 
@@ -148,6 +148,35 @@ Important implementation details:
 
 The smoke runtime does not yet prove resident-runner behavior.
 
+The first ECS-shaped resident runner implementation now exists separately from
+the smoke worker:
+
+```text
+services/agent-runtime/Dockerfile.resident
+services/agent-runtime/src/resident-runner.ts
+services/agent-runtime/src/resident-runner-server.ts
+services/agent-runtime/test/resident-runner.test.ts
+docs/agent-workstreams/agent-harness/RESIDENT_ECS_CONTAINER.md
+```
+
+It proves:
+
+- non-root resident image shape,
+- `/runner` local workspace/state/artifact/profile layout,
+- `HERMES_HOME=/runner/hermes`,
+- authenticated HTTP API for health, state, events, agent registration, wake,
+  and shutdown,
+- multiple logical agents per same tenant runner,
+- tenant mismatch rejection for registered profiles,
+- smoke and future `hermes-cli` adapter boundary,
+- session ID capture and reuse in runner state,
+- heartbeat report artifact creation,
+- critical-only canonical events for status and artifacts.
+
+The resident runner is also present in CDK as a separate Fargate task definition
+named `resident-runner`. This task definition is not yet wired to a production
+spawn path or durable S3/DynamoDB adapters.
+
 The proactive communication agent interface is documented in:
 
 ```text
@@ -168,14 +197,15 @@ docs/agent-workstreams/agent-harness/TOOL_CATALOG_AND_POLICY_PLAN.md
 docs/agent-workstreams/agent-harness/AGENT_BUILDER_RUNTIME_INTEGRATION_PLAN.md
 docs/agent-workstreams/agent-harness/RUNTIME_WORKFLOW_VISUALS.md
 docs/agent-workstreams/agent-harness/LOCAL_RUNTIME_TESTING_PLAYBOOK.md
+docs/agent-workstreams/agent-harness/RUNTIME_AUTONOMY_AND_EVENT_POLICY.md
 ```
 
 ## Gaps
 
 Agent Harness is missing:
 
-- resident user-runner mode,
-- logical agent registry,
+- production resident user-runner launch path,
+- durable logical agent registry backed by Control API/DynamoDB,
 - agent task model,
 - wake timers,
 - wait/resume state machine,
@@ -186,14 +216,15 @@ Agent Harness is missing:
 - heartbeat model,
 - runner inbox/callback processing,
 - profile/tool policy integration,
-- local Docker resident-runner emulation,
+- Hermes-enabled resident image layer,
 - local file-backed event/artifact/state/inbox/snapshot adapters,
-- tests for any of the above.
+- tests for durable adapters, cancellation, snapshot restore, and real tool
+  policy boundaries.
 
 For resident user runners, the missing runtime capabilities are:
 
-- separate resident entrypoint from the current one-shot `index.ts`,
-- runner heartbeat and stale-runner status contract,
+- durable task launch/spawn integration for the separate resident entrypoint,
+- runner heartbeat writes and stale-runner status contract,
 - runner inbox/callback processing,
 - explicit wake timers,
 - explicit wait states with timeout behavior,
@@ -230,13 +261,46 @@ For resident user runners, the missing runtime capabilities are:
   directly into model context. Mitigation: normalize all tools through runtime
   descriptors, policy checks, credential refs, approval gates, budgets,
   idempotency, and audit events.
+- The durable event ledger could become noisy if every internal tool call is
+  persisted. Mitigation: emit canonical durable events only for product-critical
+  transitions; keep routine tool churn as local aggregate metrics or
+  short-retention traces.
 - Docker local runtime could drift from ECS if it uses a different contract.
   Mitigation: local `resident-dev` and cloud `ecs-resident` should share one
   runner env/mount/secret/health/snapshot contract.
+- The resident image could be mistaken as production-ready because it builds and
+  has an HTTP API. Mitigation: keep `AGENTS_RESIDENT_ADAPTER=smoke` as default
+  and document that Hermes CLI, durable adapters, snapshot restore, and
+  task-spawn wiring are not complete.
+- Codex/ChatGPT OAuth could be overexposed if raw user sessions are passed into
+  multi-tenant agent code. Mitigation: production default remains API-key,
+  provider-service-account, or brokered credential references; OAuth/bootstrap
+  auth is private trusted-runner work only until policy and isolation are
+  approved.
 
 ## Files Expected To Change
 
-Immediate Agent Harness slice:
+Current resident container slice:
+
+```text
+services/agent-runtime/Dockerfile.resident
+services/agent-runtime/src/resident-runner.ts
+services/agent-runtime/src/resident-runner-server.ts
+services/agent-runtime/test/resident-runner.test.ts
+services/agent-runtime/package.json
+package.json
+infra/cdk/src/stacks/runtime-stack.ts
+infra/cdk/src/bin/agents-cloud-cdk.ts
+infra/cdk/src/test/workitem-genui-infra.test.ts
+docs/agent-workstreams/agent-harness/RESIDENT_ECS_CONTAINER.md
+docs/agent-workstreams/agent-harness/RESIDENT_RUNNER_PRODUCTION_ROUTING_PLAN.md
+docs/agent-workstreams/agent-harness/LOCAL_RUNTIME_TESTING_PLAYBOOK.md
+docs/agent-workstreams/agent-harness/CURRENT_PLAN.md
+docs/agent-workstreams/agent-harness/README.md
+docs/agent-workstreams/handoffs/2026-05-10-agent-harness-to-infrastructure-resident-runner-ecs-launch.md
+```
+
+Likely next Agent Harness runtime slice:
 
 ```text
 services/agent-runtime/src/runtime-model.ts
@@ -262,10 +326,9 @@ services/agent-runtime/test/local-harness.test.ts
 docs/agent-workstreams/agent-harness/CURRENT_PLAN.md
 ```
 
-Do not touch in the immediate slice unless explicitly coordinated:
+Do not touch in the next Agent Harness slice unless explicitly coordinated:
 
 ```text
-infra/cdk/**
 services/control-api/**
 services/agent-creator/**
 apps/**
@@ -278,6 +341,11 @@ infra/cloudflare/**
   Owning workstream: Infrastructure.
   Handoff file:
   `docs/agent-workstreams/handoffs/2026-05-10-infra-to-agent-harness-user-runner-state.md`
+
+- Dependency: resident runner ECS launch, scoped secrets, and task wake path.
+  Owning workstream: Infrastructure.
+  Handoff file:
+  `docs/agent-workstreams/handoffs/2026-05-10-agent-harness-to-infrastructure-resident-runner-ecs-launch.md`
 
 - Dependency: Cloudflare Realtime call session/adapters and signed claim.
   Owning workstream: Infrastructure / Realtime Streaming.
@@ -327,6 +395,7 @@ Agent Harness response created:
 
 - `docs/agent-workstreams/handoffs/2026-05-10-agent-harness-to-infrastructure-user-runner-contract-response.md`
 - `docs/agent-workstreams/handoffs/2026-05-10-agent-harness-to-infrastructure-local-ecs-runtime-contract.md`
+- `docs/agent-workstreams/handoffs/2026-05-10-agent-harness-to-infrastructure-resident-runner-ecs-launch.md`
 
 Current response:
 
@@ -467,6 +536,8 @@ This slice proves:
 - user question transcript,
 - approval request/decision events,
 - pending approval wait state,
+- mostly autonomous operation with critical-only durable event emission,
+- aggregate local tool metrics without canonical `tool.call` spam,
 - report artifact creation,
 - website artifact creation only after approval,
 - CLI run and inspect commands,
@@ -474,6 +545,29 @@ This slice proves:
 
 It is deterministic and no-network. It does not replace the planned full
 resident runner, inbox, snapshot restore, or real tool adapters.
+
+### Slice 0.6: ECS-shaped resident runner container
+
+Implemented after Slice 0.5 so the runtime can be exercised as a long-lived
+container:
+
+```text
+resident-runner HTTP server
+  -> authenticated local API
+  -> tenant-scoped logical agent registration
+  -> wake one or all logical agents
+  -> smoke or future Hermes CLI adapter
+  -> heartbeat report artifacts
+  -> canonical status/artifact events
+  -> local runner state and event inspection
+```
+
+This slice also adds a separate CDK Fargate task definition for the resident
+runner so it does not share the one-shot smoke worker task definition.
+
+It is still local-file backed. The next implementation work should add durable
+ports for `UserRunners`, `RunnerSnapshots`, `AgentInstances`, S3 artifact
+upload, and canonical event writes before any production user runner launch.
 
 ## Validation Plan
 
@@ -541,6 +635,37 @@ Result:
 - Docker image built and ran the local harness with a completed run, 10 events,
   approval evidence, a report artifact, and a website artifact.
 
+Validation results for the resident ECS container slice:
+
+```bash
+pnpm contracts:test
+pnpm agent-runtime:test
+pnpm agent-runtime:build
+pnpm --filter @agents-cloud/infra-cdk test
+pnpm agent-runtime:resident:docker:build
+docker run --rm -p 127.0.0.1:18787:8787 -e RUNNER_API_TOKEN=test-token -e ORG_ID=org-local -e USER_ID=user-local -e WORKSPACE_ID=workspace-local -e RUNNER_ID=runner-local -e RUNNER_SESSION_ID=runner-session-local agents-cloud-agent-runtime-resident:local
+curl -sS http://127.0.0.1:18787/wake -H 'authorization: Bearer test-token' -H 'content-type: application/json' -d '{"objective":"Create a stock dashboard artifact plan after rebuild.","runId":"run-docker-resident-rebuild","taskId":"task-docker-resident-rebuild","wakeReason":"on_demand"}'
+curl -sS -X POST http://127.0.0.1:18787/shutdown -H 'authorization: Bearer test-token'
+pnpm infra:synth
+git diff --check
+```
+
+Result:
+
+- protocol schemas validated,
+- agent-runtime tests passed with 11 tests, including resident runner
+  multi-agent wake, tenant rejection, authenticated HTTP API, and adapter
+  environment isolation,
+- agent-runtime build passed,
+- infra CDK tests passed with 9 tests,
+- resident Docker image built,
+- resident container started as user `runner` with command
+  `node dist/src/resident-runner-server.js`,
+- Docker wake smoke produced one heartbeat, one report artifact, four canonical
+  events, and clean shutdown,
+- `pnpm infra:synth` passed with only existing CDK deprecation warnings,
+- diff whitespace check passed.
+
 ## Progress Log
 
 - 2026-05-10: Audited current `agent-runtime`, `agent-manager`,
@@ -567,6 +692,22 @@ Result:
 - 2026-05-10: Added protocol `tool.approval` TypeScript helper and golden
   request/decision examples validated by `pnpm contracts:test`.
 - 2026-05-10: Added root convenience scripts for local and Docker harness runs.
+- 2026-05-10: Added runtime autonomy/event policy and updated the local harness
+  to track aggregate local tool metrics while keeping durable events limited to
+  status, approval, and artifact events.
+- 2026-05-10: Added `Dockerfile.resident`, resident runner/server code, tests,
+  root scripts, CDK task definition, resident container docs, and an
+  Infrastructure handoff for task launch/secrets/snapshot wiring.
+- 2026-05-10: Built and ran the resident Docker image locally, exercised the
+  authenticated HTTP wake flow, confirmed canonical status/artifact events, and
+  added an adapter environment isolation test so Hermes child processes do not
+  inherit AWS task credentials or runner tokens by default.
+- 2026-05-10: Deployed `agents-cloud-dev-state` and
+  `agents-cloud-dev-runtime`, pushed the resident image to ECR via CDK, launched
+  live ECS task
+  `arn:aws:ecs:us-east-1:625250616301:task/agents-cloud-dev-cluster/e43f96b820414db8af395525cdcd7187`,
+  verified `/health`, `/wake`, `/state`, and `/shutdown` inside Fargate, and
+  documented the remaining per-user routing plan.
 
 ## Completion Criteria
 
@@ -581,10 +722,13 @@ This planning session is complete when:
 
 The next Agent Harness implementation slice is complete when:
 
-- runtime domain types exist,
-- in-memory state transitions are tested,
-- communication tools are testable with a memory sink,
-- call claims are parsed and validated without Cloudflare network calls,
-- snapshot manifests round-trip in tests,
-- no infra/client/backend files are changed without handoff,
-- `pnpm agent-runtime:test` passes.
+- durable resident runner ports exist for events, artifacts, runner state,
+  agent instances, and snapshots,
+- resident runner heartbeat and stale-runner behavior are implemented,
+- inbox/wake/cancel/approval resume flows are explicit and tested,
+- snapshot manifests round-trip and restore workspace cursors,
+- Hermes-enabled image layer is pinned and only receives an allowlisted runtime
+  environment,
+- no client/backend files are changed without handoff,
+- `pnpm contracts:test`, `pnpm agent-runtime:test`, `pnpm agent-runtime:build`,
+  and resident Docker API smoke tests pass.

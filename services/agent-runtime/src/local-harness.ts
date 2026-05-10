@@ -40,6 +40,12 @@ export interface LocalHarnessArtifact {
 
 export interface LocalHarnessState {
   readonly schemaVersion: "local-harness.v1";
+  readonly policy: {
+    readonly autonomy: "mostly_autonomous";
+    readonly durableEventMode: "critical_only";
+    readonly traceMode: "local_aggregate";
+    readonly approvalRequiredFor: string[];
+  };
   readonly runner: {
     readonly runnerId: string;
     readonly mode: "resident-dev";
@@ -67,6 +73,13 @@ export interface LocalHarnessState {
     readonly status: "planning" | "running" | "waiting_for_approval" | "succeeded";
   }>;
   readonly tools: LocalToolExecution[];
+  readonly toolMetrics: {
+    readonly totalCalls: number;
+    readonly byToolId: Record<string, number>;
+    readonly byStatus: Record<string, number>;
+    readonly approvalGatedCalls: number;
+    readonly durableToolEvents: number;
+  };
   readonly approvals: LocalApprovalRecord[];
   readonly waitStates: Array<{
     readonly waitStateId: string;
@@ -178,6 +191,18 @@ export async function runLocalHarnessScenario(options: LocalHarnessOptions): Pro
   await putStatus(context, "planning", "Manager agent is decomposing the objective.", 0.1);
 
   await transcript(context, "Manager agent: I will create a specialist, confirm constraints, and produce a report plus preview artifact if approved.");
+  tools.push({
+    toolId: "workspace.plan_task",
+    status: "completed",
+    startedAt: createdAt,
+    completedAt: context.now()
+  });
+  tools.push({
+    toolId: "research.summarize_context",
+    status: "completed",
+    startedAt: createdAt,
+    completedAt: context.now()
+  });
   await transcript(context, `${context.agentRole}: What constraints should I follow before publishing anything user-visible?`);
   tools.push({
     toolId: "communication.ask_user_question",
@@ -245,6 +270,12 @@ export async function runLocalHarnessScenario(options: LocalHarnessOptions): Pro
   await putArtifactEvent(context, reportArtifact);
 
   if (context.previewDecision === "approved") {
+    tools.push({
+      toolId: "workspace.generate_static_site",
+      status: "completed",
+      startedAt: context.now(),
+      completedAt: context.now()
+    });
     const siteArtifact = await writeWebsiteArtifact(context);
     artifacts.push(siteArtifact);
     await putArtifactEvent(context, siteArtifact);
@@ -498,6 +529,21 @@ function buildState(
   const taskStatus = waiting ? "waiting_for_approval" : status === "succeeded" ? "succeeded" : "running";
   return {
     schemaVersion: "local-harness.v1",
+    policy: {
+      autonomy: "mostly_autonomous",
+      durableEventMode: "critical_only",
+      traceMode: "local_aggregate",
+      approvalRequiredFor: [
+        "delete",
+        "publish",
+        "external_send",
+        "spend",
+        "credential_access",
+        "infrastructure_change",
+        "source_control_write",
+        "user_call"
+      ]
+    },
     runner: {
       runnerId: context.runnerId,
       mode: "resident-dev",
@@ -537,6 +583,7 @@ function buildState(
       }
     ],
     tools,
+    toolMetrics: buildToolMetrics(tools),
     approvals,
     waitStates,
     artifacts,
@@ -638,7 +685,31 @@ export function renderInspection(state: LocalHarnessState, events: CanonicalEven
     `tasks=${state.tasks.length}`,
     `waitStates=${state.waitStates.length}`,
     `artifacts=${state.artifacts.length}`,
+    `toolCalls=${state.toolMetrics.totalCalls}`,
+    `durableToolEvents=${state.toolMetrics.durableToolEvents}`,
     `events=${events.length}`,
     `eventTypes=${[...new Set(events.map((event) => event.type))].join(",")}`
   ].join("\n");
+}
+
+function buildToolMetrics(tools: LocalToolExecution[]): LocalHarnessState["toolMetrics"] {
+  const byToolId: Record<string, number> = {};
+  const byStatus: Record<string, number> = {};
+  let approvalGatedCalls = 0;
+
+  for (const tool of tools) {
+    byToolId[tool.toolId] = (byToolId[tool.toolId] ?? 0) + 1;
+    byStatus[tool.status] = (byStatus[tool.status] ?? 0) + 1;
+    if (tool.approvalId) {
+      approvalGatedCalls += 1;
+    }
+  }
+
+  return {
+    totalCalls: tools.length,
+    byToolId,
+    byStatus,
+    approvalGatedCalls,
+    durableToolEvents: approvalGatedCalls
+  };
 }

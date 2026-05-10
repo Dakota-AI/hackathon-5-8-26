@@ -36,9 +36,16 @@ describe("local resident harness", () => {
     const { state, events } = await inspectLocalHarness(rootDir);
     assert.equal(state.runner.mode, "resident-dev");
     assert.equal(state.runner.status, "completed");
+    assert.equal(state.policy.autonomy, "mostly_autonomous");
+    assert.equal(state.policy.durableEventMode, "critical_only");
     assert.equal(state.agents.length, 2);
     assert.equal(state.waitStates.length, 0);
     assert.equal(state.artifacts.some((artifact) => artifact.kind === "website"), true);
+    assert.equal(state.toolMetrics.totalCalls, 6);
+    assert.equal(state.toolMetrics.byToolId["workspace.plan_task"], 1);
+    assert.equal(state.toolMetrics.byToolId["research.summarize_context"], 1);
+    assert.equal(state.toolMetrics.approvalGatedCalls, 1);
+    assert.equal(state.toolMetrics.durableToolEvents, 1);
     assert.deepEqual(events.map((event) => event.seq), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     assert.deepEqual(events.map((event) => event.type), [
       "run.status",
@@ -55,6 +62,8 @@ describe("local resident harness", () => {
     assert.equal(events[3]?.payload.kind, "request");
     assert.equal(events[4]?.payload.kind, "decision");
     assert.equal(events[4]?.payload.decision, "approved");
+    assert.equal(events.some((event) => event.type === "tool.call"), false);
+    assert.equal(events.some((event) => event.type === "tool.metrics"), false);
 
     const transcript = await readFile(result.transcriptPath, "utf8");
     assert.match(transcript, /User objective: Create a stock dashboard preview site/);
@@ -78,6 +87,8 @@ describe("local resident harness", () => {
     assert.equal(state.runner.status, "waiting");
     assert.equal(state.waitStates.length, 1);
     assert.equal(state.artifacts.length, 0);
+    assert.equal(state.toolMetrics.totalCalls, 4);
+    assert.equal(state.toolMetrics.approvalGatedCalls, 1);
     assert.deepEqual(events.map((event) => event.type), ["run.status", "run.status", "run.status", "tool.approval"]);
     assert.equal(events.at(-1)?.payload.kind, "request");
   });
@@ -98,6 +109,8 @@ describe("local resident harness", () => {
     assert.equal(result.status, "succeeded");
     assert.equal(state.artifacts.length, 1);
     assert.equal(state.artifacts[0]?.kind, "report");
+    assert.equal(state.toolMetrics.totalCalls, 5);
+    assert.equal(state.toolMetrics.byToolId["workspace.generate_static_site"], undefined);
     assert.equal(events.find((event) => event.type === "tool.approval" && event.payload.kind === "decision")?.payload.decision, "rejected");
     assert.equal(events.some((event) => event.type === "artifact.created" && event.payload.kind === "website"), false);
   });
@@ -121,6 +134,8 @@ describe("local resident harness", () => {
     ]);
     assert.match(run.stdout, /status=succeeded/);
     assert.match(run.stdout, /eventTypes=run.status,tool.approval,artifact.created/);
+    assert.match(run.stdout, /toolCalls=6/);
+    assert.match(run.stdout, /durableToolEvents=1/);
 
     const inspect = await execFileAsync(process.execPath, [cli, "inspect", "--root", rootDir]);
     assert.match(inspect.stdout, /runnerStatus=completed/);

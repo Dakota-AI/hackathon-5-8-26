@@ -169,12 +169,13 @@ class _Sidebar extends ConsumerWidget {
           ),
           const Spacer(),
           if (!collapsed)
-            const Text(
-              'Agents Cloud',
+            Text(
+              'v0.1 · local',
               style: TextStyle(
-                color: _Palette.muted,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
+                color: _Palette.muted.withValues(alpha: 0.7),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
               ),
             ),
         ],
@@ -319,10 +320,10 @@ class _TopBar extends StatelessWidget {
     return Container(
       height: 42,
       padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: const Row(
-        children: [
+      child: Row(
+        children: const [
           Expanded(child: SizedBox.shrink()),
-          _StatusPill(label: 'Local preview', color: _Palette.warning),
+          _StatusPill(label: 'Local · fixtures', color: _Palette.muted),
         ],
       ),
     );
@@ -572,9 +573,9 @@ class _WorkDashboard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const _SectionHeader(
-                title: 'Work board',
+                title: 'Work',
                 subtitle:
-                    'Fixture-backed WorkItems are the primary product object: objectives, runs, events, artifacts, approvals, and safe surfaces.',
+                    'Delegated objectives. Each item rolls up runs, events, artifacts, and approvals.',
               ),
               const SizedBox(height: 10),
               Wrap(
@@ -582,16 +583,9 @@ class _WorkDashboard extends StatelessWidget {
                 runSpacing: 6,
                 children: [
                   _StatusPill(
-                    label: '${items.length} active work items',
-                    color: _Palette.info,
-                  ),
-                  const _StatusPill(
-                    label: 'fixture mode',
-                    color: _Palette.warning,
-                  ),
-                  const _StatusPill(
-                    label: 'Control API adapter next',
-                    color: _Palette.success,
+                    label:
+                        '${items.length} active ${items.length == 1 ? 'item' : 'items'}',
+                    color: _Palette.muted,
                   ),
                 ],
               ),
@@ -615,6 +609,15 @@ class _WorkDashboard extends StatelessWidget {
   }
 }
 
+String _pluralize(int count, String singular, [String? plural]) {
+  if (count == 1) return '1 $singular';
+  return '$count ${plural ?? '${singular}s'}';
+}
+
+String _statRowLabel(WorkItemSummary summary) {
+  return '${summary.runSummary} · ${_pluralize(summary.artifactCount, 'artifact')} · ${_pluralize(summary.pendingApprovalCount, 'approval')}';
+}
+
 class _WorkQueue extends StatelessWidget {
   const _WorkQueue({required this.items, required this.selectedItemId});
 
@@ -627,8 +630,13 @@ class _WorkQueue extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Delegated work',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+          'Queue',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: _Palette.muted,
+            letterSpacing: 0.6,
+          ),
         ),
         const SizedBox(height: 8),
         for (final item in items) ...[
@@ -652,7 +660,7 @@ class _WorkItemCard extends StatelessWidget {
     return Card(
       filled: true,
       fillColor: selected ? _Palette.input : _Palette.panel,
-      borderColor: selected ? _Palette.text : _Palette.border,
+      borderColor: selected ? _Palette.muted : _Palette.border,
       borderRadius: BorderRadius.circular(10),
       padding: const EdgeInsets.all(10),
       boxShadow: const [],
@@ -663,11 +671,8 @@ class _WorkItemCard extends StatelessWidget {
             spacing: 5,
             runSpacing: 5,
             children: [
-              _StatusPill(label: summary.statusLabel, color: _Palette.info),
-              _StatusPill(
-                label: summary.priorityLabel,
-                color: _Palette.warning,
-              ),
+              _StatusPill(label: summary.statusLabel, color: _Palette.muted),
+              _StatusPill(label: summary.priorityLabel, color: _Palette.muted),
             ],
           ),
           const SizedBox(height: 7),
@@ -690,7 +695,7 @@ class _WorkItemCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '${summary.runSummary} · ${summary.artifactCount} artifacts · ${summary.pendingApprovalCount} approvals',
+            _statRowLabel(summary),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: _Palette.muted, fontSize: 11),
@@ -724,14 +729,11 @@ class _WorkDetail extends StatelessWidget {
             spacing: 6,
             runSpacing: 6,
             children: [
-              _StatusPill(label: summary.statusLabel, color: _Palette.info),
-              _StatusPill(
-                label: 'Owner: ${item.owner}',
-                color: _Palette.success,
-              ),
+              _StatusPill(label: summary.statusLabel, color: _Palette.muted),
+              _StatusPill(label: 'Owner: ${item.owner}', color: _Palette.muted),
               _StatusPill(
                 label: 'Updated ${item.updatedAtLabel}',
-                color: _Palette.warning,
+                color: _Palette.muted,
               ),
             ],
           ),
@@ -757,8 +759,7 @@ class _WorkDetail extends StatelessWidget {
             children: [
               _SmallSurfaceLine(
                 title: item.nextAction,
-                subtitle:
-                    'Controls are disabled until the live approval API is wired.',
+                subtitle: 'Awaiting approval API.',
                 leading: RadixIcons.checkCircled,
               ),
               const SizedBox(height: 8),
@@ -795,7 +796,7 @@ class _WorkDetail extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _WorkMiniSection(
-            title: 'Pricing review dashboard',
+            title: 'Generated surfaces',
             children: trustedSurfaces.isEmpty
                 ? const [
                     _SmallSurfaceLine(

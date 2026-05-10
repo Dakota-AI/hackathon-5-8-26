@@ -23,7 +23,7 @@ void main() {
     expect(find.text('Amplify Auth configured'), findsNothing);
     expect(find.text('Control API live'), findsNothing);
     expect(find.text('GenUI ready'), findsNothing);
-    expect(find.text('Work board'), findsOneWidget);
+    expect(find.text('Work'), findsWidgets);
   });
 
   testWidgets('renders fixture-backed WorkItem UI in the command center', (
@@ -40,7 +40,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Work board'), findsOneWidget);
+    expect(find.text('Work'), findsWidgets);
     expect(find.text('Track competitor pricing'), findsWidgets);
     expect(find.text('Prepare launch preview site'), findsOneWidget);
     expect(
@@ -48,7 +48,7 @@ void main() {
       findsWidgets,
     );
     expect(find.text('Dashboard generated'), findsOneWidget);
-    expect(find.text('Pricing review dashboard'), findsOneWidget);
+    expect(find.text('Generated surfaces'), findsOneWidget);
     expect(find.text('Approve weekly monitor'), findsOneWidget);
   });
 
@@ -142,7 +142,7 @@ void main() {
     expect(find.text('Browser'), findsOneWidget);
     expect(find.text('Kit'), findsOneWidget);
     expect(find.text('Command Center'), findsNothing);
-    expect(find.text('Work board'), findsOneWidget);
+    expect(find.text('Work'), findsWidgets);
     expect(find.text('Create WorkItem'), findsOneWidget);
   });
 

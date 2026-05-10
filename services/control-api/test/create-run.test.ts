@@ -8,6 +8,12 @@ class MemoryStore implements ControlApiStore {
   public events: unknown[] = [];
   public tasks: unknown[] = [];
 
+  async createRunLedger(input: { run: unknown; task: unknown; event: unknown }): Promise<void> {
+    await this.putRun(input.run);
+    await this.putTask(input.task);
+    await this.putEvent(input.event);
+  }
+
   async putRun(item: unknown): Promise<void> {
     this.runs.push(item);
   }

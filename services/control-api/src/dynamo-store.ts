@@ -1,5 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { ControlApiStore, EventRecord, RunRecord, TaskRecord } from "./ports.js";
 
 export class DynamoControlApiStore implements ControlApiStore {
@@ -21,6 +21,34 @@ export class DynamoControlApiStore implements ControlApiStore {
       tasksTableName,
       eventsTableName
     });
+  }
+
+  async createRunLedger(input: { readonly run: RunRecord; readonly task: TaskRecord; readonly event: EventRecord }): Promise<void> {
+    await this.client.send(new TransactWriteCommand({
+      TransactItems: [
+        {
+          Put: {
+            TableName: this.tables.runsTableName,
+            Item: input.run,
+            ConditionExpression: "attribute_not_exists(workspaceId) AND attribute_not_exists(runId)"
+          }
+        },
+        {
+          Put: {
+            TableName: this.tables.tasksTableName,
+            Item: input.task,
+            ConditionExpression: "attribute_not_exists(runId) AND attribute_not_exists(taskId)"
+          }
+        },
+        {
+          Put: {
+            TableName: this.tables.eventsTableName,
+            Item: input.event,
+            ConditionExpression: "attribute_not_exists(runId) AND attribute_not_exists(seq)"
+          }
+        }
+      ]
+    }));
   }
 
   async putRun(item: RunRecord): Promise<void> {

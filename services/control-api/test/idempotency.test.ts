@@ -8,6 +8,12 @@ class IdempotentMemoryStore implements ControlApiStore {
   public events: EventRecord[] = [];
   public tasks: TaskRecord[] = [];
 
+  async createRunLedger(input: { run: RunRecord; task: TaskRecord; event: EventRecord }): Promise<void> {
+    await this.putRun(input.run);
+    await this.putTask(input.task);
+    await this.putEvent(input.event);
+  }
+
   async putRun(item: RunRecord): Promise<void> {
     this.runs.push(item);
   }
@@ -84,7 +90,7 @@ describe("createRun idempotency", () => {
 
   it("does not start an execution when durable run writes fail", async () => {
     const store = new IdempotentMemoryStore();
-    store.putRun = async () => {
+    store.createRunLedger = async () => {
       throw new Error("DynamoDB unavailable");
     };
     const executions = new CountingExecutionStarter();

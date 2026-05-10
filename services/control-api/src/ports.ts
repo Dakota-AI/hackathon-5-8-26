@@ -54,6 +54,7 @@ export interface EventRecord {
 }
 
 export interface ControlApiStore {
+  createRunLedger(input: { readonly run: RunRecord; readonly task: TaskRecord; readonly event: EventRecord }): Promise<void>;
   putRun(item: RunRecord): Promise<void>;
   putTask(item: TaskRecord): Promise<void>;
   putEvent(item: EventRecord): Promise<void>;

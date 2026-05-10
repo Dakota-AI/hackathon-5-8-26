@@ -100,9 +100,7 @@ export async function createRun(deps: CreateRunDependencies): Promise<CreateRunR
     message: "Run accepted and queued for execution."
   });
 
-  await deps.store.putRun(run);
-  await deps.store.putTask(task);
-  await deps.store.putEvent(event);
+  await deps.store.createRunLedger({ run, task, event });
 
   const execution = await deps.executions.startExecution({
     runId,

@@ -6,8 +6,8 @@ import 'package:desktop_mobile/src/auth/auth_controller.dart';
 import 'package:desktop_mobile/src/ui/brand_mark.dart';
 import 'package:desktop_mobile/src/widgets/squares_loader.dart';
 
-/// When set to true, the app skips the sign-in gate and uses local
-/// fixture data instead of a real backend session.
+/// Test-only escape hatch. Production/mobile launches should keep this false so
+/// every work surface requires Cognito and the live Control API.
 const _authBypassDefault = bool.fromEnvironment('AGENTS_CLOUD_AUTH_BYPASS');
 
 final authBypassProvider = StateProvider<bool>((ref) => _authBypassDefault);
@@ -118,17 +118,6 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                     child: inConfirmFlow
                         ? _buildConfirmCard(auth, busy)
                         : _buildAuthCard(auth, busy),
-                  ),
-                  const SizedBox(height: 14),
-                  Button.ghost(
-                    onPressed: busy
-                        ? null
-                        : () => ref.read(authBypassProvider.notifier).state =
-                              true,
-                    child: const Text(
-                      'Continue without sign-in (local fixtures)',
-                      style: TextStyle(color: _Palette.muted, fontSize: 12),
-                    ),
                   ),
                 ],
               ),

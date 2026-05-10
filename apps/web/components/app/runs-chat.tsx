@@ -20,11 +20,13 @@ import {
   type WorkItemRecord,
   type WorkItemRunRecord
 } from "../../lib/control-api";
+import { buildChatTurns, mergeChatEvents, type ChatTurn } from "../../lib/chat-events";
 import { readRealtimeStatus } from "../../lib/realtime-client";
 import { useRunRealtimeEvents } from "../../lib/use-run-realtime-events";
 import { useAuth } from "../auth-context";
 import { useWorkspace } from "../workspace-context";
 import { cn } from "../../lib/utils";
+import { MarkdownMessage } from "./markdown-message";
 import { Panel } from "./panel";
 import { StatusPill } from "./status-pill";
 import { Textarea } from "./textarea";
@@ -243,14 +245,6 @@ function EmptyChat({ onRefresh }: { onRefresh: () => void }) {
   );
 }
 
-type ChatTurn = {
-  id: string;
-  role: "user" | "assistant" | "system" | "tool";
-  text: string;
-  meta?: string;
-  ts?: string;
-};
-
 function Conversation({
   workspaceId,
   workItem,
@@ -270,7 +264,7 @@ function Conversation({
   const activeRun = React.useMemo(() => runs.find((r) => !isTerminal(r.status)) ?? null, [runs]);
 
   const handleRealtimeEvent = React.useCallback((event: RunEvent) => {
-    setEvents((cur) => mergeEvents(cur, [event]));
+    setEvents((cur) => mergeChatEvents(cur, [event]));
     const status = readRealtimeStatus(event);
     if (status) {
       setRuns((cur) => cur.map((run) => (run.runId === event.runId ? { ...run, status } : run)));
@@ -317,7 +311,7 @@ function Conversation({
       try {
         const r = await listControlApiRunEvents(activeRun.runId, { limit: 50 });
         if (r.length > 0) {
-          setEvents((cur) => mergeEvents(cur, r));
+          setEvents((cur) => mergeChatEvents(cur, r));
         }
       } catch {
         /* ignore */
@@ -332,7 +326,8 @@ function Conversation({
     }
   }, [events.length]);
 
-  const turns = React.useMemo(() => buildTurns({ workItem, events }), [workItem, events]);
+  const turns = React.useMemo(() => buildChatTurns({ workItem, events }), [workItem, events]);
+  const showWorkingIndicator = Boolean(activeRun) || submitting;
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -382,11 +377,12 @@ function Conversation({
         <div className="mx-auto flex max-w-[820px] flex-col gap-4">
           {turns.length === 0 ? (
             <div className="text-center text-app-muted text-[12px] py-8">
-              No turns yet. Send a follow-up below to kick off a new run.
+              Send a message to start real work with this agent team.
             </div>
           ) : (
             turns.map((t) => <Turn key={t.id} turn={t} userLabel={userLabel} />)
           )}
+          {showWorkingIndicator ? <WorkingIndicator label={submitting ? "Sending…" : "Agent is working…"} /> : null}
         </div>
       </div>
 
@@ -438,7 +434,7 @@ function Turn({ turn, userLabel }: { turn: ChatTurn; userLabel: string | null })
       <div className={cn("flex min-w-0 max-w-[680px] flex-col", isUser ? "items-end" : "items-start")}>
         <div className="flex items-baseline gap-2 text-[10px] uppercase tracking-wider text-app-muted">
           <span className="font-extrabold">
-            {isUser ? "You" : isTool ? "Tool" : isSystem ? "System" : "Agent"}
+            {isUser ? "You" : isTool ? "Tool" : isSystem ? "System" : turn.actorLabel || "Agent"}
           </span>
           {turn.meta ? <span>{turn.meta}</span> : null}
         </div>
@@ -454,7 +450,44 @@ function Turn({ turn, userLabel }: { turn: ChatTurn; userLabel: string | null })
               : "bg-app-panel-bubble text-app-text"
           )}
         >
-          {turn.text}
+          {turn.kind === "artifact" && turn.artifact ? (
+            <ArtifactTurnCard turn={turn} />
+          ) : !isUser && !isTool && !isSystem ? (
+            <MarkdownMessage>{turn.text}</MarkdownMessage>
+          ) : (
+            turn.text
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ArtifactTurnCard({ turn }: { turn: ChatTurn }) {
+  const artifact = turn.artifact;
+  const href = artifact?.previewUrl || artifact?.uri;
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="text-[12px] font-extrabold text-app-text">{artifact?.name || turn.text}</div>
+      <div className="text-[11px] text-app-muted">{artifact?.kind || "artifact"}</div>
+      {href ? (
+        <a className="text-[12px] text-app-text underline underline-offset-2" href={href} target="_blank" rel="noreferrer">
+          Open artifact
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
+function WorkingIndicator({ label }: { label: string }) {
+  return (
+    <div className="flex gap-3">
+      <div className="shrink-0"><Avatar icon={<LogoMark size="sm" />} variant="agent" raw /></div>
+      <div className="flex min-w-0 max-w-[680px] flex-col items-start">
+        <div className="text-[10px] font-extrabold uppercase tracking-wider text-app-muted">Agent</div>
+        <div className="mt-1 flex items-center gap-2 rounded-[12px] border border-app-border bg-app-panel-bubble px-3 py-2 text-[13px] text-app-muted">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-app-text/50" />
+          {label}
         </div>
       </div>
     </div>
@@ -486,94 +519,9 @@ function Avatar({
   );
 }
 
-function buildTurns({
-  workItem,
-  events
-}: {
-  workItem: WorkItemRecord | null;
-  events: RunEvent[];
-}): ChatTurn[] {
-  const turns: ChatTurn[] = [];
-  if (workItem) {
-    turns.push({
-      id: `objective-${workItem.workItemId}`,
-      role: "user",
-      text: workItem.objective,
-      meta: formatRelative(workItem.createdAt),
-      ts: workItem.createdAt
-    });
-  }
-  const sorted = [...events].sort((a, b) => a.seq - b.seq);
-  for (const event of sorted) {
-    const friendly = friendlyEvent(event);
-    if (!friendly) continue;
-    turns.push(friendly);
-  }
-  return turns;
-}
-
-function friendlyEvent(event: RunEvent): ChatTurn | null {
-  const id = event.id || `${event.runId}-${event.seq}-${event.type}`;
-  const meta = formatRelative(event.createdAt);
-  const payload = event.payload ?? {};
-  if (event.type === "run.status") {
-    const status = String((payload as Record<string, unknown>).status ?? "");
-    const label = friendlyStatus[status] ?? `Status: ${status}`;
-    return { id, role: "assistant", text: label, meta };
-  }
-  if (event.type === "run.message" || event.type === "agent.message") {
-    const text = stringFrom(payload, ["text", "message", "content"]);
-    if (!text) return null;
-    return { id, role: "assistant", text, meta };
-  }
-  if (event.type === "tool.call" || event.type.startsWith("tool.")) {
-    const name = stringFrom(payload, ["tool", "name"]) || event.type;
-    const args = stringFrom(payload, ["argsPreview", "preview", "input"]);
-    const text = `${name}${args ? `\n${args}` : ""}`;
-    return { id, role: "tool", text, meta };
-  }
-  if (event.type === "artifact.created") {
-    const name = stringFrom(payload, ["name"]) || "artifact";
-    const kind = stringFrom(payload, ["kind"]) || "artifact";
-    return { id, role: "assistant", text: `Created ${kind}: ${name}`, meta };
-  }
-  if (event.type === "approval.requested") {
-    const reason = stringFrom(payload, ["reason", "summary"]) || "Action paused — approval needed.";
-    return { id, role: "system", text: reason, meta };
-  }
-  return null;
-}
-
-const friendlyStatus: Record<string, string> = {
-  queued: "Queued — getting set up.",
-  planning: "Planning — breaking this into steps.",
-  running: "Working on it.",
-  testing: "Checking the result before showing it.",
-  archiving: "Saving the final output.",
-  succeeded: "Done — the result is ready.",
-  failed: "Something went wrong while doing the work.",
-  cancelled: "Run was cancelled."
-};
-
 function isTerminal(status?: string) {
   if (!status) return false;
   return ["succeeded", "failed", "cancelled", "timed_out"].includes(status);
-}
-
-function mergeEvents(existing: RunEvent[], incoming: RunEvent[]): RunEvent[] {
-  const map = new Map<string, RunEvent>();
-  for (const e of [...existing, ...incoming]) {
-    map.set(e.id || `${e.runId}-${e.seq}-${e.type}`, e);
-  }
-  return [...map.values()].sort((a, b) => a.seq - b.seq);
-}
-
-function stringFrom(obj: Record<string, unknown>, keys: string[]): string {
-  for (const k of keys) {
-    const v = obj[k];
-    if (typeof v === "string" && v.length > 0) return v;
-  }
-  return "";
 }
 
 function initials(label: string): string {

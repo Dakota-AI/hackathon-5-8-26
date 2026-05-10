@@ -133,6 +133,20 @@ class ControlApi {
     return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
   }
 
+  Future<List<Map<String, dynamic>>> listUserRunners({
+    String? workspaceId,
+    int? limit,
+  }) async {
+    final query = <String, String>{};
+    if (workspaceId != null) query['workspaceId'] = workspaceId;
+    if (limit != null) query['limit'] = limit.toString();
+    final response = await _http.get(
+      _uri('/user-runners', query),
+      headers: await _headers(),
+    );
+    return _asList(_decode(response), keys: const ['items', 'runs', 'userRunners']);
+  }
+
   Future<List<Map<String, dynamic>>> listRuns(String workItemId) async {
     final response = await _http.get(
       _uri('/work-items/$workItemId/runs'),

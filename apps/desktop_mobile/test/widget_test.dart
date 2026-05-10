@@ -1,12 +1,17 @@
 import 'package:desktop_mobile/main.dart';
 import 'package:desktop_mobile/src/auth/sign_in_page.dart';
+import 'package:desktop_mobile/src/data/fixture_work_repository.dart';
+import 'package:desktop_mobile/src/data/http_work_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 Widget _bootApp() {
   return ProviderScope(
-    overrides: [authBypassProvider.overrideWith((ref) => true)],
+    overrides: [
+      authBypassProvider.overrideWith((ref) => true),
+      workRepositoryProvider.overrideWith((ref) => FixtureWorkRepository()),
+    ],
     child: const AgentsCloudConsoleApp(),
   );
 }

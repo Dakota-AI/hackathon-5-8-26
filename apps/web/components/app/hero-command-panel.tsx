@@ -13,7 +13,8 @@ import {
   type RunEvent
 } from "../../lib/control-api";
 import { useWorkspace } from "../workspace-context";
-import { deriveRunLedgerView, isSmokeWorkerArtifact, mergeRunEvents } from "../../lib/run-ledger";
+import { chatTurnFromEvent } from "../../lib/chat-events";
+import { deriveRunLedgerView, mergeRunEvents } from "../../lib/run-ledger";
 import { readRealtimeStatus } from "../../lib/realtime-client";
 import { useRunRealtimeEvents } from "../../lib/use-run-realtime-events";
 import { useAuth } from "../auth-context";
@@ -22,17 +23,6 @@ import { StatusPill } from "./status-pill";
 import { Textarea } from "./textarea";
 import { Button } from "./button";
 import { ChatBubble } from "./chat-bubble";
-
-const friendlyStatusLabels: Record<string, string> = {
-  queued: "Got it. Setting up the work now.",
-  planning: "Breaking this into the right steps.",
-  running: "Working on it.",
-  testing: "Checking the result before showing it.",
-  archiving: "Saving the final output.",
-  succeeded: "Done — the result is ready.",
-  failed: "Something went wrong while doing the work.",
-  cancelled: "This run was cancelled."
-};
 
 const placeholder =
   "Describe the strategic objective — research a market, build a launch page, prepare a CEO report…";
@@ -212,8 +202,14 @@ export function HeroCommandPanel() {
             />
           ))}
           {createdRun && !ledger.isTerminal ? (
-            <div className="text-[11px] text-app-muted">
-              {ledger.pollingLabel} · run {createdRun.runId.slice(-8)}
+            <div className="flex items-center gap-2 text-[11px] text-app-muted">
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-app-text/50" />
+              Agent is working… · run {createdRun.runId.slice(-8)}
+            </div>
+          ) : submitting ? (
+            <div className="flex items-center gap-2 text-[11px] text-app-muted">
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-app-text/50" />
+              Starting…
             </div>
           ) : null}
         </div>
@@ -231,39 +227,21 @@ function buildMessages(input: {
   error: string | null;
 }): Msg[] {
   const out: Msg[] = [];
-  const artifacts = deriveRunLedgerView({ initialStatus: "queued", events: input.events }).artifacts;
-  const hasSmoke = artifacts.some((a) => isSmokeWorkerArtifact(a));
   if (input.objective) out.push({ id: "user-objective", role: "user", text: input.objective });
-  if (input.submitting) out.push({ id: "starting", role: "assistant", text: "Starting that now." });
+  if (input.error) out.push({ id: "error", role: "system", text: input.error });
 
   const seen = new Set<string>();
   for (const event of input.events) {
-    const text = friendlyEvent(event, hasSmoke);
-    if (!text || seen.has(text)) continue;
-    seen.add(text);
+    const turn = chatTurnFromEvent(event);
+    if (!turn || turn.role === "user") continue;
+    const key = `${turn.role}:${turn.text}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     out.push({
       id: event.id || `${event.runId}-${event.seq}-${event.type}`,
-      role: "assistant",
-      text
+      role: turn.role === "system" ? "system" : "assistant",
+      text: turn.text
     });
   }
   return out;
-}
-
-function friendlyEvent(event: RunEvent, hasSmoke: boolean): string | null {
-  if (event.type === "run.status" && typeof event.payload?.status === "string") {
-    if (event.payload.status === "succeeded" && hasSmoke) {
-      return "Reached the worker, but the deployed worker is still a test runner. Real app generation isn't wired yet.";
-    }
-    return friendlyStatusLabels[event.payload.status] ?? "Updating the work status.";
-  }
-  if (event.type === "artifact.created") {
-    const name = typeof event.payload?.name === "string" ? event.payload.name : "the result";
-    const kind = typeof event.payload?.kind === "string" ? event.payload.kind : "artifact";
-    if (isSmokeWorkerArtifact({ name, kind })) {
-      return "This produced a worker test report, not the requested app.";
-    }
-    return `Created ${name}.`;
-  }
-  return null;
 }

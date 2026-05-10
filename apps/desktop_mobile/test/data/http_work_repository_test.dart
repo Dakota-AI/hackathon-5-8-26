@@ -1,5 +1,4 @@
 import 'package:desktop_mobile/src/api/control_api.dart';
-import 'package:desktop_mobile/src/data/fixture_work_repository.dart';
 import 'package:desktop_mobile/src/data/http_work_repository.dart';
 import 'package:desktop_mobile/src/domain/work_item_models.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -250,21 +249,16 @@ void main() {
   });
 
   group('HttpWorkRepository failure policy', () {
-    test('falls back to fixtures on StateError (unauthenticated)', () async {
-      final api = _FakeControlApi(
-        listWorkItemsThrows: StateError('Cognito ID token unavailable.'),
-      );
-      final fallback = FixtureWorkRepository();
-      final repo = HttpWorkRepository(api: api, fallback: fallback);
-      final items = await repo.listWorkItems();
-      final fixture = await fallback.listWorkItems();
-      expect(
-        items.length,
-        fixture.length,
-        reason:
-            'Returns the fixture set verbatim, not just any non-empty list.',
-      );
-    });
+    test(
+      'does NOT fall back to fixtures on StateError (unauthenticated)',
+      () async {
+        final api = _FakeControlApi(
+          listWorkItemsThrows: StateError('Cognito ID token unavailable.'),
+        );
+        final repo = HttpWorkRepository(api: api);
+        await expectLater(repo.listWorkItems(), throwsA(isA<StateError>()));
+      },
+    );
 
     test('does NOT fall back to fixtures on real API/network errors', () async {
       // Critical: a network/5xx must surface as a real error, not pretend

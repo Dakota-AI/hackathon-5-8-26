@@ -3,27 +3,21 @@ import 'dart:developer' as developer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/control_api.dart';
-import '../auth/auth_controller.dart';
 import '../domain/work_item_models.dart';
-import 'fixture_work_repository.dart';
+import 'fixture_work_repository.dart' show WorkRepository;
 
 /// Real HTTP-backed [WorkRepository] that delegates to [ControlApi].
 ///
 /// Failure policy:
-///   * Missing/null auth token (treated as "not signed in") falls back to
-///     the fixture repository so the app still renders demo content.
-///   * Real HTTP / parse / 5xx errors are LOGGED and PROPAGATED, never
-///     silently swapped for fixture data — that would surface stale demo
-///     work items as if they were the user's real data.
+///   * Missing/null auth token, real HTTP / parse / 5xx errors are LOGGED and
+///     PROPAGATED, never silently swapped for fixture data — that would surface
+///     stale demo work items as if they were the user's real data.
 ///   * Per-side-endpoint failures inside getWorkItem (runs/events/artifacts)
 ///     ARE tolerated as empty lists, but each failure is logged.
 class HttpWorkRepository implements WorkRepository {
-  HttpWorkRepository({required ControlApi api, WorkRepository? fallback})
-    : _api = api,
-      _fallback = fallback ?? FixtureWorkRepository();
+  HttpWorkRepository({required ControlApi api}) : _api = api;
 
   final ControlApi _api;
-  final WorkRepository _fallback;
 
   @override
   Future<List<WorkItem>> listWorkItems() async {
@@ -34,15 +28,14 @@ class HttpWorkRepository implements WorkRepository {
         items.add(_decodeWorkItem(json));
       }
       return List.unmodifiable(items);
-    } on StateError catch (e) {
-      // ControlApi throws StateError when the id token is missing.
-      // This is the "not signed in" path — safe to fall back to fixtures.
+    } on StateError catch (e, st) {
       developer.log(
-        'HttpWorkRepository.listWorkItems unauthenticated; falling back to fixtures',
+        'HttpWorkRepository.listWorkItems failed before HTTP request',
         name: 'http_work_repository',
         error: e,
+        stackTrace: st,
       );
-      return _fallback.listWorkItems();
+      rethrow;
     } catch (e, st) {
       developer.log(
         'HttpWorkRepository.listWorkItems failed',
@@ -59,13 +52,14 @@ class HttpWorkRepository implements WorkRepository {
     final Map<String, dynamic> json;
     try {
       json = await _api.getWorkItem(id);
-    } on StateError catch (e) {
+    } on StateError catch (e, st) {
       developer.log(
-        'HttpWorkRepository.getWorkItem unauthenticated; falling back to fixtures',
+        'HttpWorkRepository.getWorkItem($id) failed before HTTP request',
         name: 'http_work_repository',
         error: e,
+        stackTrace: st,
       );
-      return _fallback.getWorkItem(id);
+      rethrow;
     } catch (e, st) {
       developer.log(
         'HttpWorkRepository.getWorkItem($id) failed',
@@ -393,14 +387,10 @@ class HttpWorkRepository implements WorkRepository {
   }
 }
 
-/// Provider that returns an [HttpWorkRepository] when the user is signed in,
-/// or a [FixtureWorkRepository] fallback otherwise. The repository itself
-/// also internally falls back to fixtures on per-call failures.
+/// Provider that always points at the real Control API. Test code may override
+/// this provider with fixtures, but the shipped app should never silently swap
+/// live work surfaces to demo data.
 final workRepositoryProvider = Provider<WorkRepository>((ref) {
-  final auth = ref.watch(authControllerProvider);
-  if (auth.status == AuthStatus.signedIn) {
-    final api = ref.watch(controlApiProvider);
-    return HttpWorkRepository(api: api);
-  }
-  return FixtureWorkRepository();
+  final api = ref.watch(controlApiProvider);
+  return HttpWorkRepository(api: api);
 });

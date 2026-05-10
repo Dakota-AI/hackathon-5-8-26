@@ -72,6 +72,8 @@ const _agentBrowserBridgeAutoOpen = bool.fromEnvironment(
   'AGENTS_CLOUD_BROWSER_BRIDGE_AUTO_OPEN_BROWSER',
 );
 
+const _defaultWorkspaceId = 'workspace-web';
+
 final selectedPageProvider = StateProvider<ConsolePage>(
   (ref) => _agentBrowserBridgeAutoOpen ? ConsolePage.browser : ConsolePage.work,
 );
@@ -79,6 +81,7 @@ final selectedPageProvider = StateProvider<ConsolePage>(
 final selectedAgentIdProvider = StateProvider<String?>((ref) => null);
 
 final sidebarCollapsedProvider = StateProvider<bool>((ref) => true);
+final workItemsRefreshCounterProvider = StateProvider<int>((ref) => 0);
 
 class AgentsCloudConsoleApp extends StatelessWidget {
   const AgentsCloudConsoleApp({super.key});
@@ -1469,8 +1472,10 @@ class _WorkDashboard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final refreshCounter = ref.watch(workItemsRefreshCounterProvider);
     final repository = ref.watch(workRepositoryProvider);
     return FutureBuilder<List<WorkItem>>(
+      key: ValueKey('work-dashboard-$refreshCounter'),
       future: repository.listWorkItems(),
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
@@ -1982,21 +1987,106 @@ class _HeroCommandPanel extends StatelessWidget {
   }
 }
 
-class _CommandComposerMock extends StatelessWidget {
+class _CommandComposerMock extends ConsumerStatefulWidget {
   const _CommandComposerMock();
+
+  @override
+  ConsumerState<_CommandComposerMock> createState() => _CommandComposerState();
+}
+
+class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
+  final _controller = TextEditingController(
+    text:
+        'Build a launch page, research competitors, test it, publish a preview, and prepare a CEO report.',
+  );
+  bool _isSubmitting = false;
+  String? _status;
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _createAndRun() async {
+    final objective = _controller.text.trim();
+    if (objective.isEmpty) {
+      setState(() => _error = 'Enter an objective first.');
+      return;
+    }
+
+    final auth = ref.read(authControllerProvider);
+    if (auth.status != AuthStatus.signedIn) {
+      setState(() => _error = 'Sign in first to run live Control API workflows.');
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+      _status = null;
+    });
+
+    try {
+      final api = ref.read(controlApiProvider);
+      final workItem = await api.createWorkItem(
+        workspaceId: _defaultWorkspaceId,
+        title: objective.length > 80 ? objective.substring(0, 80) : objective,
+        objective: objective,
+      );
+      final workItemId = _extractWorkItemId(workItem);
+      if (workItemId == null) {
+        throw StateError('No WorkItem id returned from Control API.');
+      }
+      await api.startRun(
+        workItemId: workItemId,
+        workspaceId: _defaultWorkspaceId,
+        objective: objective,
+      );
+
+      if (!mounted) return;
+      ref.read(workItemsRefreshCounterProvider.notifier).state++;
+      setState(() {
+        _status = 'WorkItem created and run started: $workItemId';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+    }
+  }
+
+  String? _extractWorkItemId(Map<String, dynamic> body) {
+    final direct = body['id'] ?? body['workItemId'] ?? body['work_item_id'];
+    if (direct is String && direct.isNotEmpty) return direct;
+
+    final nested = body['workItem'];
+    if (nested is Map<String, dynamic>) {
+      final nestedId = nested['id'] ?? nested['workItemId'] ?? nested['work_item_id'];
+      if (nestedId is String && nestedId.isNotEmpty) {
+        return nestedId;
+      }
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final isCompact = MediaQuery.sizeOf(context).width < 760;
+    final auth = ref.watch(authControllerProvider);
+    final canRun = auth.status == AuthStatus.signedIn;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextArea(
-          initialValue:
-              'Build a launch page, research competitors, test it, publish a preview, and prepare a CEO report.',
+          controller: _controller,
           minLines: isCompact ? 3 : 2,
           maxLines: 5,
-          readOnly: true,
+          readOnly: !canRun || _isSubmitting,
           filled: true,
           placeholder: const Text('Describe the strategic objective...'),
         ),
@@ -2005,25 +2095,45 @@ class _CommandComposerMock extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           crossAxisAlignment: WrapCrossAlignment.center,
-          children: const [
+          children: [
             Button.primary(
-              enabled: false,
-              leading: Icon(RadixIcons.play, size: 14),
-              child: Text('Create WorkItem'),
+              enabled: canRun && !_isSubmitting,
+              onPressed: _isSubmitting ? null : _createAndRun,
+              leading: const Icon(RadixIcons.play, size: 14),
+              child: Text(_isSubmitting ? 'Starting...' : 'Create WorkItem + Start Run'),
             ),
             Button.outline(
               enabled: false,
-              leading: Icon(RadixIcons.reader, size: 14),
-              child: Text('Draft report'),
+              leading: const Icon(RadixIcons.reader, size: 14),
+              child: const Text('Draft report'),
             ),
             Button.outline(
               enabled: false,
-              leading: Icon(RadixIcons.globe, size: 14),
-              child: Text('Preview site'),
+              leading: const Icon(RadixIcons.globe, size: 14),
+              child: const Text('Preview site'),
             ),
-            _StatusPill(label: 'fixture UI only', color: _Palette.warning),
+            _StatusPill(
+              label: canRun
+                  ? 'live Control API'
+                  : 'sign in for live Control API',
+              color: canRun ? _Palette.success : _Palette.warning,
+            ),
           ],
         ),
+        if (_status != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _status!,
+            style: const TextStyle(color: _Palette.success, fontSize: 11),
+          ),
+        ],
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _error!,
+            style: const TextStyle(color: _Palette.danger, fontSize: 11),
+          ),
+        ],
       ],
     );
   }

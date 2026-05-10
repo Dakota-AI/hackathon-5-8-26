@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'hermes_client.dart';
 import 'llm_client.dart';
+import '../api/control_api.dart';
 
 const _provider = String.fromEnvironment(
   'LLM_PROVIDER',
@@ -16,6 +19,16 @@ const _hermesCallId = String.fromEnvironment(
   'HERMES_TEXT_CALL_ID',
   defaultValue: 'mobile-chat',
 );
+const _runnerWaitMs = int.fromEnvironment(
+  'MOBILE_RUNNER_WAIT_MS',
+  defaultValue: 180000,
+);
+const _runnerPollMs = int.fromEnvironment(
+  'MOBILE_RUNNER_POLL_MS',
+  defaultValue: 1500,
+);
+
+const _runnerHealthyStatuses = <String>{"online", "running", "ready"};
 
 /// System prompt for the *text* surface — markdown OK, GenUI blocks OK.
 const _textSystemPrompt = '''
@@ -100,3 +113,120 @@ LlmClient resolveLlmClient() {
 }
 
 String get llmProviderName => _provider;
+
+/// Picks a Hermes client from a ready user runner record in Control API.
+/// This is the mobile-first path so chat can stay coupled to the user's
+/// current ECS runner instead of a static demo endpoint.
+Future<LlmClient> resolveRunnerLlmClient({
+  required ControlApi controlApi,
+  bool allowConfiguredFallback = false,
+}) async {
+  final deadline = DateTime.now().add(Duration(milliseconds: _runnerWaitMs));
+  String? lastMessage;
+  while (DateTime.now().isBefore(deadline)) {
+    final runners = await controlApi.listUserRunners();
+    final runner = _pickReadyRunner(runners);
+    if (runner != null) {
+      return _buildHermesClientFromRunner(runner);
+    }
+    lastMessage = _runnerNotReadyMessage(runners);
+    await Future.delayed(Duration(milliseconds: _runnerPollMs));
+  }
+  if (!allowConfiguredFallback) {
+    return UnconfiguredLlmClient(
+      lastMessage ??
+          'Hermes runner is still provisioning. Start or wake your ECS runner and retry.',
+    );
+  }
+  final fallback = resolveLlmClient();
+  if (fallback is UnconfiguredLlmClient) {
+    return UnconfiguredLlmClient(
+      lastMessage ??
+          'Hermes runner was not ready, and no configured fallback endpoint is available.',
+    );
+  }
+  return fallback;
+}
+
+LlmClient _buildHermesClientFromRunner(Map<String, dynamic> runner) {
+  final base = _runnerEndpoint(runner);
+  if (base == null || base.isEmpty) {
+    throw StateError("Runner record does not include a reachable endpoint.");
+  }
+  return HermesLlmClient(
+    baseUrl: base,
+    authToken: _hermesToken,
+    callId: _hermesCallId,
+  );
+}
+
+Map<String, dynamic>? _pickReadyRunner(List<Map<String, dynamic>> runners) {
+  final candidates = runners
+      .where(_isReachable)
+      .where((runner) => _isHealthyStatus(_status(runner)))
+      .toList();
+  if (candidates.isNotEmpty) {
+    candidates.sort(_compareUpdatedAt);
+    return candidates.first;
+  }
+  return null;
+}
+
+bool _isReachable(Map<String, dynamic> runner) {
+  final endpoint = _runnerEndpoint(runner);
+  if (endpoint != null && endpoint.isNotEmpty) return true;
+  return _runnerEndpointFromIp(_stringValueOrNull(runner["privateIp"])) != null;
+}
+
+bool _isHealthyStatus(String status) {
+  return _runnerHealthyStatuses.contains(status);
+}
+
+String _status(Map<String, dynamic> runner) {
+  return _stringValue(runner['status']).toLowerCase();
+}
+
+String _runnerNotReadyMessage(List<Map<String, dynamic>> runners) {
+  final hasRunner = runners.isNotEmpty;
+  if (!hasRunner) {
+    return "No UserRunner rows were found yet for this user; start an ECS run to provision one.";
+  }
+  final hasEndpoint = runners.any((runner) => _runnerEndpoint(runner) != null);
+  if (!hasEndpoint) {
+    return "Runner rows are present, but no usable runner endpoint exists yet. Waiting for private IP/endpoint registration.";
+  }
+  final hasHealthy = runners.any((runner) => _isHealthyStatus(_status(runner)));
+  if (!hasHealthy) {
+    return "User runner is still starting. Waiting for an online/running/ready status.";
+  }
+  return "No runner endpoint is ready yet.";
+}
+
+String? _runnerEndpoint(Map<String, dynamic> runner) {
+  final endpoint = _stringValueOrNull(runner["runnerEndpoint"]);
+  if (endpoint != null && endpoint.isNotEmpty) {
+    return endpoint.replaceAll(RegExp(r"/+$"), "");
+  }
+  return _runnerEndpointFromIp(_stringValueOrNull(runner["privateIp"]));
+}
+
+String? _runnerEndpointFromIp(String? privateIp) {
+  final trimmed = _stringValue(privateIp);
+  if (trimmed.isEmpty) return null;
+  return "http://$trimmed:8787";
+}
+
+String _stringValue(Object? value) {
+  return value is String ? value.trim() : "";
+}
+
+String? _stringValueOrNull(Object? value) {
+  final trimmed = _stringValue(value);
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+int _compareUpdatedAt(Map<String, dynamic> left, Map<String, dynamic> right) {
+  return _stringValue(
+    right["updatedAt"],
+  ).compareTo(_stringValue(left["updatedAt"]));
+}

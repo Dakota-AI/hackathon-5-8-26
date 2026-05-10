@@ -1,13 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart' show HapticFeedback, TextInputAction;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:markdown_widget/markdown_widget.dart' as md;
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
+import '../api/control_api.dart';
 import '../conversation/agent_inbox.dart';
 import '../conversation/conversation_store.dart';
 import '../conversation/store_persistence.dart';
 import '../notifications/notification_service.dart';
+import '../llm/llm_client.dart';
+import '../llm/llm_provider.dart';
 import '../ui/genui_block.dart';
 import '../ui/streaming_text.dart';
 import '../ui/tokens.dart';
@@ -24,7 +28,7 @@ class ChatScreen extends StatelessWidget {
   Widget build(BuildContext context) => const AgentChatSurface();
 }
 
-class AgentChatSurface extends StatefulWidget {
+class AgentChatSurface extends ConsumerStatefulWidget {
   const AgentChatSurface({
     super.key,
     this.showVoiceAction = true,
@@ -35,16 +39,19 @@ class AgentChatSurface extends StatefulWidget {
   final bool compact;
 
   @override
-  State<AgentChatSurface> createState() => _AgentChatSurfaceState();
+  ConsumerState<AgentChatSurface> createState() => _AgentChatSurfaceState();
 }
 
-class _AgentChatSurfaceState extends State<AgentChatSurface>
+class _AgentChatSurfaceState extends ConsumerState<AgentChatSurface>
     with WidgetsBindingObserver {
   final _store = ConversationStore();
   late final AgentInbox _inbox;
   final _composer = TextEditingController();
   final _scroll = ScrollController();
   final _focus = FocusNode();
+  bool _isBootstrappingRunner = false;
+  String? _runnerStatusMessage;
+  Timer? _runnerRetryTimer;
   StreamSubscription<Turn>? _newTurnSub;
   StreamSubscription<String?>? _notifTapSub;
   StreamSubscription<String>? _notifReplySub;
@@ -77,7 +84,53 @@ class _AgentChatSurfaceState extends State<AgentChatSurface>
       unawaited(_store.sendUser(text: reply));
     });
     NotificationService.instance.setChatVisible(true);
+    unawaited(_bootstrapRunnerClient());
     unawaited(_attachPersistence());
+  }
+
+  Future<void> _bootstrapRunnerClient() async {
+    if (_isBootstrappingRunner) return;
+    setState(() {
+      _isBootstrappingRunner = true;
+      _runnerStatusMessage = 'Connecting to your ECS runner…';
+    });
+    try {
+      final controlApi = ref.read(controlApiProvider);
+      final client = await resolveRunnerLlmClient(
+        controlApi: controlApi,
+        allowConfiguredFallback: false,
+      );
+      if (!mounted) return;
+      _store.replaceClient(client);
+      if (client is UnconfiguredLlmClient) {
+        _runnerStatusMessage = client.reason;
+        if (_isRunnerBootstrappingMessage(client.reason)) {
+          _scheduleRunnerRetry();
+        } else {
+          _cancelRunnerRetry();
+        }
+      } else {
+        _runnerStatusMessage = null;
+        _cancelRunnerRetry();
+      }
+      setState(() {});
+    } catch (error) {
+      if (!mounted) return;
+      final message =
+          "Could not connect to your runner. ${error is Exception ? error.toString() : error}";
+      _runnerStatusMessage = message;
+      _store.replaceClient(UnconfiguredLlmClient(message));
+      if (_isRunnerBootstrappingMessage(message)) {
+        _scheduleRunnerRetry();
+      } else {
+        _cancelRunnerRetry();
+      }
+      setState(() {});
+    } finally {
+      if (mounted) {
+        setState(() => _isBootstrappingRunner = false);
+      }
+    }
   }
 
   Future<void> _attachPersistence() async {
@@ -110,6 +163,7 @@ class _AgentChatSurfaceState extends State<AgentChatSurface>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     NotificationService.instance.setChatVisible(false);
+    _cancelRunnerRetry();
     _store.removeListener(_handleStoreChange);
     _newTurnSub?.cancel();
     _notifTapSub?.cancel();
@@ -132,7 +186,37 @@ class _AgentChatSurfaceState extends State<AgentChatSurface>
       // The background reply isolate may have appended turns to disk
       // while we were suspended. Pull the canonical state back in.
       unawaited(_store.reload());
+      if (_runnerStatusMessage != null &&
+          _isRunnerBootstrappingMessage(_runnerStatusMessage!)) {
+        unawaited(_bootstrapRunnerClient());
+      }
+    } else {
+      _cancelRunnerRetry();
     }
+  }
+
+  void _scheduleRunnerRetry() {
+    _cancelRunnerRetry();
+    if (_runnerStatusMessage == null) return;
+    if (!_isRunnerBootstrappingMessage(_runnerStatusMessage!)) return;
+    _runnerRetryTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted || _isBootstrappingRunner) return;
+      unawaited(_bootstrapRunnerClient());
+    });
+  }
+
+  void _cancelRunnerRetry() {
+    _runnerRetryTimer?.cancel();
+    _runnerRetryTimer = null;
+  }
+
+  bool _isRunnerBootstrappingMessage(String message) {
+    final lower = message.toLowerCase();
+    return lower.contains('provision') ||
+        lower.contains('starting') ||
+        lower.contains('waiting') ||
+        lower.contains('connecting to your ecs runner') ||
+        lower.contains('no userrunner rows');
   }
 
   void _handleStoreChange() {
@@ -156,7 +240,12 @@ class _AgentChatSurfaceState extends State<AgentChatSurface>
 
   Future<void> _send() async {
     final text = _composer.text.trim();
-    if (text.isEmpty || _store.isResponding) return;
+    if (text.isEmpty ||
+        _store.isResponding ||
+        _isBootstrappingRunner ||
+        _isRunnerBootstrappingMessage(_runnerStatusMessage ?? '')) {
+      return;
+    }
     _composer.clear();
     _focus.requestFocus();
     await _store.sendUser(text: text);
@@ -176,6 +265,8 @@ class _AgentChatSurfaceState extends State<AgentChatSurface>
 
   @override
   Widget build(BuildContext context) {
+    final statusMessage = _runnerStatusMessage;
+
     return Scaffold(
       backgroundColor: Palette.background,
       child: SafeArea(
@@ -184,33 +275,68 @@ class _AgentChatSurfaceState extends State<AgentChatSurface>
         child: Column(
           children: [
             Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: _dismissKeyboard,
-                child: _store.turns.isEmpty
-                    ? const _EmptyState()
-                    : ListView.builder(
-                        controller: _scroll,
-                        keyboardDismissBehavior:
-                            ScrollViewKeyboardDismissBehavior.onDrag,
-                        padding: EdgeInsets.fromLTRB(
-                          widget.compact ? 10 : 16,
-                          widget.compact ? 10 : 16,
-                          widget.compact ? 10 : 16,
-                          8,
+              child: Column(
+                children: [
+                  if (statusMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
                         ),
-                        itemCount: _store.turns.length,
-                        itemBuilder: (context, index) {
-                          final turn = _store.turns[index];
-                          return _TurnView(key: ValueKey(turn.id), turn: turn);
-                        },
+                        decoration: BoxDecoration(
+                          color: Palette.panel,
+                          border: Border.all(color: Palette.border),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          statusMessage,
+                          style: const TextStyle(
+                            color: Palette.muted,
+                            fontSize: 11.5,
+                            height: 1.4,
+                          ),
+                        ),
                       ),
+                    ),
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: _dismissKeyboard,
+                      child: _store.turns.isEmpty
+                          ? const _EmptyState()
+                          : ListView.builder(
+                              controller: _scroll,
+                keyboardDismissBehavior:
+                                  ScrollViewKeyboardDismissBehavior.onDrag,
+                              padding: EdgeInsets.fromLTRB(
+                                widget.compact ? 10 : 16,
+                                widget.compact ? 10 : 16,
+                                widget.compact ? 10 : 16,
+                                8,
+                              ),
+                              itemCount: _store.turns.length,
+                              itemBuilder: (context, index) {
+                                final turn = _store.turns[index];
+                                return _TurnView(
+                                  key: ValueKey(turn.id),
+                                  turn: turn,
+                                );
+                              },
+                            ),
+                    ),
+                  ),
+                ],
               ),
             ),
             _Composer(
               controller: _composer,
               focusNode: _focus,
-              busy: _store.isResponding,
+              busy: _store.isResponding ||
+                  _isBootstrappingRunner ||
+                  _isRunnerBootstrappingMessage(_runnerStatusMessage ?? ''),
               onSubmit: _send,
               onConversation: widget.showVoiceAction
                   ? _startConversation

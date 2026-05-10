@@ -24,10 +24,13 @@ Implemented, deployed, and synthesizing:
   - Public access blocked, SSL enforced, bucket-owner-enforced object ownership.
 
 - `StateStack`
+  - WorkItems table with user, status, and idempotency lookup indexes.
   - Runs table.
   - Tasks table.
   - Events table.
   - Artifacts table.
+  - DataSources table for durable DataSourceRef records.
+  - Surfaces table for validated GenUI/A2UI surface records.
   - Approvals table.
   - PAY_PER_REQUEST billing.
   - PITR enabled outside `dev`.
@@ -39,18 +42,21 @@ Implemented, deployed, and synthesizing:
 
 - `RuntimeStack`
   - Fargate `agent-runtime` task definition built from `services/agent-runtime/Dockerfile` as a CDK ECR asset.
-  - Hermes-boundary worker container that accepts `RUN_ID`, `TASK_ID`, `WORKSPACE_ID`, `USER_ID`, and `OBJECTIVE`.
+  - Hermes-boundary worker container that accepts `RUN_ID`, `TASK_ID`, `WORKSPACE_ID`, optional `WORK_ITEM_ID`, `USER_ID`, and `OBJECTIVE`.
+  - Runtime environment includes WorkItems, DataSources, and Surfaces table names for the next WorkItem/GenUI worker phase.
   - Task role grants for the current S3 buckets and DynamoDB tables.
 
 - `OrchestrationStack`
   - First Step Functions state machine.
   - Runs the Hermes/smoke Fargate task with the optimized ECS `runTask.sync` integration and per-run environment overrides.
+  - Passes optional `workItemId` through to the ECS task as `WORK_ITEM_ID`.
 
 - `ControlApiStack`
   - API Gateway HTTP API for durable run lifecycle endpoints.
   - Cognito JWT authorizer wired to the Amplify Auth user pool/client.
   - Lambda handlers for `POST /runs`, `GET /runs/{runId}`, and
     `GET /runs/{runId}/events`.
+  - Product-shaped WorkItem, Artifact, DataSourceRef, and Surface routes are provisioned behind the same authorizer with explicit `501 NotImplemented` handlers for the next Control API implementation phase.
   - IAM grants for DynamoDB run/task/event access and Step Functions execution
     start.
 
@@ -92,6 +98,7 @@ From the repository root:
 
 ```bash
 pnpm install
+pnpm infra:test
 pnpm infra:build
 pnpm infra:synth
 ```
@@ -100,10 +107,37 @@ Package-local equivalents:
 
 ```bash
 pnpm --filter @agents-cloud/infra-cdk build
+pnpm --filter @agents-cloud/infra-cdk test
 pnpm --filter @agents-cloud/infra-cdk synth
 pnpm --filter @agents-cloud/infra-cdk diff
 pnpm --filter @agents-cloud/infra-cdk deploy
 ```
+
+## WorkItem / GenUI Infrastructure Slice
+
+The current CDK app includes the infrastructure foundation for the product spine documented in `docs/roadmap/WORKITEM_GENUI_INFRA_IMPLEMENTATION.md`:
+
+```text
+WorkItem -> Run -> Events -> Artifacts -> DataSources -> Surfaces
+```
+
+This slice creates the AWS state and route shape only. The WorkItem, DataSourceRef, and Surface product handlers intentionally return `501 NotImplemented` until the Control API phase adds validation, tenant authorization, and DynamoDB use cases.
+
+New state resources:
+
+- `WorkItemsTable` keyed by `workspaceId + workItemId`.
+- `DataSourcesTable` keyed by `workspaceId + dataSourceId`.
+- `SurfacesTable` keyed by `workspaceId + surfaceId`.
+- WorkItem lookup GSIs on `RunsTable` and `ArtifactsTable`.
+
+New product routes:
+
+- `/work-items` and `/work-items/{workItemId}`.
+- `/work-items/{workItemId}/runs`, `/events`, `/artifacts`, `/data-source-refs`, and `/surfaces`.
+- `/runs/{runId}/artifacts`, `/runs/{runId}/data-source-refs`, and `/runs/{runId}/surfaces`.
+- `/data-source-refs` and `/surfaces` creation/detail/update/publish paths.
+
+Regression coverage lives in `infra/cdk/src/test/workitem-genui-infra.test.ts` and should be run with `pnpm infra:test` before every infra deploy.
 
 ## Configuration
 

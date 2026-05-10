@@ -46,6 +46,7 @@ export class OrchestrationStack extends AgentsCloudStack {
                   { Name: "RUN_ID", "Value.$": "$.runId" },
                   { Name: "TASK_ID", "Value.$": "$.taskId" },
                   { Name: "WORKSPACE_ID", "Value.$": "$.workspaceId" },
+                  { Name: "WORK_ITEM_ID", "Value.$": "$.workItemId" },
                   { Name: "USER_ID", "Value.$": "$.userId" },
                   { Name: "OBJECTIVE", "Value.$": "$.objective" }
                 ]

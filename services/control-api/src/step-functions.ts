@@ -19,6 +19,7 @@ export class StepFunctionsExecutionStarter implements ExecutionStarter {
     readonly runId: string;
     readonly taskId: string;
     readonly workspaceId: string;
+    readonly workItemId?: string;
     readonly userId: string;
     readonly objective: string;
   }): Promise<{ executionArn: string }> {
@@ -26,7 +27,7 @@ export class StepFunctionsExecutionStarter implements ExecutionStarter {
       new StartExecutionCommand({
         stateMachineArn: this.stateMachineArn,
         name: input.runId,
-        input: JSON.stringify(input)
+        input: JSON.stringify({ ...input, workItemId: input.workItemId ?? "" })
       })
     );
 

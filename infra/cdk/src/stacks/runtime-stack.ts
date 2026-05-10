@@ -40,17 +40,69 @@ export class RuntimeStack extends AgentsCloudStack {
       file: "services/agent-runtime/Dockerfile",
       platform: Platform.LINUX_AMD64,
       exclude: [
+        ".agent.md",
+        ".amplify",
+        ".amplify/**",
+        ".dockerignore",
+        ".DS_Store",
+        ".env",
+        ".env.*",
         ".git",
+        ".git/**",
+        ".nvmrc",
         "AGENTS.md",
         "README.md",
+        "amplify.yml",
         "apps",
+        "apps/**",
+        "coverage",
+        "coverage/**",
+        "dist",
+        "dist/**",
         "docs",
+        "docs/**",
         "infra",
+        "infra/**",
+        "node_modules",
+        "node_modules/**",
+        ".pnpm-store",
+        ".pnpm-store/**",
+        ".research",
+        ".research/**",
+        ".turbo",
+        ".turbo/**",
+        ".vibecode",
+        ".vibecode/**",
         "services/control-api",
+        "services/control-api/**",
         "services/agent-runtime/README.md",
         "services/agent-runtime/dist",
+        "services/agent-runtime/dist/**",
         "services/agent-runtime/test",
-        "tools"
+        "services/agent-runtime/test/**",
+        "services/realtime-api",
+        "services/realtime-api/**",
+        "scripts",
+        "scripts/**",
+        "tests",
+        "tests/**",
+        "tools",
+        "tools/**",
+        "**/.DS_Store",
+        "**/.env",
+        "**/.env.*",
+        "**/.next",
+        "**/.next/**",
+        "**/cdk.out",
+        "**/cdk.out/**",
+        "**/coverage",
+        "**/coverage/**",
+        "**/dist",
+        "**/dist/**",
+        "**/node_modules",
+        "**/node_modules/**",
+        "**/out",
+        "**/out/**"
       ]
     });
 
@@ -64,10 +116,13 @@ export class RuntimeStack extends AgentsCloudStack {
         AGENTS_CLOUD_ENV: props.config.envName,
         AGENTS_CLOUD_WORKER_KIND: "agent-runtime-hermes",
         HERMES_RUNNER_MODE: process.env.AGENTS_CLOUD_HERMES_RUNNER_MODE ?? "smoke",
+        WORK_ITEMS_TABLE_NAME: props.state.workItemsTable.tableName,
         RUNS_TABLE_NAME: props.state.runsTable.tableName,
         TASKS_TABLE_NAME: props.state.tasksTable.tableName,
         EVENTS_TABLE_NAME: props.state.eventsTable.tableName,
         ARTIFACTS_TABLE_NAME: props.state.artifactsTable.tableName,
+        DATA_SOURCES_TABLE_NAME: props.state.dataSourcesTable.tableName,
+        SURFACES_TABLE_NAME: props.state.surfacesTable.tableName,
         ARTIFACTS_BUCKET_NAME: props.storage.workspaceLiveArtifactsBucket.bucketName
       }
     });
@@ -77,10 +132,13 @@ export class RuntimeStack extends AgentsCloudStack {
     props.storage.previewStaticBucket.grantReadWrite(this.agentRuntimeTaskDefinition.taskRole);
     props.storage.researchDatasetsBucket.grantReadWrite(this.agentRuntimeTaskDefinition.taskRole);
 
+    props.state.workItemsTable.grantReadWriteData(this.agentRuntimeTaskDefinition.taskRole);
     props.state.runsTable.grantReadWriteData(this.agentRuntimeTaskDefinition.taskRole);
     props.state.tasksTable.grantReadWriteData(this.agentRuntimeTaskDefinition.taskRole);
     props.state.eventsTable.grantReadWriteData(this.agentRuntimeTaskDefinition.taskRole);
     props.state.artifactsTable.grantReadWriteData(this.agentRuntimeTaskDefinition.taskRole);
+    props.state.dataSourcesTable.grantReadWriteData(this.agentRuntimeTaskDefinition.taskRole);
+    props.state.surfacesTable.grantReadWriteData(this.agentRuntimeTaskDefinition.taskRole);
     props.state.approvalsTable.grantReadWriteData(this.agentRuntimeTaskDefinition.taskRole);
     props.state.previewDeploymentsTable.grantReadWriteData(this.agentRuntimeTaskDefinition.taskRole);
 

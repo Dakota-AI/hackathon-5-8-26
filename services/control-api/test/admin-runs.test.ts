@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buildArtifactCreatedEvent, buildRunStatusEvent } from "@agents-cloud/protocol";
-import { listAdminRuns } from "../src/query-runs.js";
+import { listAdminRunEvents, listAdminRuns } from "../src/query-runs.js";
 import type { AuthenticatedUser, ControlApiStore, EventRecord, RunRecord, TaskRecord } from "../src/ports.js";
 
 class MemoryStore implements ControlApiStore {
@@ -162,5 +162,34 @@ describe("admin runs", () => {
         retryable: true
       }
     });
+  });
+
+  it("returns a cross-user event lineage for an admin-selected run", async () => {
+    const result = await listAdminRunEvents({
+      store: new MemoryStore(runs, { "run-failed": failedEvents }),
+      user: admin,
+      adminEmails: ["seb4594@gmail.com"],
+      runId: "run-failed",
+      limit: 20
+    });
+
+    assert.equal(result.statusCode, 200);
+    assert.deepEqual(result.body, {
+      run: runs[0],
+      events: failedEvents,
+      nextSeq: 2
+    });
+  });
+
+  it("rejects non-admin cross-user event lineage access", async () => {
+    const result = await listAdminRunEvents({
+      store: new MemoryStore(runs, { "run-failed": failedEvents }),
+      user: nonAdmin,
+      adminEmails: ["seb4594@gmail.com"],
+      runId: "run-failed",
+      limit: 20
+    });
+
+    assert.equal(result.statusCode, 403);
   });
 });

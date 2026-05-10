@@ -134,6 +134,7 @@ Use these docs in this order:
 17. `docs/roadmap/AGENT_CREATED_INTERFACES_GENUI_PRODUCT_VISION.md`
 18. `docs/roadmap/BEST_NEXT_STEPS_EXECUTION_PLAN.md`
 19. `docs/roadmap/WORKITEM_GENUI_IMPLEMENTATION_PLAN.md`
+20. `docs/roadmap/WORKITEM_GENUI_INFRA_IMPLEMENTATION.md`
 
 The long roadmap and architecture docs are still useful, but this master
 document and `PROJECT_STATUS.md` reflect the current implementation position.

@@ -98,6 +98,13 @@ contract-correct.
   Control API ports/use cases, runtime artifact linkage, DataSourceRefs,
   Surface validation, web Work pages, Flutter native review, approvals, and
   final validation gates.
+- The CDK infrastructure slice for WorkItem/GenUI is documented in
+  `docs/roadmap/WORKITEM_GENUI_INFRA_IMPLEMENTATION.md`; it adds the
+  WorkItems/DataSources/Surfaces tables, WorkItem lookup GSIs, route/IAM/env
+  wiring, Step Functions `workItemId` passthrough, runtime table environment,
+  and CDK regression coverage. The provisioned product routes intentionally
+  return `501 NotImplemented` until the next Control API phase adds real
+  validation and tenant authorization.
 
 ### Not Complete
 

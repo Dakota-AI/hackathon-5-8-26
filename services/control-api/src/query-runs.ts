@@ -52,13 +52,7 @@ export async function listAdminRuns(deps: {
   readonly limit?: number;
 }): Promise<QueryResult> {
   if (!isAdminUser(deps.user, deps.adminEmails)) {
-    return {
-      statusCode: 403,
-      body: {
-        error: "Forbidden",
-        message: "Admin access is required."
-      }
-    };
+    return forbidden();
   }
 
   const runs = await deps.store.listRecentRuns(Math.min(Math.max(deps.limit ?? 50, 1), 100));
@@ -75,6 +69,35 @@ export async function listAdminRuns(deps: {
         succeededRuns: summaries.filter((run) => run.status === "succeeded").length
       }
     }
+  };
+}
+
+export async function listAdminRunEvents(deps: {
+  readonly store: ControlApiStore;
+  readonly user: AuthenticatedUser;
+  readonly adminEmails: readonly string[];
+  readonly runId: string;
+  readonly afterSeq?: number;
+  readonly limit?: number;
+}): Promise<QueryResult> {
+  if (!isAdminUser(deps.user, deps.adminEmails)) {
+    return forbidden();
+  }
+
+  const run = await deps.store.getRunById(deps.runId);
+  if (!run) {
+    return notFound();
+  }
+
+  const events = await deps.store.listEvents(deps.runId, {
+    afterSeq: deps.afterSeq,
+    limit: deps.limit
+  });
+  const nextSeq = events.length > 0 ? events[events.length - 1]?.seq : deps.afterSeq;
+
+  return {
+    statusCode: 200,
+    body: { run, events, nextSeq }
   };
 }
 
@@ -118,6 +141,16 @@ function hasFailurePayload(payload: Record<string, unknown>): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function forbidden(): QueryResult {
+  return {
+    statusCode: 403,
+    body: {
+      error: "Forbidden",
+      message: "Admin access is required."
+    }
+  };
 }
 
 function notFound(): QueryResult {

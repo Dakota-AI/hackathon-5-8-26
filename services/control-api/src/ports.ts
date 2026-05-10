@@ -70,6 +70,7 @@ export interface ExecutionStarter {
     readonly runId: string;
     readonly taskId: string;
     readonly workspaceId: string;
+    readonly workItemId?: string;
     readonly userId: string;
     readonly objective: string;
   }): Promise<{ executionArn: string }>;

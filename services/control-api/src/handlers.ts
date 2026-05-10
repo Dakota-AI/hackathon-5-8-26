@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { APIGatewayProxyStructuredResultV2, APIGatewayProxyEventV2WithJWTAuthorizer } from "aws-lambda";
 import { createRun } from "./create-run.js";
 import { DynamoControlApiStore } from "./dynamo-store.js";
-import { getRun, listAdminRuns, listRunEvents } from "./query-runs.js";
+import { getRun, listAdminRunEvents, listAdminRuns, listRunEvents } from "./query-runs.js";
 import { StepFunctionsExecutionStarter } from "./step-functions.js";
 import type { AuthenticatedUser } from "./ports.js";
 
@@ -63,6 +63,39 @@ export async function listAdminRunsHandler(event: APIGatewayProxyEventV2WithJWTA
   return json(result.statusCode, result.body);
 }
 
+export async function listAdminRunEventsHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
+  const runId = event.pathParameters?.runId;
+  if (!runId) {
+    return json(400, { error: "BadRequest", message: "runId path parameter is required." });
+  }
+
+  const result = await listAdminRunEvents({
+    store,
+    user: userFromEvent(event),
+    adminEmails: parseAdminEmails(process.env.ADMIN_EMAILS),
+    runId,
+    afterSeq: parseOptionalInteger(event.queryStringParameters?.afterSeq),
+    limit: parseOptionalInteger(event.queryStringParameters?.limit)
+  });
+  return json(result.statusCode, result.body);
+}
+
+export async function notImplementedWorkItemsHandler(): Promise<APIGatewayProxyStructuredResultV2> {
+  return notImplemented("WorkItem API is provisioned in infrastructure and will be implemented in the Control API phase.");
+}
+
+export async function notImplementedArtifactsHandler(): Promise<APIGatewayProxyStructuredResultV2> {
+  return notImplemented("Artifact API is provisioned in infrastructure and will be implemented in the Control API phase.");
+}
+
+export async function notImplementedDataSourceRefsHandler(): Promise<APIGatewayProxyStructuredResultV2> {
+  return notImplemented("DataSourceRef API is provisioned in infrastructure and will be implemented in the Control API phase.");
+}
+
+export async function notImplementedSurfacesHandler(): Promise<APIGatewayProxyStructuredResultV2> {
+  return notImplemented("Surface API is provisioned in infrastructure and will be implemented in the Control API phase.");
+}
+
 function userFromEvent(event: APIGatewayProxyEventV2WithJWTAuthorizer): AuthenticatedUser {
   const claims = event.requestContext.authorizer.jwt.claims;
   const userId = String(claims.sub ?? "");
@@ -117,4 +150,11 @@ function json(statusCode: number, body: Record<string, unknown>): APIGatewayProx
     },
     body: JSON.stringify(body)
   };
+}
+
+function notImplemented(message: string): APIGatewayProxyStructuredResultV2 {
+  return json(501, {
+    error: "NotImplemented",
+    message
+  });
 }

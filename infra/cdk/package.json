@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "test": "pnpm build && node --test dist/test/**/*.test.js",
     "clean": "rm -rf dist cdk.out",
     "bootstrap": "pnpm build && cdk bootstrap aws://${CDK_DEFAULT_ACCOUNT:-625250616301}/${AWS_REGION:-us-east-1}",
     "synth": "pnpm build && cdk synth --app 'node dist/bin/agents-cloud-cdk.js'",

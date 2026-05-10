@@ -15,6 +15,7 @@
     "realtime-api:build": "pnpm --filter @agents-cloud/realtime-api run build",
     "realtime-api:test": "pnpm --filter @agents-cloud/realtime-api run test",
     "infra:build": "pnpm control-api:build && pnpm agent-runtime:build && pnpm realtime-api:build && pnpm --filter @agents-cloud/infra-cdk run build",
+    "infra:test": "pnpm --filter @agents-cloud/infra-cdk run test",
     "infra:synth": "pnpm control-api:build && pnpm agent-runtime:build && pnpm realtime-api:build && AWS_PROFILE=${AWS_PROFILE:-agents-cloud-source} AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} AGENTS_CLOUD_AWS_REGION=${AGENTS_CLOUD_AWS_REGION:-us-east-1} pnpm --filter @agents-cloud/infra-cdk run synth",
     "infra:diff": "pnpm control-api:build && pnpm agent-runtime:build && pnpm realtime-api:build && AWS_PROFILE=${AWS_PROFILE:-agents-cloud-source} AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} AGENTS_CLOUD_AWS_REGION=${AGENTS_CLOUD_AWS_REGION:-us-east-1} pnpm --filter @agents-cloud/infra-cdk run diff",
     "infra:deploy": "pnpm control-api:build && pnpm agent-runtime:build && pnpm realtime-api:build && AWS_PROFILE=${AWS_PROFILE:-agents-cloud-source} AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} AGENTS_CLOUD_AWS_REGION=${AGENTS_CLOUD_AWS_REGION:-us-east-1} pnpm --filter @agents-cloud/infra-cdk run deploy",

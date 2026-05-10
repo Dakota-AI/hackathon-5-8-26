@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:genui/genui.dart' as genui;
 import 'package:markdown_widget/markdown_widget.dart' as md;
 import 'package:shadcn_flutter/shadcn_flutter.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import 'backend_config.dart';
 import 'src/data/fixture_work_repository.dart';
@@ -14,11 +15,23 @@ Future<void> main() async {
   runApp(const AgentsCloudConsoleApp());
 }
 
-enum ConsolePage { commandCenter, runs, agents, artifacts, miro, approvals }
+enum ConsolePage {
+  work,
+  genuiLab,
+  browser,
+  uiKit,
+  agents,
+  approvals,
+  runs,
+  artifacts,
+  miro,
+}
 
 final selectedPageProvider = StateProvider<ConsolePage>(
-  (ref) => ConsolePage.commandCenter,
+  (ref) => ConsolePage.work,
 );
+
+final sidebarCollapsedProvider = StateProvider<bool>((ref) => false);
 
 class AgentsCloudConsoleApp extends StatelessWidget {
   const AgentsCloudConsoleApp({super.key});
@@ -91,87 +104,133 @@ class _Sidebar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      width: 236,
+    final collapsed = ref.watch(sidebarCollapsedProvider);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      width: collapsed ? 62 : 218,
       color: _Palette.sidebar,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      padding: EdgeInsets.fromLTRB(
+        collapsed ? 8 : 10,
+        10,
+        collapsed ? 8 : 10,
+        10,
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: collapsed
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
         children: [
-          const _BrandHeader(),
-          const SizedBox(height: 16),
+          _SidebarCollapseButton(collapsed: collapsed),
+          const SizedBox(height: 10),
           _NavButton(
-            label: 'Command Center',
+            label: 'Work',
             icon: RadixIcons.dashboard,
-            page: ConsolePage.commandCenter,
-            selected: selectedPage == ConsolePage.commandCenter,
+            page: ConsolePage.work,
+            selected: selectedPage == ConsolePage.work,
+            collapsed: collapsed,
           ),
           _NavButton(
-            label: 'Runs',
-            icon: RadixIcons.activityLog,
-            page: ConsolePage.runs,
-            selected: selectedPage == ConsolePage.runs,
+            label: 'GenUI Lab',
+            icon: RadixIcons.component1,
+            page: ConsolePage.genuiLab,
+            selected: selectedPage == ConsolePage.genuiLab,
+            collapsed: collapsed,
           ),
           _NavButton(
-            label: 'Agents & Teams',
+            label: 'Browser',
+            icon: RadixIcons.globe,
+            page: ConsolePage.browser,
+            selected: selectedPage == ConsolePage.browser,
+            collapsed: collapsed,
+          ),
+          _NavButton(
+            label: 'UI Kit',
+            icon: RadixIcons.tokens,
+            page: ConsolePage.uiKit,
+            selected: selectedPage == ConsolePage.uiKit,
+            collapsed: collapsed,
+          ),
+          const SizedBox(height: 8),
+          _NavButton(
+            label: 'Agents',
             icon: RadixIcons.group,
             page: ConsolePage.agents,
             selected: selectedPage == ConsolePage.agents,
-          ),
-          _NavButton(
-            label: 'Artifacts',
-            icon: RadixIcons.archive,
-            page: ConsolePage.artifacts,
-            selected: selectedPage == ConsolePage.artifacts,
-          ),
-          _NavButton(
-            label: 'Miro Boards',
-            icon: RadixIcons.component1,
-            page: ConsolePage.miro,
-            selected: selectedPage == ConsolePage.miro,
+            collapsed: collapsed,
           ),
           _NavButton(
             label: 'Approvals',
             icon: RadixIcons.checkCircled,
             page: ConsolePage.approvals,
             selected: selectedPage == ConsolePage.approvals,
+            collapsed: collapsed,
           ),
           const Spacer(),
-          const _ConnectionCard(),
+          if (!collapsed)
+            const Text(
+              'Agents Cloud',
+              style: TextStyle(
+                color: _Palette.muted,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
         ],
       ),
     );
   }
 }
 
-class _BrandHeader extends StatelessWidget {
-  const _BrandHeader();
+class _SidebarCollapseButton extends ConsumerWidget {
+  const _SidebarCollapseButton({required this.collapsed});
+
+  final bool collapsed;
 
   @override
-  Widget build(BuildContext context) {
-    return const Row(
-      children: [
-        _LogoMark(),
-        SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Agents Cloud',
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final button = GestureDetector(
+      key: const ValueKey('sidebar-collapse-button'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () =>
+          ref.read(sidebarCollapsedProvider.notifier).state = !collapsed,
+      child: Container(
+        height: 38,
+        width: collapsed ? 44 : double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: _Palette.input,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _Palette.border),
+        ),
+        child: Row(
+          mainAxisAlignment: collapsed
+              ? MainAxisAlignment.center
+              : MainAxisAlignment.spaceBetween,
+          children: [
+            const Icon(RadixIcons.cube, size: 16, color: _Palette.text),
+            if (!collapsed) ...[
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Agents Cloud',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
+                ),
               ),
-              SizedBox(height: 2),
-              Text(
-                'Autonomous company console',
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: _Palette.muted, fontSize: 11),
+              const Icon(
+                RadixIcons.doubleArrowLeft,
+                size: 14,
+                color: _Palette.muted,
               ),
             ],
-          ),
+          ],
         ),
-      ],
+      ),
+    );
+    return _NavTooltip(
+      label: collapsed ? 'Expand navigation' : 'Collapse navigation',
+      enabled: collapsed,
+      child: button,
     );
   }
 }
@@ -200,52 +259,52 @@ class _NavButton extends ConsumerWidget {
     required this.icon,
     required this.page,
     required this.selected,
+    required this.collapsed,
   });
 
   final String label;
   final IconData icon;
   final ConsolePage page;
   final bool selected;
+  final bool collapsed;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Padding(
+    final nav = Padding(
       padding: const EdgeInsets.only(bottom: 5),
       child: NavigationItem(
         selected: selected,
         onChanged: (value) {
           if (value) ref.read(selectedPageProvider.notifier).state = page;
         },
-        label: Text(label, overflow: TextOverflow.ellipsis),
+        label: collapsed ? null : Text(label, overflow: TextOverflow.ellipsis),
         child: Icon(icon, size: 17),
       ),
     );
+    return _NavTooltip(label: label, enabled: collapsed, child: nav);
   }
 }
 
-class _ConnectionCard extends StatelessWidget {
-  const _ConnectionCard();
+class _NavTooltip extends StatelessWidget {
+  const _NavTooltip({
+    required this.label,
+    required this.enabled,
+    required this.child,
+  });
+
+  final String label;
+  final bool enabled;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return const _Panel(
-      padding: EdgeInsets.all(10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _StatusPill(
-            label: 'Amplify Auth configured',
-            color: _Palette.success,
-          ),
-          SizedBox(height: 8),
-          _StatusPill(label: 'Control API configured', color: _Palette.success),
-          SizedBox(height: 8),
-          Text(
-            'Cognito Auth and the deployed Control API endpoint are available for native client wiring.',
-            style: TextStyle(color: _Palette.muted, fontSize: 11, height: 1.35),
-          ),
-        ],
-      ),
+    if (!enabled) return child;
+    return Tooltip(
+      waitDuration: Duration.zero,
+      anchorAlignment: Alignment.centerRight,
+      alignment: Alignment.centerLeft,
+      tooltip: (context) => TooltipContainer(child: Text(label)),
+      child: child,
     );
   }
 }
@@ -256,24 +315,12 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 54,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       child: const Row(
         children: [
-          Expanded(
-            child: Text(
-              'CEO command center',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-          ),
-          _StatusPill(
-            label: 'Amplify Auth configured',
-            color: _Palette.success,
-          ),
-          SizedBox(width: 8),
-          _StatusPill(label: 'Control API live', color: _Palette.success),
-          SizedBox(width: 8),
-          _StatusPill(label: 'GenUI ready', color: _Palette.success),
+          Expanded(child: SizedBox.shrink()),
+          _StatusPill(label: 'Local preview', color: _Palette.warning),
         ],
       ),
     );
@@ -286,7 +333,7 @@ class _MobileTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 48,
+      height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       color: _Palette.sidebar,
       child: const Row(
@@ -294,27 +341,13 @@ class _MobileTopBar extends StatelessWidget {
           _LogoMark(),
           SizedBox(width: 10),
           Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Agents Cloud',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
-                ),
-                SizedBox(height: 1),
-                Text(
-                  'Command, runs, approvals',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: _Palette.muted, fontSize: 10),
-                ),
-              ],
+            child: Text(
+              'Agents Cloud',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
             ),
           ),
-          _StatusPill(label: 'Live', color: _Palette.success),
         ],
       ),
     );
@@ -335,18 +368,32 @@ class _MobileNavBar extends ConsumerWidget {
       child: Row(
         children: [
           _MobileNavItem(
-            label: 'Home',
+            label: 'Work',
             icon: RadixIcons.dashboard,
-            selected: selectedPage == ConsolePage.commandCenter,
+            selected: selectedPage == ConsolePage.work,
             onTap: () => ref.read(selectedPageProvider.notifier).state =
-                ConsolePage.commandCenter,
+                ConsolePage.work,
           ),
           _MobileNavItem(
-            label: 'Runs',
-            icon: RadixIcons.activityLog,
-            selected: selectedPage == ConsolePage.runs,
+            label: 'GenUI',
+            icon: RadixIcons.component1,
+            selected: selectedPage == ConsolePage.genuiLab,
             onTap: () => ref.read(selectedPageProvider.notifier).state =
-                ConsolePage.runs,
+                ConsolePage.genuiLab,
+          ),
+          _MobileNavItem(
+            label: 'Browser',
+            icon: RadixIcons.globe,
+            selected: selectedPage == ConsolePage.browser,
+            onTap: () => ref.read(selectedPageProvider.notifier).state =
+                ConsolePage.browser,
+          ),
+          _MobileNavItem(
+            label: 'Kit',
+            icon: RadixIcons.tokens,
+            selected: selectedPage == ConsolePage.uiKit,
+            onTap: () => ref.read(selectedPageProvider.notifier).state =
+                ConsolePage.uiKit,
           ),
           _MobileNavItem(
             label: 'Agents',
@@ -354,22 +401,6 @@ class _MobileNavBar extends ConsumerWidget {
             selected: selectedPage == ConsolePage.agents,
             onTap: () => ref.read(selectedPageProvider.notifier).state =
                 ConsolePage.agents,
-          ),
-          _MobileNavItem(
-            label: 'Files',
-            icon: RadixIcons.archive,
-            selected: selectedPage == ConsolePage.artifacts,
-            onTap: () => ref.read(selectedPageProvider.notifier).state =
-                ConsolePage.artifacts,
-          ),
-          _MobileNavItem(
-            label: 'More',
-            icon: RadixIcons.dotsHorizontal,
-            selected:
-                selectedPage == ConsolePage.miro ||
-                selectedPage == ConsolePage.approvals,
-            onTap: () => ref.read(selectedPageProvider.notifier).state =
-                ConsolePage.miro,
           ),
         ],
       ),
@@ -441,12 +472,15 @@ class _PageBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (page) {
-      ConsolePage.commandCenter => const _CommandCenterPage(),
-      ConsolePage.runs => const _RunsPage(),
+      ConsolePage.work => const _CommandCenterPage(),
+      ConsolePage.genuiLab => const _GenUiLabPage(),
+      ConsolePage.browser => const _BrowserPage(),
+      ConsolePage.uiKit => const _UiKitPage(),
       ConsolePage.agents => const _AgentsPage(),
+      ConsolePage.approvals => const _ApprovalsPage(),
+      ConsolePage.runs => const _RunsPage(),
       ConsolePage.artifacts => const _ArtifactsPage(),
       ConsolePage.miro => const _MiroPage(),
-      ConsolePage.approvals => const _ApprovalsPage(),
     };
   }
 }
@@ -986,7 +1020,7 @@ class _HeroCommandPanel extends StatelessWidget {
           ),
           SizedBox(height: isCompact ? 10 : 14),
           Text(
-            'Command the company. Track every run.',
+            'Delegate work. Review outputs.',
             style: TextStyle(
               fontSize: isCompact ? 22 : 24,
               fontWeight: FontWeight.w900,
@@ -1034,7 +1068,7 @@ class _CommandComposerMock extends StatelessWidget {
             Button.primary(
               enabled: false,
               leading: Icon(RadixIcons.play, size: 14),
-              child: Text('Create run'),
+              child: Text('Create WorkItem'),
             ),
             Button.outline(
               enabled: false,
@@ -1290,6 +1324,398 @@ class _GenUiPreviewPanelState extends State<_GenUiPreviewPanel> {
               surfaceContext: _controller.contextFor(_surfaceId),
               defaultBuilder: (_) => const Text('Waiting for GenUI surface...'),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GenUiLabPage extends StatelessWidget {
+  const _GenUiLabPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(14),
+      children: const [
+        _SectionHeader(
+          title: 'GenUI component lab',
+          subtitle:
+              'Safe generated UI preview surface for testing cards, tables, timelines, approvals, loading states, and agent chat output before backend wiring.',
+        ),
+        SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _GeneratedSurfacePreview()),
+            SizedBox(width: 12),
+            Expanded(child: _AgentChatStatePanel()),
+          ],
+        ),
+        SizedBox(height: 12),
+        _LoadingStatesPanel(),
+      ],
+    );
+  }
+}
+
+class _GeneratedSurfacePreview extends StatelessWidget {
+  const _GeneratedSurfacePreview();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeader(
+            title: 'Generated surface preview',
+            subtitle:
+                'Validated catalog-only components; no arbitrary Flutter code.',
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: const [
+              Expanded(
+                child: _TinyStat(label: 'Components', value: '8'),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: _TinyStat(label: 'Data refs', value: '2'),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: _TinyStat(label: 'Actions', value: '0'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const _SmallSurfaceLine(
+            title: 'Metric card: active work',
+            subtitle:
+                'work_board_summary component bound to server-approved data refs.',
+            leading: RadixIcons.dashboard,
+          ),
+          const _SmallSurfaceLine(
+            title: 'Table: competitor prices',
+            subtitle:
+                'data_table component with safe pagination and column allowlist.',
+            leading: RadixIcons.table,
+          ),
+          const _SmallSurfaceLine(
+            title: 'Timeline: run events',
+            subtitle: 'run_timeline component renders canonical events only.',
+            leading: RadixIcons.activityLog,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgentChatStatePanel extends StatelessWidget {
+  const _AgentChatStatePanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          _SectionHeader(
+            title: 'Agent chat states',
+            subtitle:
+                'Message, tool, approval, and report states for future agent conversations.',
+          ),
+          SizedBox(height: 12),
+          _ChatBubble(
+            role: 'You',
+            body: 'Create a launch preview and show me the checklist.',
+          ),
+          SizedBox(height: 8),
+          _ChatBubble(
+            role: 'Agent',
+            body:
+                'I am building the preview, validating artifacts, and preparing a generated checklist surface.',
+          ),
+          SizedBox(height: 8),
+          _SmallSurfaceLine(
+            title: 'Tool running: preview.deploy',
+            subtitle: 'Streaming progress indicator + audit trail placeholder.',
+            leading: RadixIcons.gear,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoadingStatesPanel extends StatelessWidget {
+  const _LoadingStatesPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          _SectionHeader(
+            title: 'Loading states',
+            subtitle:
+                'Reusable loading, stale, empty, denied, and reconnecting states for generated surfaces.',
+          ),
+          SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _StateChip(label: 'Loading work…'),
+              _StateChip(label: 'Reconnecting'),
+              _StateChip(label: 'Stale data'),
+              _StateChip(label: 'Approval required'),
+              _StateChip(label: 'Empty surface'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StateChip extends StatelessWidget {
+  const _StateChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      filled: true,
+      fillColor: _Palette.input,
+      borderColor: _Palette.border,
+      borderRadius: BorderRadius.circular(999),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      boxShadow: const [],
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+}
+
+class _BrowserPage extends StatefulWidget {
+  const _BrowserPage();
+
+  @override
+  State<_BrowserPage> createState() => _BrowserPageState();
+}
+
+class _BrowserPageState extends State<_BrowserPage> {
+  static const _previewUrl = 'https://launch-demo.preview.solo-ceo.ai';
+  WebViewController? _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_runningInWidgetTest) {
+      _controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.disabled)
+        ..loadRequest(Uri.parse(_previewUrl));
+    }
+  }
+
+  bool get _runningInWidgetTest =>
+      WidgetsBinding.instance.runtimeType.toString().contains('Test');
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(14),
+      children: [
+        const _SectionHeader(
+          title: 'Embedded browser',
+          subtitle:
+              'Dedicated in-app preview browser for generated domains and signed artifact URLs. Web content receives no app secrets.',
+        ),
+        const SizedBox(height: 12),
+        Card(
+          filled: true,
+          fillColor: _Palette.input,
+          borderColor: _Palette.border,
+          borderRadius: BorderRadius.circular(12),
+          padding: const EdgeInsets.all(8),
+          boxShadow: const [],
+          child: Row(
+            children: const [
+              Icon(RadixIcons.lockClosed, size: 14, color: _Palette.text),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _previewUrl,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: _Palette.text),
+                ),
+              ),
+              SizedBox(width: 8),
+              Button.outline(enabled: false, child: Text('Open external')),
+              SizedBox(width: 6),
+              Button.outline(enabled: false, child: Text('Copy URL')),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          filled: true,
+          fillColor: const Color(0xFF080808),
+          borderColor: _Palette.border,
+          borderRadius: BorderRadius.circular(12),
+          padding: EdgeInsets.zero,
+          boxShadow: const [],
+          child: SizedBox(
+            height: 460,
+            child: _runningInWidgetTest
+                ? const Center(child: Text('Preview opened inside the app'))
+                : Stack(
+                    children: [
+                      WebViewWidget(controller: _controller!),
+                      const Positioned(
+                        left: 12,
+                        top: 12,
+                        child: _StatusPill(
+                          label: 'Preview opened inside the app',
+                          color: _Palette.success,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _UiKitPage extends StatelessWidget {
+  const _UiKitPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(14),
+      children: const [
+        _SectionHeader(
+          title: 'UI testing suite',
+          subtitle:
+              'End-to-end visual inventory for the UI patterns agents will use: navigation, indicators, chats, generated surfaces, approvals, and browser previews.',
+        ),
+        SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _ButtonsPanel()),
+            SizedBox(width: 12),
+            Expanded(child: _IndicatorsPanel()),
+            SizedBox(width: 12),
+            Expanded(child: _ApprovalExamplePanel()),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ButtonsPanel extends StatelessWidget {
+  const _ButtonsPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          _SectionHeader(
+            title: 'Buttons',
+            subtitle:
+                'Primary, secondary, destructive, and disabled command affordances.',
+          ),
+          SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Button.primary(child: Text('Run')),
+              Button.outline(child: Text('Review')),
+              Button.destructive(child: Text('Stop')),
+              Button.outline(enabled: false, child: Text('Disabled')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IndicatorsPanel extends StatelessWidget {
+  const _IndicatorsPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          _SectionHeader(
+            title: 'Indicators',
+            subtitle:
+                'Status chips and loading labels used across WorkItems and generated surfaces.',
+          ),
+          SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _StatusPill(label: 'Running', color: _Palette.success),
+              _StatusPill(label: 'Needs review', color: _Palette.warning),
+              _StatusPill(label: 'Blocked', color: _Palette.info),
+              _StateChip(label: 'Streaming…'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ApprovalExamplePanel extends StatelessWidget {
+  const _ApprovalExamplePanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          _SectionHeader(
+            title: 'Approval card',
+            subtitle:
+                'Human gate for publishing, tool use, spend, and repository writes.',
+          ),
+          SizedBox(height: 12),
+          _SmallSurfaceLine(
+            title: 'Publish preview domain',
+            subtitle: 'Requires human approval before external visibility.',
+            leading: RadixIcons.checkCircled,
+          ),
+          SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Button.primary(enabled: false, child: Text('Approve')),
+              Button.outline(enabled: false, child: Text('Request changes')),
+            ],
           ),
         ],
       ),

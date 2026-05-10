@@ -15,22 +15,14 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Agents Cloud'), findsOneWidget);
-    expect(find.text('Command Center'), findsOneWidget);
-    expect(find.text('CEO command center'), findsOneWidget);
-    expect(find.text('Autonomous control plane'), findsOneWidget);
-
-    await tester.scrollUntilVisible(
-      find.text('Autonomous run timeline'),
-      220,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pump(const Duration(milliseconds: 100));
-
-    expect(find.text('Live GenUI surface'), findsOneWidget);
-    expect(find.text('Google GenUI bridge'), findsOneWidget);
-    expect(find.text('A2UI v0.9'), findsOneWidget);
-    expect(find.text('Autonomous run timeline'), findsOneWidget);
+    expect(find.text('Agents Cloud'), findsWidgets);
+    expect(find.text('Work'), findsWidgets);
+    expect(find.text('CEO command center'), findsNothing);
+    expect(find.text('Autonomous company console'), findsNothing);
+    expect(find.text('Amplify Auth configured'), findsNothing);
+    expect(find.text('Control API live'), findsNothing);
+    expect(find.text('GenUI ready'), findsNothing);
+    expect(find.text('Work board'), findsOneWidget);
   });
 
   testWidgets('renders fixture-backed WorkItem UI in the command center', (
@@ -59,7 +51,9 @@ void main() {
     expect(find.text('Approve weekly monitor'), findsOneWidget);
   });
 
-  testWidgets('navigates to planning pages', (WidgetTester tester) async {
+  testWidgets('navigates to GenUI lab, browser, and UI kit pages', (
+    WidgetTester tester,
+  ) async {
     tester.view.physicalSize = const Size(1280, 820);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -68,27 +62,48 @@ void main() {
     await tester.pumpWidget(
       const ProviderScope(child: AgentsCloudConsoleApp()),
     );
+
+    await tester.tap(find.byType(NavigationItem).at(1));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('GenUI component lab'), findsOneWidget);
+    expect(find.text('Generated surface preview'), findsOneWidget);
+    expect(find.text('Loading states'), findsOneWidget);
+    expect(find.text('Agent chat states'), findsOneWidget);
+
     await tester.tap(find.byType(NavigationItem).at(2));
     await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Embedded browser'), findsOneWidget);
+    expect(find.text('https://launch-demo.preview.solo-ceo.ai'), findsWidgets);
+    expect(find.text('Preview opened inside the app'), findsOneWidget);
 
-    expect(
-      find.text(
-        'Agent-team org chart, specialist profiles, team staffing, budgets, and heartbeats.',
-      ),
-      findsOneWidget,
+    await tester.tap(find.byType(NavigationItem).at(3));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('UI testing suite'), findsOneWidget);
+    expect(find.text('Buttons'), findsOneWidget);
+    expect(find.text('Indicators'), findsOneWidget);
+    expect(find.text('Approval card'), findsOneWidget);
+  });
+
+  testWidgets('collapses sidebar to icon rail with shadcn tooltips', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 820);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const ProviderScope(child: AgentsCloudConsoleApp()),
     );
-    expect(find.text('Executive agent'), findsOneWidget);
-
-    await tester.tap(find.byType(NavigationItem).at(4));
+    await tester.tap(find.byKey(const ValueKey('sidebar-collapse-button')));
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(
-      find.text(
-        'Miro OAuth + MCP broker for board context, diagrams, docs, tables, prototypes, and Sidekick-like collaboration.',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Create diagrams'), findsOneWidget);
+    expect(find.text('GenUI Lab'), findsNothing);
+    expect(find.byType(Tooltip), findsWidgets);
+
+    await tester.tap(find.byKey(const ValueKey('sidebar-collapse-button')));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('GenUI Lab'), findsOneWidget);
   });
 
   testWidgets('renders compact mobile shell without desktop sidebar', (
@@ -104,12 +119,12 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Command, runs, approvals'), findsOneWidget);
-    expect(find.text('Home'), findsOneWidget);
-    expect(find.text('Files'), findsOneWidget);
+    expect(find.text('Work'), findsWidgets);
+    expect(find.text('Browser'), findsOneWidget);
+    expect(find.text('Kit'), findsOneWidget);
     expect(find.text('Command Center'), findsNothing);
-    expect(find.text('Command the company. Track every run.'), findsOneWidget);
-    expect(find.text('Create run'), findsOneWidget);
+    expect(find.text('Work board'), findsOneWidget);
+    expect(find.text('Create WorkItem'), findsOneWidget);
   });
 
   testWidgets('renders artifact, markdown, and browser preview surfaces', (
@@ -123,13 +138,12 @@ void main() {
     await tester.pumpWidget(
       const ProviderScope(child: AgentsCloudConsoleApp()),
     );
-    await tester.tap(find.byType(NavigationItem).at(3));
+    await tester.tap(find.byType(NavigationItem).at(2));
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Artifact workspace'), findsOneWidget);
-    expect(find.text('Markdown document viewer'), findsOneWidget);
-    expect(find.text('Embedded browser shell'), findsOneWidget);
-    expect(find.text('CEO launch memo.md'), findsOneWidget);
-    expect(find.text('Embedded WebView preview slot'), findsOneWidget);
+    expect(find.text('Embedded browser'), findsOneWidget);
+    expect(find.text('Preview opened inside the app'), findsOneWidget);
+    expect(find.text('Open external'), findsOneWidget);
+    expect(find.text('Copy URL'), findsOneWidget);
   });
 }

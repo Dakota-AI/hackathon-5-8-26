@@ -130,7 +130,7 @@ Remaining before product-grade realtime:
 3. Add stronger replay/gap repair UX that clearly backfills through `GET /runs/{runId}/events` after reconnect.
 4. Add workspace membership authorization; current smoke uses user-scoped event delivery but not full workspace ACLs.
 
-## Implemented Locally: Agent Profile Registry First Slice
+## Implemented and Deployed: Agent Profile Registry First Slice
 
 The Agent Workshop/Profile foundation now has a backend registry slice ready for deployment testing:
 
@@ -158,7 +158,29 @@ Validation evidence:
 - `pnpm infra:synth` passed after adding the profile table, Lambda route, environment, and S3/DynamoDB grants.
 - `git diff --check` passed for touched web/control/profile/infra/docs paths.
 
-Deployment status: implemented and synthesized locally; not yet deployed to AWS in this slice.
+Deployment status: deployed to AWS dev.
+
+Deployment evidence:
+
+- Commit `c25d57f` added the Agent Workshop/profile/admin/docs slice.
+- Commit `a91885f` fixed Amplify Hosting by building `@agents-cloud/agent-profile` before `web:build`.
+- CDK deploy completed for `agents-cloud-dev-control-api`.
+- Control API URL remains `https://ajmonuqk61.execute-api.us-east-1.amazonaws.com`.
+- Amplify Hosting job `34` for commit `a91885f503346e3c8479860df6a73917c7ca3798` succeeded.
+- Live default admin URL returned HTTP 200: `https://main.dkqxgsrxe1fih.amplifyapp.com/admin`.
+- Unauthenticated `GET /agent-profiles` returned HTTP 401 with `www-authenticate: Bearer`, confirming the route is protected by Cognito.
+- Deployed Lambda smoke invoked `agents-cloud-dev-control--AgentProfilesFunctionECE-966Vwp3RVDSn` with synthetic authenticated claims and verified:
+  - draft create returned status code 201,
+  - approval returned status code 200,
+  - DynamoDB table `agents-cloud-dev-state-AgentProfilesTableFF4D8E5F-OKROMINWG46P` stored `lifecycleState = approved`,
+  - S3 bucket `agents-cloud-dev-storage-workspaceliveartifactsbuc-8br4g70cte0m` stored profile artifact key `workspaces/workspace-admin-playground-smoke/agent-profiles/admin-playground-smoke-1778401627/versions/0.1.0-draft/profile.json`.
+
+Domain status:
+
+- Amplify domain association exists for `solo-ceo.ai` and reports `domainStatus = AVAILABLE`, `updateStatus = UPDATE_COMPLETE`.
+- `solo-ceo.ai` and `www.solo-ceo.ai` currently return HTTP 200.
+- `admin.solo-ceo.ai` does not currently resolve because DNS is set to `d1b1zwmidx0opr.cloudfront.net/admin.`; it must be a hostname-only CNAME to `d1b1zwmidx0opr.cloudfront.net` with no `/admin` path.
+- Amplify still reports the subdomain verification flags as false for `*`, `www`, and `admin`, so DNS should be corrected/rechecked at the DNS provider.
 
 ## Completed and Deployed: Amplify Auth Sandbox
 

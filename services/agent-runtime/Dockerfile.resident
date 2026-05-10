@@ -14,7 +14,7 @@ COPY services/agent-runtime services/agent-runtime
 RUN pnpm --filter @agents-cloud/protocol run build \
   && pnpm --filter @agents-cloud/agent-runtime run build
 
-FROM nousresearch/hermes-agent:latest AS runtime
+FROM nousresearch/hermes-agent@sha256:df3361f51cff6a5c3cefc088276fe4b2f913097022344b95ecb25f74dd59fa71 AS runtime
 
 ENV NODE_ENV=production \
     AGENTS_RUNTIME_MODE=ecs-resident \

@@ -38,5 +38,11 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
+    target.build_configurations.each do |config|
+      # Enforce a minimum macOS deployment target across every pod.
+      # speech_to_text and other modern plugins need 10.15+; some
+      # transitive deps still default to 10.11/10.14 which breaks the build.
+      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '10.15'
+    end
   end
 end

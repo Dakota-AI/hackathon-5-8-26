@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { executeRun } from "../src/worker.js";
 import type { ArtifactSink, EventSink, HermesRunner, RuntimeContext, RuntimeEvent } from "../src/ports.js";
+import { InMemorySeqAllocator } from "../src/seq-allocator.js";
 
 class MemoryEventSink implements EventSink {
   public events: RuntimeEvent[] = [];
@@ -43,7 +44,7 @@ class SuccessfulHermesRunner implements HermesRunner {
     return {
       summary: "Hermes completed the first worker run.",
       rawOutput: "Hermes completed the first worker run.\nNext: wire richer tools.",
-      mode: "hermes-cli"
+      mode: "hermes-gateway"
     };
   }
 }
@@ -62,8 +63,9 @@ describe("executeRun", () => {
     const events = new MemoryEventSink();
     const artifacts = new MemoryArtifactSink();
     const hermes = new SuccessfulHermesRunner();
+    const seq = new InMemorySeqAllocator(1);
 
-    const result = await executeRun({ context, events, artifacts, hermes });
+    const result = await executeRun({ context, events, artifacts, hermes, seq });
 
     assert.equal(result.status, "succeeded");
     assert.equal(hermes.prompts.length, 1);
@@ -75,7 +77,7 @@ describe("executeRun", () => {
       events.events.map((event) => [event.id, event.seq, event.type, event.payload.status ?? event.payload.artifactId]),
       [
         ["evt-run-123-000002", 2, "run.status", "running"],
-        ["evt-run-123-000003", 3, "artifact.created", "artifact-task-123-0001"],
+        ["evt-run-123-000003", 3, "artifact.created", "artifact-task-123-0003"],
         ["evt-run-123-000004", 4, "run.status", "succeeded"]
       ]
     );
@@ -85,19 +87,19 @@ describe("executeRun", () => {
     assert.equal(events.events[1]?.payload.name, "Hermes worker report");
 
     assert.equal(artifacts.artifacts.length, 1);
-    assert.equal(artifacts.artifacts[0]?.key, "workspaces/workspace-abc/runs/run-123/artifacts/artifact-task-123-0001/hermes-report.md");
+    assert.equal(artifacts.artifacts[0]?.key, "workspaces/workspace-abc/runs/run-123/artifacts/artifact-task-123-0003/hermes-report.md");
     assert.match(artifacts.artifacts[0]?.body ?? "", /Hermes completed the first worker run/);
     assert.deepEqual(artifacts.records[0], {
       runId: "run-123",
-      artifactId: "artifact-task-123-0001",
+      artifactId: "artifact-task-123-0003",
       workspaceId: "workspace-abc",
       userId: "user-123",
       taskId: "task-123",
       kind: "report",
       name: "Hermes worker report",
       bucket: "artifact-bucket",
-      key: "workspaces/workspace-abc/runs/run-123/artifacts/artifact-task-123-0001/hermes-report.md",
-      uri: "s3://artifact-bucket/workspaces/workspace-abc/runs/run-123/artifacts/artifact-task-123-0001/hermes-report.md",
+      key: "workspaces/workspace-abc/runs/run-123/artifacts/artifact-task-123-0003/hermes-report.md",
+      uri: "s3://artifact-bucket/workspaces/workspace-abc/runs/run-123/artifacts/artifact-task-123-0003/hermes-report.md",
       contentType: "text/markdown; charset=utf-8",
       createdAt: "2026-05-10T01:00:00.000Z"
     });
@@ -106,13 +108,14 @@ describe("executeRun", () => {
   it("writes a failed event and returns failed when Hermes fails", async () => {
     const events = new MemoryEventSink();
     const artifacts = new MemoryArtifactSink();
+    const seq = new InMemorySeqAllocator(1);
     const hermes: HermesRunner = {
       async run(): Promise<{ summary: string; rawOutput: string; mode: string }> {
         throw new Error("Hermes unavailable");
       }
     };
 
-    const result = await executeRun({ context, events, artifacts, hermes });
+    const result = await executeRun({ context, events, artifacts, hermes, seq });
 
     assert.equal(result.status, "failed");
     assert.deepEqual(events.runStatuses, ["running", "failed"]);
@@ -122,5 +125,19 @@ describe("executeRun", () => {
     assert.equal(events.events.at(-1)?.payload.status, "failed");
     assert.match(String(events.events.at(-1)?.payload.message), /Hermes unavailable/);
     assert.equal(artifacts.artifacts.length, 0);
+  });
+
+  it("on retry continues from the last persisted seq, avoiding artifact ID collision", async () => {
+    const events = new MemoryEventSink();
+    const artifacts = new MemoryArtifactSink();
+    const hermes = new SuccessfulHermesRunner();
+    // simulate retry: previous attempt left seq 4 in the events table
+    const seq = new InMemorySeqAllocator(4);
+
+    const result = await executeRun({ context, events, artifacts, hermes, seq });
+
+    assert.equal(result.status, "succeeded");
+    assert.deepEqual(events.events.map((event) => event.seq), [5, 6, 7]);
+    assert.equal(artifacts.artifacts[0]?.key, "workspaces/workspace-abc/runs/run-123/artifacts/artifact-task-123-0006/hermes-report.md");
   });
 });

@@ -1,12 +1,19 @@
 import { buildArtifactCreatedEvent, buildRunStatusEvent } from "@agents-cloud/protocol";
-import type { RunStatus } from "@agents-cloud/protocol";
-import type { ArtifactSink, EventSink, HermesRunner, RuntimeContext, RuntimeEvent } from "./ports.js";
+import type {
+  ArtifactSink,
+  EventSink,
+  HermesRunner,
+  RuntimeContext,
+  RuntimeEvent,
+  SeqAllocator
+} from "./ports.js";
 
 export interface ExecuteRunDeps {
   readonly context: RuntimeContext;
   readonly events: EventSink;
   readonly artifacts: ArtifactSink;
   readonly hermes: HermesRunner;
+  readonly seq: SeqAllocator;
 }
 
 export interface ExecuteRunResult {
@@ -15,15 +22,16 @@ export interface ExecuteRunResult {
 }
 
 export async function executeRun(deps: ExecuteRunDeps): Promise<ExecuteRunResult> {
-  const { context, events, artifacts, hermes } = deps;
+  const { context, events, artifacts, hermes, seq } = deps;
 
   await events.updateRunStatus("running");
   await events.updateTaskStatus("running");
-  await events.putEvent(statusEvent(context, 2, "running", "Hermes worker started."));
+  await events.putEvent(statusEvent(context, seq.next(), "running", "Hermes worker started."));
 
   try {
     const hermesResult = await hermes.run(buildHermesPrompt(context));
-    const artifactId = artifactIdForAttempt(context);
+    const artifactSeq = seq.next();
+    const artifactId = artifactIdForAttempt(context, artifactSeq);
     const createdAt = context.now();
     const key = `workspaces/${context.workspaceId}/runs/${context.runId}/artifacts/${artifactId}/hermes-report.md`;
     const contentType = "text/markdown; charset=utf-8";
@@ -46,8 +54,8 @@ export async function executeRun(deps: ExecuteRunDeps): Promise<ExecuteRunResult
     });
 
     await events.putEvent(buildArtifactCreatedEvent({
-      id: eventId(context.runId, 3),
-      seq: 3,
+      id: eventId(context.runId, artifactSeq),
+      seq: artifactSeq,
       createdAt,
       userId: context.userId,
       workspaceId: context.workspaceId,
@@ -65,14 +73,14 @@ export async function executeRun(deps: ExecuteRunDeps): Promise<ExecuteRunResult
     }));
     await events.updateRunStatus("succeeded");
     await events.updateTaskStatus("succeeded");
-    await events.putEvent(statusEvent(context, 4, "succeeded", hermesResult.summary));
+    await events.putEvent(statusEvent(context, seq.next(), "succeeded", hermesResult.summary));
 
     return { status: "succeeded", artifactId };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await events.updateRunStatus("failed");
     await events.updateTaskStatus("failed");
-    await events.putEvent(statusEvent(context, 3, "failed", `Hermes worker failed: ${message}`, {
+    await events.putEvent(statusEvent(context, seq.next(), "failed", `Hermes worker failed: ${message}`, {
       code: "HERMES_WORKER_FAILED",
       message,
       retryable: true
@@ -107,9 +115,9 @@ function eventId(runId: string, seq: number): string {
   return `evt-${runId}-${String(seq).padStart(6, "0")}`;
 }
 
-function artifactIdForAttempt(context: RuntimeContext): string {
+function artifactIdForAttempt(context: RuntimeContext, seq: number): string {
   const safeTaskId = context.taskId.replace(/[^a-zA-Z0-9_-]/g, "-");
-  return `artifact-${safeTaskId}-0001`;
+  return `artifact-${safeTaskId}-${String(seq).padStart(4, "0")}`;
 }
 
 function buildHermesPrompt(context: RuntimeContext): string {

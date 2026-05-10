@@ -94,20 +94,26 @@ The resident runner is built (image, TaskDef, in-process server, HTTP API, tests
   - `POST /user-runners`
   - `GET/PATCH /user-runners/{runnerId}`
   - `POST /user-runners/{runnerId}/heartbeat`
-  - Owner enforced as `(userId, runnerId)` lookup on every read (line 121).
+  - Owner enforced as `(userId, runnerId)` lookup on every read.
 - ✅ HostNode admin endpoints (`POST /runner-hosts`, heartbeat) gated by `isAdmin`.
-- ✅ Resident runner image: `services/agent-runtime/Dockerfile.resident`, separate `FargateTaskDefinition` in `runtime-stack.ts:132` (1 vCPU / 2 GiB, port 8787) with task role granted RW on every state table.
-- ✅ `services/agent-runtime/src/resident-runner.ts` + `resident-runner-server.ts` — multi-agent registry, `/wake`, `/state`, `/events`, `/health`, Bearer-token guarded.
-- ✅ `assertTenant` (resident-runner.ts:554) refuses agents whose `tenant.userId` mismatches.
+- ✅ Resident runner image: `services/agent-runtime/Dockerfile.resident` — **multi-stage build with `nousresearch/hermes-agent:latest` as Stage 2, so the Hermes binary is now baked in at `/opt/hermes/.venv/bin/hermes`** (commit `d8c2a22`).
+- ✅ `FargateTaskDefinition` in `runtime-stack.ts` (1 vCPU / 2 GiB, port 8787, task role granted RW on every state table).
+- ✅ `services/agent-runtime/src/resident-runner.ts` + `resident-runner-server.ts` — multi-agent registry, `/wake`, `/state`, `/events`, `/health`, `/agents`, `/credentials/hermes-auth`, `/shutdown`, Bearer-token guarded.
+- ✅ `runAdapter` defaults to `hermes-cli` (the previous `smoke` adapter was **removed** in commit `d8c2a22`). Spawns real `hermes chat -q ... -Q --source agents-cloud --max-turns 8 --pass-session-id` plus optional `-m / --provider / -t / --resume / --accept-hooks / --yolo`.
+- ✅ `assertTenant` refuses agents whose `tenant.userId` mismatches.
+- ✅ `1deaf57` hardening: `assertSafeId(runId)` and `assertSafeId(taskId)` in `wake()` close a path-traversal hole; `ResidentRunnerApiToken` Secret is provisioned in CDK.
+- ✅ **Live ECS proof**: `agents-cloud-dev-resident-runner:4` was launched manually via `aws ecs run-task` on 2026-05-10. Hermes child reached the OpenAI Codex backend and got `HTTP 429 usage_limit_reached` — proving the container/auth path works end-to-end.
 
 ### What's missing
 
-- ❌ **Placement scheduler.** Nothing reads `UserRunnersTable.desiredState` and starts an ECS service / Fargate task. The `ResidentRunnerTaskDefinition` is registered but never `RunTask`'d.
-- ❌ **Host supervisor.** `services/local-runner-supervisor/` does not exist (Phase 3 in `USER_RUNNER_LOCAL_ECS_ARCHITECTURE.md`).
-- ❌ **userId → runner routing in `createRun`.** Given a userId from `POST /runs`, no code looks up "does this user have a runner; if not, start one; route this objective to that runner's `/wake`." `createRun` always launches a fresh stateless ECS task via SFN.
-- ❌ `RunnerSnapshotsTable` and `AgentInstancesTable` are provisioned but not written.
+- ❌ **Placement scheduler / dispatcher.** Nothing reads `UserRunnersTable.desiredState` and calls `ecs:RunTask` against the resident family. The `ResidentRunnerTaskDefinition` is registered, IAM is granted, image is pushed, manual launch is proven — but no automated caller exists. (Verified by directory listing 2026-05-10: no `runner-dispatcher.ts` in `services/control-api/src/`, no `EcsService` / `FargateService` / Cloud Map registration anywhere.)
+- ❌ **Reachability layer.** Even after a task launches, no Cloud Map / Service Discovery / internal ALB target maps `userId → runner endpoint`, so Lambda has no way to call `/wake`.
+- ❌ **Durable state mirroring.** Resident runner persists events/artifacts to local task disk (`/runner/state/events.ndjson`, `/runner/artifacts/...`); needs ports for `EventSink → EventsTable`, `ArtifactSink → S3 + ArtifactsTable`, `RunnerStateStore → UserRunnersTable heartbeats`, `SnapshotStore → S3 + RunnerSnapshotsTable`.
+- ❌ **userId → runner routing in `createRun`.** `createRun` always launches the stateless ECS task via SFN. No lookup of "does this user have a runner; if not, start one; route this objective to that runner's `/wake`."
+- ❌ `RunnerSnapshotsTable` and `AgentInstancesTable` are provisioned but not written by any code.
 - ❌ `createUserRunner` accepts arbitrary `placementTarget` strings without validating `local-docker | ecs-fargate | ecs-ec2` or reserving capacity on a `HostNode`.
-- ❌ `RUNNER_API_TOKEN` provisioning — `resident-runner-server.ts:20` requires it in ECS mode but no stack mints/injects it.
+- ⚠️ `RUNNER_API_TOKEN` is now backed by a CDK Secrets Manager secret (`ResidentRunnerApiToken`) — but the dispatcher that injects it per task still doesn't exist.
+- ⚠️ Provider quota: the proof run hit OpenAI Codex `429 usage_limit_reached`. A real demo needs a billing account with quota.
 
 ### What needs to happen for hackathon
 

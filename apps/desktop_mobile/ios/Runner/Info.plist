@@ -66,5 +66,22 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Agents Cloud uses the microphone for live voice conversations with the AI agent.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Agents Cloud transcribes your voice on-device so the agent can respond.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Agents Cloud uses the local network for low-latency voice connections during calls.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_dartobservatory._tcp</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>voip</string>
+		<string>remote-notification</string>
+		<string>fetch</string>
+	</array>
 </dict>
 </plist>

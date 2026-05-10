@@ -29,10 +29,21 @@ import 'src/widgets/squares_loader.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AgentsCloudBackend.configureAmplify();
-  // Notification permissions + iOS UN category for inline reply.
-  // Must run before any code path that may schedule a banner.
-  await NotificationService.instance.init();
+  try {
+    await AgentsCloudBackend.configureAmplify();
+  } catch (e, st) {
+    // Bad Amplify config must NOT prevent the UI from loading; the app
+    // can still render in fixture/bypass mode and surface the error.
+    debugPrint('Amplify configuration failed: $e\n$st');
+  }
+  try {
+    // Notification permissions + iOS UN category for inline reply.
+    // Wrapped: notification plugin failures (missing platform settings,
+    // sandbox issues) must never black-screen the app at startup.
+    await NotificationService.instance.init();
+  } catch (e, st) {
+    debugPrint('NotificationService init failed: $e\n$st');
+  }
   runApp(const AgentsCloudConsoleApp());
 }
 

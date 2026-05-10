@@ -49,16 +49,18 @@ Tasks: no standalone schema. `TaskRecord` in `services/control-api/src/ports.ts:
 - Web subscribes via `apps/web/lib/realtime-client.ts` with userId-filtered fanout.
 - ⚠️ `subscribeRun` does not verify ownership (mitigated by relay-side userId filter).
 
-## Web UI — ✅ real
+## Web UI — ✅ real (redesigned in `b515e14`)
 
-`apps/web/components/command-center.tsx`:
-- Calls `createControlApiRun`, polls `getControlApiRun` + `listControlApiRunEvents`.
-- WebSocket realtime when configured; falls back to mock mode.
-- `apps/web/lib/run-ledger.ts` derives a ledger view from canonical events.
+Three surfaces consume runs:
+- `apps/web/components/app/hero-command-panel.tsx` — chat-style "create run" textarea on `/`. Calls `createControlApiRun` + polls `listControlApiRunEvents` every 4 s. `apps/web/lib/run-ledger.ts` derives a ledger view from canonical events.
+- `apps/web/components/app/runs-chat.tsx` — `/runs` Open-WebUI-style chat. WorkItem-keyed conversation list; sends via `startControlApiWorkItemRun`; polls `listControlApiRunEvents` every 2.5 s for the active run.
+- `apps/web/components/work-dashboard.tsx` — `/` work board renders runs/events/artifacts inline per WorkItem.
 
-## Flutter UI — ⚠️ fixture
+⚠️ All three use **HTTP polling** — `lib/realtime-client.ts` exists but is not consumed by any rendering component.
 
-`_LiveRunTimeline` (`main.dart:1174-1228`) and `_RunLedgerCard` (`main.dart:1985-2024`) are static markdown placeholders.
+## Flutter UI — ⚠️ fixture (real client exists, providers not consumed)
+
+`apps/desktop_mobile/lib/src/api/control_api.dart` has real `startRun(...)`, `listRuns(workItemId)`, `listEvents(workItemId)` methods, and `lib/src/realtime/realtime_client.dart` has a real `web_socket_channel` wss client with `subscribeRun` action. **Neither provider is read by any rendering widget today.** All page bodies still load from `FixtureWorkRepository`.
 
 ---
 

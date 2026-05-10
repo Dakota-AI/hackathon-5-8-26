@@ -47,15 +47,15 @@ CDK provisioning at `control-api-stack.ts:237-250`.
 
 🔘 Not directly streamed. Clients refresh via the listed endpoints. Run events that link a `workItemId` flow through the run channel.
 
-## Web UI — ⚠️ fixture
+## Web UI — ✅ live (since commit `b515e14`)
 
-`apps/web/components/work-dashboard.tsx` calls `listFixtureWorkItems()` from `apps/web/lib/work-items.ts:239`. Banner at line 50-55: "Fixture-backed until the WorkItem Control API slice is finalized."
+`apps/web/components/work-dashboard.tsx` uses `useWorkItems({ isAuthed, workspaceId })` from `apps/web/lib/use-work-items.ts`. When signed-in, fetches `/work-items?workspaceId=...` and per-item `useWorkItemDetail` (runs / events / artifacts / surfaces) in parallel. Creates new items via `POST /work-items` from a quick form. **Fixture mode only when signed-out.**
 
-❌ No real-data fetcher in `apps/web/lib/control-api.ts` for `/work-items`.
+Also wired in `apps/web/components/app/runs-chat.tsx` — the conversation sidebar lists work items as conversations, and "New conversation…" creates a WorkItem via `createControlApiWorkItem`.
 
-## Flutter UI — ⚠️ fixture
+## Flutter UI — ⚠️ fixture (`ControlApi.listWorkItems` exists but not consumed)
 
-`apps/desktop_mobile/lib/main.dart:532-577` reads `_repository.listWorkItems()` where the repository is `FixtureWorkRepository` (`apps/desktop_mobile/lib/src/data/fixture_work_repository.dart`).
+`apps/desktop_mobile/lib/main.dart` page bodies still read from `FixtureWorkRepository` (`apps/desktop_mobile/lib/src/data/fixture_work_repository.dart`). Commit `b4d18fc` added `apps/desktop_mobile/lib/src/api/control_api.dart` with real `listWorkItems({workspaceId})` / `getWorkItem(id)` / `createWorkItem` / `updateWorkItemStatus` methods, but **the `controlApiProvider` is never read** by any rendering widget. Migration is just rewiring the providers.
 
 ---
 
@@ -68,15 +68,15 @@ CDK provisioning at `control-api-stack.ts:237-250`.
 | API | ✅ |
 | Worker | n/a |
 | Realtime | 🔘 (no canonical event type) |
-| Web | ⚠️ fixture |
-| Flutter | ⚠️ fixture |
+| Web | ✅ live |
+| Flutter | ⚠️ fixture (real client coded, provider not consumed) |
 
 ## What needs to ship for hackathon
 
-- [ ] Add `listControlApiWorkItems` / `createControlApiWorkItem` / `getControlApiWorkItem` to `apps/web/lib/control-api.ts`
-- [ ] Replace `listFixtureWorkItems()` in `apps/web/components/work-dashboard.tsx:15` with real fetcher; fall back to fixture only when `getControlApiHealth().configured === false`
-- [ ] Wire CommandCenter "submit objective" form to optionally create a WorkItem first, then a child Run
-- [ ] (Flutter, if pursued) swap `FixtureWorkRepository` → `RemoteWorkRepository` driven by `backend_config.dart`
-- [ ] Decide and document a `workitem.status.changed` canonical event so client refreshes can avoid polling
+- [x] ~~Add `listControlApiWorkItems` etc. to web~~ — done in `lib/control-api.ts`
+- [x] ~~Replace fixture in web work-dashboard~~ — done; signed-out fallback retained
+- [x] ~~Wire "submit objective" form to create WorkItem~~ — done via `HeroCommandPanel` and `RunsChat`
+- [ ] (Flutter) swap `FixtureWorkRepository` → real `ControlApi`-backed repository (provider already exists, just consume it)
+- [ ] Decide on a `workitem.status.changed` canonical event so client refreshes can avoid polling
 
 [→ runs-and-tasks](runs-and-tasks.md) · [→ control-api](../services/control-api.md)

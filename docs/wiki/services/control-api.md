@@ -66,14 +66,15 @@ No remaining 501 stubs for routes implemented in this phase.
 services/control-api/src/
 ├── handlers.ts            # All 13 Lambda entrypoints
 ├── create-run.ts          # POST /runs implementation
-├── query-runs.ts          # GET run / events / admin runs
+├── query-runs.ts          # GET run / events / admin runs / GET /runs (user listing)
 ├── work-items.ts          # WorkItems CRUD + child run create
 ├── user-runners.ts        # UserRunners + HostNodes routes
 ├── agent-profiles.ts      # AgentProfiles CRUD + approve
-├── artifacts.ts           # Artifact read + presigned download
-├── data-source-refs.ts    # Data source reference routes
-├── surfaces.ts            # Surface and generated UI metadata routes
-├── approvals.ts           # Approval creation + decision routes
+├── artifacts.ts           # Artifact list/get + presigned download (commits 76505c3, 0c60353)
+├── data-source-refs.ts    # Data source reference routes (f550bad)
+├── surfaces.ts            # Surface CRUD + publish + validation (f550bad, ba54101)
+├── approvals.ts           # Approval create/list/get/decision (f550bad)
+├── s3-presigner.ts        # GetObjectCommand + getSignedUrl helper for downloads
 ├── dynamo-store.ts        # All DynamoDB access
 ├── step-functions.ts      # StartExecution wrapper
 ├── ports.ts               # Interfaces (Store, ExecutionStarter, etc.)
@@ -133,15 +134,18 @@ Step Functions `StartExecution` uses `name = runId`, so a duplicate-name attempt
 
 ## Test coverage
 
-`services/control-api/test/` — 8 files, real coverage:
+`services/control-api/test/` — 11 test files:
 - `create-run.test.ts` — happy path + idempotency duplicate handling
 - `query-runs.test.ts` — owner gates + admin
 - `work-items.test.ts`
 - `user-runners.test.ts`
-- `agent-profiles.test.ts` (new) — drafts, list, approve
-- handlers wiring
-- DynamoDB store
-- shared step-functions wrapper
+- `agent-profiles.test.ts` — drafts, list, approve
+- `artifacts.test.ts` — listRunArtifacts, listWorkItemArtifacts, getRunArtifact, presigned download URL
+- `data-source-refs.test.ts` — create / get / list (run + workitem scoped)
+- `surfaces.test.ts` — 11 cases covering type/status validation, 64KiB cap, full CRUD ownership
+- `idempotency.test.ts`
+- `dynamo-store.test.ts`
+- `admin-runs.test.ts`
 
 Run: `pnpm control-api:test`.
 

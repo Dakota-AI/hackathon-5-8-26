@@ -706,6 +706,57 @@ export async function approvalsHandler(event: APIGatewayProxyEventV2WithJWTAutho
   return notImplemented("Approvals API is provisioned in infrastructure and will be implemented in the Control API phase.");
 }
 
+/**
+ * Receives proactive engagement requests from the Hermes agent (via the
+ * `phone_user` tool). Today this validates + logs and returns 202; the
+ * real delivery (APNS push, fan-out to user-scoped WebSocket via the
+ * Cloudflare Durable Object hub) is wired in a follow-up.
+ *
+ * Routes covered:
+ *   POST /user-engagement/notify
+ */
+export async function userEngagementHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
+  const routeKey = event.routeKey ?? "";
+  const caller = userFromEvent(event);
+
+  if (routeKey === "POST /user-engagement/notify") {
+    const body = parseJsonBody(event.body);
+    const targetUserId = stringField(body, "userId");
+    const title = optionalStringField(body, "title") ?? "AI Caller";
+    const messageBody = stringField(body, "body");
+    const deepLink = optionalStringField(body, "deepLink");
+
+    if (!messageBody.trim()) {
+      return json(400, { error: "BadRequest", message: "body must not be empty." });
+    }
+
+    // For now: log + return 202. Next steps (TODO):
+    //  1. Resolve targetUserId → APNS device tokens (USER_DEVICES table).
+    //  2. Send the banner via APNS HTTP/2 (or SNS Mobile Push topic).
+    //  3. Optionally write a user_engagement event to the events table so
+    //     the existing realtime relay surfaces it on the user's open
+    //     WebSocket session for in-app delivery.
+    console.log(JSON.stringify({
+      kind: "user_engagement.notify",
+      caller: caller.userId,
+      targetUserId,
+      title,
+      bodyChars: messageBody.length,
+      deepLink: deepLink ?? null,
+      receivedAt: new Date().toISOString()
+    }));
+
+    return json(202, {
+      accepted: true,
+      method: "notify",
+      targetUserId,
+      note: "Banner delivery wiring is pending APNS configuration."
+    });
+  }
+
+  return notImplemented(`Route '${routeKey}' is not handled by user-engagement.`);
+}
+
 function userFromEvent(event: APIGatewayProxyEventV2WithJWTAuthorizer): AuthenticatedUser {
   const claims = event.requestContext.authorizer.jwt.claims;
   const userId = String(claims.sub ?? "");

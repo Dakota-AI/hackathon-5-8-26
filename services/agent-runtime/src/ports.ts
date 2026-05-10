@@ -33,3 +33,7 @@ export interface HermesRunner {
     readonly mode: string;
   }>;
 }
+
+export interface SeqAllocator {
+  next(): number;
+}

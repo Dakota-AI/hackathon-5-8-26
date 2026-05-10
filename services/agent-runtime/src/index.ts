@@ -1,7 +1,8 @@
 import { AwsArtifactSink } from "./aws-artifact-sink.js";
 import { DynamoEventSink } from "./dynamo-event-sink.js";
-import { CliHermesRunner } from "./hermes-runner.js";
+import { GatewayHermesRunner } from "./gateway-hermes-runner.js";
 import type { RuntimeContext } from "./ports.js";
+import { loadSeqAllocatorFromEnvironment } from "./seq-allocator.js";
 import { executeRun } from "./worker.js";
 
 async function main(): Promise<void> {
@@ -10,7 +11,8 @@ async function main(): Promise<void> {
     context,
     events: DynamoEventSink.fromEnvironment(context),
     artifacts: AwsArtifactSink.fromEnvironment(),
-    hermes: CliHermesRunner.fromEnvironment()
+    hermes: GatewayHermesRunner.fromEnvironment(),
+    seq: await loadSeqAllocatorFromEnvironment(context.runId)
   });
 
   console.log(JSON.stringify({

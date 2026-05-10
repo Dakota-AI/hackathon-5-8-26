@@ -33,10 +33,16 @@ export class RuntimeStack extends AgentsCloudStack {
     super(scope, id, props);
 
     this.agentRuntimeTaskDefinition = new FargateTaskDefinition(this, "AgentRuntimeTaskDefinition", {
-      cpu: 512,
-      memoryLimitMiB: 1024,
+      cpu: 1024,
+      memoryLimitMiB: 2048,
       family: logicalName(props.config, "agent-runtime")
     });
+
+    const agentRuntimeHermesAuth = Secret.fromSecretNameV2(
+      this,
+      "AgentRuntimeHermesAuthJson",
+      process.env.AGENTS_CLOUD_WORKER_HERMES_AUTH_SECRET_NAME ?? `agents-cloud/${props.config.envName}/agent-runtime/hermes-auth-json`
+    );
 
     const agentRuntimeImage = new DockerImageAsset(this, "AgentRuntimeImage", {
       directory: repoRoot,
@@ -115,10 +121,21 @@ export class RuntimeStack extends AgentsCloudStack {
         streamPrefix: "agent-runtime",
         logGroup: props.cluster.agentRuntimeLogGroup
       }),
+      secrets: {
+        HERMES_AUTH_JSON_BOOTSTRAP: EcsSecret.fromSecretsManager(agentRuntimeHermesAuth)
+      },
       environment: {
         AGENTS_CLOUD_ENV: props.config.envName,
         AGENTS_CLOUD_WORKER_KIND: "agent-runtime-hermes",
-        HERMES_RUNNER_MODE: process.env.AGENTS_CLOUD_HERMES_RUNNER_MODE ?? "smoke",
+        AGENTS_RUNTIME_MODE: "ecs-worker",
+        AGENTS_RUNNER_ROOT: "/runner",
+        HERMES_HOME: "/runner/hermes",
+        HERMES_GATEWAY_HOST: "127.0.0.1",
+        HERMES_GATEWAY_PORT: "8642",
+        HERMES_GATEWAY_URL: "http://127.0.0.1:8642",
+        HERMES_GATEWAY_BOOT_TIMEOUT_SECONDS: "60",
+        HERMES_MODEL: process.env.AGENTS_CLOUD_WORKER_HERMES_MODEL ?? "hermes-agent",
+        HERMES_TIMEOUT_MS: process.env.AGENTS_CLOUD_WORKER_HERMES_TIMEOUT_MS ?? "600000",
         WORK_ITEMS_TABLE_NAME: props.state.workItemsTable.tableName,
         RUNS_TABLE_NAME: props.state.runsTable.tableName,
         TASKS_TABLE_NAME: props.state.tasksTable.tableName,

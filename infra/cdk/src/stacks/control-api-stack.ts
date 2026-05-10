@@ -181,6 +181,17 @@ export class ControlApiStack extends AgentsCloudStack {
       environment: commonEnvironment
     });
 
+    // Receives proactive engagement requests from Hermes (phone_user tool).
+    // Currently logs + returns 202; APNS push delivery is the follow-up.
+    const userEngagementFunction = new NodejsFunction(this, "UserEngagementFunction", {
+      runtime: Runtime.NODEJS_22_X,
+      entry: controlApiEntry,
+      handler: "userEngagementHandler",
+      timeout: Duration.seconds(10),
+      memorySize: 256,
+      environment: commonEnvironment
+    });
+
     props.state.workItemsTable.grantReadWriteData(createRunFunction);
     props.state.runsTable.grantReadWriteData(createRunFunction);
     props.state.tasksTable.grantReadWriteData(createRunFunction);
@@ -364,6 +375,18 @@ export class ControlApiStack extends AgentsCloudStack {
         authorizer
       });
     }
+
+    // Hermes calls POST /user-engagement/notify via the `phone_user` tool
+    // when the agent wants to ping the user proactively (banner / inline reply).
+    this.api.addRoutes({
+      path: "/user-engagement/notify",
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration(
+        "UserEngagementNotifyIntegration",
+        userEngagementFunction
+      ),
+      authorizer
+    });
 
     new CfnOutput(this, "ControlApiUrl", {
       value: this.api.apiEndpoint,

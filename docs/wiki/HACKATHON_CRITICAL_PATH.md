@@ -18,7 +18,10 @@ Goal recap (per user spec):
 - ✅ DDB tables PAY_PER_REQUEST; no per-user quota tuning needed. See [stacks.md](infrastructure/stacks.md#statestack).
 - ✅ WebSocket relay filters fan-out by `userId` — cross-user leak prevented. See [realtime-api.md](services/realtime-api.md).
 - ✅ ECS Fargate concurrency: one task per run, no manual cap; safe at hackathon scale.
-- ✅ Web app real run loop with admin console.
+- ✅ **Web client redesigned and wired to real backend** (commit `b515e14`): real Cognito, real Control API for every product surface (work-items / runs / artifacts / approvals / surfaces / agent-profiles / admin), real GenUI renderer, workspace switcher.
+- ✅ All Control API surfaces real (no more 501 stubs): `GET /runs`, artifacts read + presigned download, data-source-refs CRUD, surfaces CRUD with validation, approvals CRUD + decision.
+- ✅ **Resident runner real Hermes** (commit `d8c2a22`): image baked with `nousresearch/hermes-agent:latest`, `runAdapter` defaults to `hermes-cli`, manual ECS task `agents-cloud-dev-resident-runner:4` reached OpenAI Codex backend.
+- ✅ Flutter auth + transport layer real (commit `b4d18fc`): Cognito sign-in, `ControlApi` HTTP client, `RealtimeClient` wss client. (Render paths still consume fixtures — see #4 below.)
 
 ---
 
@@ -26,99 +29,89 @@ Goal recap (per user spec):
 
 ### 1. Make the worker actually call a model — see [agent-runtime.md](services/agent-runtime.md)
 
-Today `HERMES_RUNNER_MODE=smoke` returns canned text. Two cheap options:
+✅ **Resolved for the resident runner.** Commit `d8c2a22` baked Hermes into `Dockerfile.resident` (Stage 2 = `nousresearch/hermes-agent:latest`). The smoke adapter was removed; `runAdapter` defaults to `hermes-cli`. Live ECS task reached OpenAI Codex backend (`agents-cloud-dev-resident-runner:4`).
 
-**Option A (fastest):** drop `CliHermesRunner` and inline an Anthropic / OpenAI / Bedrock SDK call in `services/agent-runtime/src/worker.ts` that consumes `OBJECTIVE` and produces a real text artifact. Bake the API key into the ECS task role via Secrets Manager (or just inject as ECS env at synth time for hackathon).
+⚠️ **Stateless smoke worker (the SFN-driven path) still uses smoke mode.** If the demo flow goes through `POST /runs` → SFN → stateless ECS (which is what web's "Create run" does today), it returns canned text. To fix:
 
-**Option B:** rebuild the Dockerfile with the `hermes` binary baked in, set `AGENTS_CLOUD_HERMES_RUNNER_MODE=cli`. Same risk profile, more moving parts.
+- [ ] Bake Hermes into `services/agent-runtime/Dockerfile` like the resident did, OR
+- [ ] Stop using SFN/stateless worker entirely once #2 (resident dispatcher) ships.
+- [ ] Stop hardcoding `seq=2,3,4` in `worker.ts` — use a counter so retries don't crash on conditional writes.
 
-Recommended: **Option A**. Single PR. ~1 day of work.
-
-- [ ] Add `@anthropic-ai/sdk` (or chosen) to `services/agent-runtime/package.json`
-- [ ] Replace `CliHermesRunner` call in `services/agent-runtime/src/worker.ts:25` with real model call
-- [ ] Pass API key via ECS secret/env in `infra/cdk/src/stacks/runtime-stack.ts`
-- [ ] Stop hardcoding `seq=2,3,4` in the worker — use a counter so retries don't crash on conditional writes
+⚠️ Provider quota: the live exercise hit `429 usage_limit_reached` on Codex. Demo needs a billing account with quota.
 
 ### 2. Per-user resident runner dispatch — see [multi-user-routing.md](flows/multi-user-routing.md)
 
-This is the biggest architectural delta vs. what's deployed. Implement the missing piece in `services/control-api/src/create-run.ts`:
+**This is now the #1 hackathon blocker.** The container, image, TaskDef, IAM, Secrets Manager token, and `/wake` endpoint are all real and proven. Only the automated caller is missing.
+
+Implement the missing dispatcher in `services/control-api/src/`:
 
 ```
-on POST /runs:
+on POST /runs (or new POST /agents/{agentId}/wake):
   1. lookup UserRunner by userId  (already real)
   2. if missing or status != "running":
        a. ecs:RunTask  ResidentRunnerTaskDefinition
-          with env USER_ID, RUNNER_ID, RUNNER_API_TOKEN, table names
-       b. write UserRunner row { status: starting, taskArn, runnerEndpoint }
+          with overrides: USER_ID, RUNNER_ID, ORG_ID, WORKSPACE_ID
+          inject RUNNER_API_TOKEN from ResidentRunnerApiToken secret
+          inject HERMES_AUTH_JSON_BOOTSTRAP from HERMES_AUTH_SECRET
+       b. write UserRunner row { status: starting, taskArn, privateIp }
        c. wait for /health to return ok (poll up to 30s)
-  3. POST  http://<runnerEndpoint>:8787/wake
+  3. POST  http://<privateIp>:8787/wake
        Authorization: Bearer <RUNNER_API_TOKEN>
        body: { agentId, runId, taskId, objective }
   4. respond 202 with runId
 ```
 
-- [ ] Add ECS RunTask client + reachability layer to `services/control-api/src/`
-- [ ] Mint `RUNNER_API_TOKEN` per user (random uuid, store on UserRunner row)
-- [ ] Make resident container reachable from Lambda (Cloud Map or internal ALB; see below)
-- [ ] Replace `simple-run` Step Function path with this dispatch (or keep as fallback)
+- [ ] Add `RunTaskCommand` (`@aws-sdk/client-ecs`) caller to `services/control-api/src/runner-dispatcher.ts` (new file)
+- [ ] Add IAM permission to the createRun Lambda role: `ecs:RunTask` scoped to resident family ARN, `iam:PassRole` to resident task role
+- [ ] **Reachability:** simplest hackathon path — have the resident task self-register its private IP in the `UserRunner` row on boot via `POST /user-runners/{runnerId}/heartbeat`. Lambda reads the row and uses the IP. (No ALB, no Cloud Map.)
+- [ ] Update `query-runs.ts` and `create-run.ts` to optionally route through the dispatcher
+- [ ] Add CDK route binding for `POST /agents/{agentId}/wake` → dispatcher Lambda
 
-**Reachability gotcha:** Lambda → resident container needs a network address. Cheapest hackathon path: internal ALB targeting the resident task family with a `userId`/`runnerId` header rule. Or skip ALB and have the resident task self-register its private IP in the `UserRunner` row on boot.
+### 3. Resident runner durable adapters + concurrent agents — see [agent-runtime.md](services/agent-runtime.md)
 
-### 3. Resident runner: durable persistence + concurrent agents — see [agent-runtime.md](services/agent-runtime.md)
+`services/agent-runtime/src/resident-runner.ts` still writes events to local NDJSON only. If the task dies, work is lost. Realtime relay never sees resident events because nothing puts them in `EventsTable`.
 
-Today `services/agent-runtime/src/resident-runner.ts` writes events only to local NDJSON. If the task dies, the work is lost.
+- [ ] Add injectable `EventSink` port → mirrors NDJSON events to `EventsTable` (so realtime relay sees them)
+- [ ] Add `ArtifactSink` port → mirrors artifacts to S3 + `ArtifactsTable` row
+- [ ] Add `RunnerStateStore` port → heartbeats to `UserRunnersTable.lastHeartbeatAt`
+- [ ] Add `SnapshotStore` port → S3 + `RunnerSnapshotsTable` (provisioned, never written today)
+- [ ] Replace serial `for (agent of agents)` loop in `wake()` with `Promise.all` (or worker pool)
+- [ ] Wire `AgentInstancesTable` writes per registered agent
 
-- [ ] Mirror every event from resident NDJSON to `EventsTable` (so realtime relay still works)
-- [ ] Mirror artifacts to S3 + `ArtifactsTable`
-- [ ] Replace serial `for (agent of agents)` loop in `wake()` with `Promise.all` (or worker pool) so concurrent agents per user actually run concurrently
-- [ ] Optional: snapshot to S3 every N minutes using `RunnerSnapshotsTable` (already provisioned)
+### 4. Make Flutter pages consume real providers — see [flutter.md](clients/flutter.md)
 
-### 4. Wire Flutter to live API — see [flutter.md](clients/flutter.md)
+✅ **Auth + transport layer is real after `b4d18fc`.** Sign-in, sign-up, confirm, sign-out, ID token fetch, `controlApiProvider`, `realtimeClientProvider` — all wired.
 
-Currently `apps/desktop_mobile` configures Amplify but never calls anything. Get Flutter to parity for the demo:
+❌ **Page bodies still call `FixtureWorkRepository`.** The remaining work is migrating each render path:
 
-- [ ] Add sign-in screen (Amplify `Authenticator` Flutter widget or manual)
-- [ ] Implement `fetchAuthSession()` to retrieve ID token
-- [ ] Wire `ControlApiClient.createRun(...)` (already coded in `lib/backend_config.dart`) into a Riverpod provider used by the command-center
-- [ ] Add `web_socket_channel` and replicate the web's subscribe/parse/merge loop
-- [ ] Replace `FixtureWorkRepository` with `RemoteWorkRepository` against `/work-items`
+- [ ] Replace `FixtureWorkRepository`/`kanbanWorkRepositoryProvider` calls with reads against `controlApiProvider.listWorkItems(...)` and friends
+- [ ] Wire `_AgentDetailPage` Activity tab to `realtimeClientProvider.subscribeRun(runId)` instead of fixture events
+- [ ] Wire `_ArtifactsTab` to `controlApiProvider.listArtifacts(workItemId)`
+- [ ] Wire `_ApprovalsTab` to a new `ControlApi.listApprovals` (add it — currently `ControlApi` has 8 endpoints, no approvals)
+- [ ] Wire `_GenUiLabPage._LiveGenUiSurfaceCard` to subscribe to `a2ui.delta` events from the realtime client (would also need a producer; see #5)
 
-If time-boxed, pick **just** sign-in + create-run + WebSocket — Work, Approvals, Artifacts can stay fixture for the demo.
+If time-boxed, pick **just** the Agents workspace migration. Demo from web for everything else.
 
-### 5. WorkItems live data on web — see [work-items.md](surfaces/work-items.md)
+### 5. Have agents emit `tool.approval` and `a2ui.delta` events
 
-The API works; only the client is fixture. Easy win.
+The clients render both, but no producer fires them in the wild today. Local harness emits `tool.approval` already (`services/agent-runtime/src/local-harness.ts:365`); generalizing to the live worker is the work.
 
-- [ ] Add `listControlApiWorkItems()` / `createControlApiWorkItem()` to `apps/web/lib/control-api.ts`
-- [ ] Replace `listFixtureWorkItems()` in `apps/web/components/work-dashboard.tsx`
-- [ ] Wire CommandCenter "submit objective" to optionally create a WorkItem first, then a child Run
+- [ ] In resident runner adapter, gate medium/high-risk tools on a `tool.approval` request envelope (`buildToolApprovalEvent({kind: "request", ...})`).
+- [ ] Resident runner pauses agent until `POST /approvals/{id}/decision` writes the decision back into `EventsTable`.
+- [ ] In resident runner, after a successful tool/output that should yield UI, emit `buildCanonicalEvent({type: "a2ui.delta", payload: {surfaceId, catalogId, message: {createSurface | updateComponents}}})`.
+- [ ] Web `<GenUiSurface/>` already renders surfaces fetched via `/work-items/:id/surfaces`; for live patches, subscribe to `a2ui.delta` events on the run channel.
 
-### 6. `GET /runs` user-listing — see [runs-and-tasks.md](surfaces/runs-and-tasks.md)
+### 6. ~~`GET /runs` user-listing~~
 
-GSI exists, handler doesn't. ~30 lines of code.
+✅ Done in commit `f550bad`.
 
-- [ ] Add `listRunsForUser(userId, limit, cursor)` to `services/control-api/src/dynamo-store.ts` using `by-user-created-at`
-- [ ] Add handler dispatch in `handlers.ts` and route in `control-api-stack.ts`
-- [ ] Web fetcher and a "Recent runs" section on home page
+### 7. ~~Artifacts read endpoints~~
 
-### 7. Artifacts read endpoints — see [artifacts.md](surfaces/artifacts.md)
+✅ Done in commits `76505c3` (read endpoints) and `0c60353` (presigned download). Web `<ArtifactsBoard/>` consumes them.
 
-Worker already produces them; only reads are 501.
+### 8. ~~Approvals~~
 
-- [ ] Replace `notImplementedArtifactsHandler` in `services/control-api/src/handlers.ts:379`
-- [ ] Add `ArtifactStore` interface + Dynamo impl
-- [ ] Sign S3 URLs (presigned GET) for `previewUrl`
-- [ ] Web: ArtifactCard already exists in `apps/web/lib/run-ledger.ts:11`; just wire to `/artifacts` on the run detail
-
-### 8. Approvals (only if a demo flow needs it)
-
-If the hackathon storyline includes "agent asks user for permission to do X":
-
-- [ ] Worker emits `tool.approval` request envelope (`buildToolApprovalEvent`)
-- [ ] New `POST /approvals/{approvalId}/decision` route writes a decision envelope back into `EventsTable`
-- [ ] Web subscribes via existing realtime, renders Approve/Reject buttons
-
-If not in demo storyline, skip — see [gaps.md](gaps.md).
+✅ Done in commit `f550bad` (API) and `b515e14` (web `<ApprovalsBoard/>` UI). Outstanding: worker producer (covered in #5).
 
 ---
 
@@ -142,14 +135,12 @@ See [gaps.md](gaps.md) for the full skip list.
 
 | # | Task | Rough size |
 |---|---|---|
-| 1 | Real model call in worker | 4–6 hr |
-| 2 | Resident runner dispatch | 1–2 days |
-| 3 | Resident runner durable persistence | 4–6 hr |
-| 4 | Flutter live integration | 1 day |
-| 5 | WorkItems live web | 2–3 hr |
-| 6 | `GET /runs` listing | 1 hr |
-| 7 | Artifacts read endpoints | 2–3 hr |
-| 8 | Approvals (optional) | half day |
+| 1 | Stateless smoke worker → real (or retire path) | 0–6 hr (already done in resident; pick a route) |
+| 2 | **Resident runner dispatcher** (#1 blocker) | 1–2 days |
+| 3 | Resident runner durable adapters | half day |
+| 4 | Flutter render paths consume real providers | half day per page |
+| 5 | Worker producers for `tool.approval` and `a2ui.delta` | half day |
 
-If you have **2 days**, ship 1, 2, 5, 6, 7. Skip Flutter live (use web), skip approvals.
-If you have **4 days**, add 3 + 4.
+If you have **1 day**, ship #2 only. Demo from web. Single user via the dispatcher.
+If you have **2 days**, add #3 (durable adapters) so multi-user actually persists.
+If you have **3+ days**, add #5 (real approval / GenUI events) and #4 (Flutter parity).

@@ -95,21 +95,38 @@ Full forensic trace with file:line citations: [run-creation.md](flows/run-creati
  └────────────┘    └────────────┘    └────────────┘
 ```
 
-**Reality today:**
+**Reality today (after `d8c2a22`, `febccc1`, `1deaf57`):**
 
 ```
    user A              user B              user C
      │                   │                   │
      ▼                   ▼                   ▼
  ┌─────────────────────────────────────────────────┐
- │ Step Functions simple-run                       │
- │ (one stateless ECS Fargate task per run)        │
- │ launches agent-runtime image (smoke worker)     │
- │ does NOT route by userId, does NOT reuse runner │
+ │ Step Functions simple-run (DEFAULT path)        │
+ │ One stateless ECS Fargate task per run          │
+ │ Smoke worker (HERMES_RUNNER_MODE=smoke)         │
+ │ Does NOT route by userId, does NOT reuse runner │
+ └─────────────────────────────────────────────────┘
+
+       (separately, manually launchable)
+              │
+              ▼
+ ┌─────────────────────────────────────────────────┐
+ │ ResidentRunner Fargate task                     │
+ │ Image baked with real Hermes (Stage 2 =         │
+ │   nousresearch/hermes-agent:latest)             │
+ │ Hermes-cli adapter (smoke removed)              │
+ │ Bearer-token-gated /wake on :8787               │
+ │ Live ECS proof: agents-cloud-dev-resident-      │
+ │   runner:4 reached OpenAI Codex                 │
+ │                                                 │
+ │ MISSING: dispatcher to call ecs:RunTask for it  │
+ │ MISSING: reachability layer (Cloud Map / IP)    │
+ │ MISSING: durable adapters (events → DDB, etc.)  │
  └─────────────────────────────────────────────────┘
 ```
 
-The resident-runner Docker image, TaskDefinition, in-process server, and HTTP API all exist. **The dispatcher that calls `ecs:RunTask` for it does not.** The `UserRunners` DDB table is provisioned and writable but no scheduler reads `desiredState` and acts on it.
+The resident-runner Docker image, TaskDefinition, in-process server, HTTP API, Hermes binary, and Secrets Manager token all exist and have been proven. **The dispatcher that calls `ecs:RunTask` for it from `services/control-api/src/` does not exist yet.** The `UserRunners` DDB table is provisioned and writable but no scheduler reads `desiredState` and acts on it.
 
 Full analysis: [multi-user-routing.md](flows/multi-user-routing.md), [agent-runtime.md](services/agent-runtime.md).
 

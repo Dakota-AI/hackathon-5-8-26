@@ -47,9 +47,18 @@ Backed by `ApprovalStore` against `ApprovalsTable` (PK `workspaceId`, SK `approv
 
 `tool.approval` flows through EventsTable → DDB stream → relay. No dedicated subscription topic.
 
-### Web UI — 🔘
+### Web UI — ✅ live (since commit `b515e14`)
 
-The work-dashboard renders fixture approval lines (`apps/web/components/work-dashboard.tsx:161-168`); the live command-center has no approval surface.
+- `apps/web/app/(console)/approvals/page.tsx` — `<ApprovalsBoard/>` route.
+- `apps/web/components/app/approvals-board.tsx`:
+  1. `listControlApiWorkItems({workspaceId, limit:25})`.
+  2. Fan out to `listControlApiWorkItemRuns` → unique runIds (capped 50).
+  3. Fan out to `listControlApiRunApprovals` per runId.
+  4. Render each pending approval with risk pill, tool name, status, last-8 of runId, requested action, JSON `argumentsPreview`, optional reason.
+  5. **Approve / Deny buttons POST `decideControlApiApproval({workspaceId, approvalId, decision})`.** Returned record replaces the row in state.
+- ⚠️ "Request revision" button hard-disabled (no backend route).
+- ⚠️ No reason input field (API accepts `reason`, UI doesn't collect it).
+- Demo cards (`<DemoApprovals/>`) render for signed-out visitors.
 
 ### Flutter UI — ⚠️ fixture
 
@@ -64,16 +73,17 @@ The work-dashboard renders fixture approval lines (`apps/web/components/work-das
 | API | ✅ implemented |
 | Worker | ⚠️ harness only (live worker doesn't emit `tool.approval` requests yet) |
 | Realtime | ✅ (carries the event) |
-| Web | 🔘 (no Approve/Reject UI in command-center) |
-| Flutter | ⚠️ fixture |
+| Web | ✅ ApprovalsBoard with Approve/Deny POST |
+| Flutter | ⚠️ fixture (buttons disabled) |
 
 ### What needs to ship (only if demo storyline includes approvals)
 
 - [x] ~~Add `ApprovalsStore` and routes~~ — done; `POST /approvals`, `GET /approvals`, `GET /runs/{runId}/approvals`, `POST /approvals/{approvalId}/decision` are live
 - [x] ~~Implement `approvalsHandler`~~ — done
+- [x] ~~Web Approvals UI with Approve/Reject POSTing decisions~~ — done at `/approvals`
 - [ ] Have worker (or resident-runner) gate risky tool calls and emit `tool.approval` requests, mirroring `local-harness.ts:365`
-- [ ] Add Approvals card to web command-center subscribing to `tool.approval` events with Approve/Reject buttons (POSTs to `/approvals/{id}/decision`)
-- [ ] (Flutter) replace fixture cards in `_ApprovalQueuePanel` with the same fetch
+- [ ] Add reason input to web ApprovalsBoard (API already accepts `reason`)
+- [ ] (Flutter) replace fixture cards in `_ApprovalQueuePanel` with `controlApiProvider`-backed fetch
 
 ---
 

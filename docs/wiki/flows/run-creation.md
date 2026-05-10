@@ -20,17 +20,19 @@ The control-api and worker share this builder via the `@agents-cloud/protocol` w
 
 ## 1. UI → Control API
 
-User submits the objective in `apps/web/components/command-center.tsx:233` (`onSubmit`). Form posts:
+After commit `b515e14`, the entry points are `apps/web/components/app/hero-command-panel.tsx` (on `/`) and `apps/web/components/app/runs-chat.tsx` (on `/runs`). Both use `<WorkspaceProvider>` for the active workspaceId (no longer hardcoded). Form posts:
 
 ```
-POST {NEXT_PUBLIC_AGENTS_CLOUD_API_URL}/runs
+POST {NEXT_PUBLIC_AGENTS_CLOUD_API_URL}/runs        # via createControlApiRun
+   or
+POST /work-items/{workItemId}/runs                  # via startControlApiWorkItemRun
 Authorization: Bearer <Cognito ID token>
-Body: { workspaceId: "workspace-web", objective, idempotencyKey }
+Body: { workspaceId, objective, idempotencyKey }
 ```
 
-- `createControlApiRun` at `apps/web/lib/control-api.ts:157`.
-- ⚠️ `workspaceId` is **hardcoded `"workspace-web"`** at `command-center.tsx:251`. All web users share one workspace key.
-- Idempotency key is a deterministic browser hash `web-<base36-time>-<hash>` (`control-api.ts:515`); refresh within the same second collapses to same run.
+- `createControlApiRun` and `startControlApiWorkItemRun` in `apps/web/lib/control-api.ts`.
+- `workspaceId` comes from `useWorkspace()` — defaults to `workspace-web`, persisted in `localStorage["agents-cloud:workspace"]`, switchable via `<WorkspaceSwitcher/>`.
+- Idempotency key is a deterministic browser hash; refresh within the same second collapses to same run.
 
 API Gateway routes `POST /runs` to `CreateRunFunction` Lambda with the `HttpJwtAuthorizer` (Cognito-verified ID token).
 
@@ -173,17 +175,20 @@ Handler `services/realtime-api/src/relay.ts:7-17`:
 
 ---
 
-## 8. WebSocket → web client
+## 8. WebSocket → web client (BYPASSED — clients poll instead)
 
-WebSocket `$connect` goes through `authorizerHandler` (`services/realtime-api/src/auth.ts:30-48`), `aws-jwt-verify` against the same Cognito user pool. Verified `sub` becomes the connection's `userId`, persisted on connect (`handlers.ts:33-46`). `subscribeRun` (handlers.ts:75-83) writes a topic row including `userId`.
+The WebSocket `$connect` path is real and deployable:
+- `services/realtime-api/src/auth.ts:30-48` — `aws-jwt-verify` against Cognito user pool.
+- `handlers.ts:33-46` — verified `sub` persisted on connection record.
+- `subscribeRun` (handlers.ts:75-83) writes a topic row including `userId`.
 
-Web subscriber: `apps/web/components/command-center.tsx:153-231`:
-1. After `createControlApiRun` returns, opens `new WebSocket(buildRealtimeWebSocketUrl(url, idToken))`.
-2. Sends `subscribeRun`.
-3. Merges incoming events via `parseRealtimeRunEvent` → `mergeRunEvents`.
-4. Polls `GET /runs/{runId}/events?afterSeq=...` every 7.5s as backfill.
+⚠️ **No client subscribes today.** After commit `b515e14`'s redesign, the web UI uses HTTP polling exclusively:
+- `apps/web/components/app/runs-chat.tsx` — polls `listControlApiRunEvents(runId, {limit:50})` every 2.5 s for active runs.
+- `apps/web/components/app/hero-command-panel.tsx` — polls every 4 s.
 
-✅ **Real.** Cognito ID token verified at WS handshake; userId pinned to connection record.
+`apps/web/lib/realtime-client.ts` ships with `getRealtimeApiHealth`, `buildRealtimeWebSocketUrl`, `serializeSubscribeRunMessage`, `parseRealtimeRunEvent` helpers — but no component constructs a `WebSocket`. Flutter has the same gap (`realtimeClientProvider` declared, never read).
+
+✅ **Backend WebSocket is real.** Infrastructure is ready as soon as a client subscribes — relay-side userId filter prevents cross-user delivery.
 
 ---
 

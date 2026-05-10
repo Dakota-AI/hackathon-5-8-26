@@ -1,7 +1,7 @@
 # Agents Cloud — System Wiki
 
-> **Last audit:** 2026-05-10
-> **Stage:** Foundation deployed, first vertical slice live, ~30–35% of full vision.
+> **Last audit:** 2026-05-10 (refresh after `b515e14` web redesign + `b4d18fc` Flutter auth gate + `d8c2a22` real Hermes resident runner)
+> **Stage:** Foundation deployed, all product surfaces wired end-to-end on web, resident runner image proven on ECS. Per-user dispatcher and concurrent-agent durable adapters are the remaining gaps.
 > **Hackathon goal:** multiple users running agents concurrently. One ECS resident container per user, multiple logical agents inside, **table-routing-by-userId** for access control. Skip deep IAM, AccessCodes, Workspaces ACLs, Cloudflare.
 
 This wiki is the single source of truth for what is currently built, what is partially built, and what is missing. Each page has a status checklist and links to related pages.
@@ -103,28 +103,27 @@ Status legend: ✅ done · ⚠️ partial · ❌ stub · 🔘 nothing
 - 10 CDK stacks deployed, `CREATE_COMPLETE` in `agents-cloud-dev` (account 625250616301, us-east-1)
 - 14 DynamoDB tables (PAY_PER_REQUEST, no concurrency cap)
 - Cognito JWT propagated through every layer (HTTP + WebSocket)
-- `POST /runs` → Step Functions → ECS Fargate → DynamoDB → DDB streams → WebSocket → web command center
-- Web admin console: runner fleet, lineage timeline, agent workshop, failures
-- AWS-native realtime, no Cloudflare dependency
+- `POST /runs` → Step Functions → ECS Fargate → DynamoDB → DDB streams → WebSocket → web client
+- All product API surfaces real: WorkItems / Runs / Events / Artifacts (with presigned download) / Approvals / Surfaces (with validation) / DataSourceRefs / AgentProfiles / RunnerState / Admin
+- Web client redesigned (commit `b515e14`): real Cognito auth, real Control API for every product surface, real GenUI renderer, workspace switcher
+- Flutter client (commit `b4d18fc`): real Amplify Cognito sign-in/sign-up/confirm, real `ControlApi` HTTP client, real `RealtimeClient` wss client — but page bodies still consume `FixtureWorkRepository` (providers declared, not yet read)
+- Resident runner: real Hermes baked into image (`d8c2a22`), `runAdapter` defaults to `hermes-cli` (smoke removed), live ECS task `agents-cloud-dev-resident-runner:4` proven to reach OpenAI Codex backend
 
 ⚠️ **Partial / fragile:**
-- Worker is `HERMES_RUNNER_MODE=smoke` — no real model invocation. Image has no `hermes` binary.
-- Resident runner image and TaskDefinition exist; **no scheduler ever calls `ecs:RunTask`** for them.
+- Stateless smoke worker still has `HERMES_RUNNER_MODE=smoke` — no real model in the SFN-driven path.
+- **Resident runner has no automated dispatcher** — only operator-driven `aws ecs run-task` triggers it. No `ecs:RunTask` caller for the resident family in the codebase.
 - Worker hardcodes `seq=2,3,4` — any retry crashes on conditional-check failures.
-- Web `WorkDashboard` is fixture-only (real data not fetched).
-- Web hardcodes `workspaceId: "workspace-web"` — all users share one workspace key.
-- Flutter has Amplify configured but **never calls Control API or WebSocket**. UI is static literals.
+- Realtime fanout exists (DDB Streams → relay → WebSocket) but no client consumes WebSocket — web polls every 2.5–4 s, Flutter doesn't subscribe at all.
 - `subscribeRun` doesn't verify run ownership (mitigated only by event userId filter on relay).
+- Workspace IDs are seeded client-side; no `/workspaces` discovery API; backend doesn't validate userId-to-workspace membership.
 
 ❌ **Missing / stub:**
-- Per-user runner placement (the "one ECS per user with N agents inside" model)
-- ~~`Artifacts`, `DataSourceRefs`, `Surfaces` HTTP routes return 501~~ — **now implemented**
-- ~~`Approvals` no route~~ — **now implemented**
-- `Notifications` doesn't exist at any layer
-- ~~No `GET /runs` user listing endpoint~~ — **now implemented**
-- Worker producers for `tool.approval` and `a2ui.delta` events still missing
-- No CI, no e2e tests, no production observability dashboards
-- `ADMIN_EMAILS` hardcoded to `seb4594@gmail.com` in CDK source
+- **Per-user runner placement / dispatcher** (the "one ECS per user with N agents inside" model) — image, TaskDef, IAM, secrets all there; the caller is missing.
+- Worker producers for `tool.approval` and `a2ui.delta` events (clients render them, no producer fires them).
+- Resident runner durable adapters (events to DDB, artifacts to S3, snapshots to `RunnerSnapshotsTable`) — currently local FS only.
+- `Notifications` doesn't exist at any layer.
+- No CI, no e2e tests, no production observability dashboards.
+- `ADMIN_EMAILS` hardcoded to `seb4594@gmail.com` in CDK source.
 
 ---
 

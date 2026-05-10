@@ -16,6 +16,7 @@ class _Palette {
   static const text = Color(0xFFF5F5F5);
   static const muted = Color(0xFFA3A3A3);
   static const danger = Color(0xFFEF4444);
+  static const info = Color(0xFFA3A3A3);
 }
 
 class SignInPage extends ConsumerStatefulWidget {
@@ -26,7 +27,7 @@ class SignInPage extends ConsumerStatefulWidget {
 }
 
 class _SignInPageState extends ConsumerState<SignInPage> {
-  int _tab = 0; // 0 = sign in, 1 = sign up, 2 = confirm
+  int _tab = 0; // 0 = sign in, 1 = sign up
 
   final _signInEmail = TextEditingController();
   final _signInPassword = TextEditingController();
@@ -34,7 +35,6 @@ class _SignInPageState extends ConsumerState<SignInPage> {
   final _signUpEmail = TextEditingController();
   final _signUpPassword = TextEditingController();
 
-  final _confirmEmail = TextEditingController();
   final _confirmCode = TextEditingController();
 
   @override
@@ -43,7 +43,6 @@ class _SignInPageState extends ConsumerState<SignInPage> {
     _signInPassword.dispose();
     _signUpEmail.dispose();
     _signUpPassword.dispose();
-    _confirmEmail.dispose();
     _confirmCode.dispose();
     super.dispose();
   }
@@ -59,34 +58,39 @@ class _SignInPageState extends ConsumerState<SignInPage> {
     await ref
         .read(authControllerProvider.notifier)
         .signUp(email, _signUpPassword.text);
-    final state = ref.read(authControllerProvider);
+  }
+
+  Future<void> _onConfirm(String email) async {
+    await ref
+        .read(authControllerProvider.notifier)
+        .confirmSignUp(email, _confirmCode.text.trim());
     if (!mounted) return;
-    if (state.errorMessage == null) {
-      setState(() {
-        _tab = 2;
-        if (_confirmEmail.text.isEmpty) _confirmEmail.text = email;
-      });
+    final state = ref.read(authControllerProvider);
+    if (state.errorMessage == null && !state.needsConfirmation) {
+      _confirmCode.clear();
+      // Pre-populate the sign-in form with the confirmed email.
+      if (_signInEmail.text.isEmpty) _signInEmail.text = email;
+      setState(() => _tab = 0);
     }
   }
 
-  Future<void> _onConfirm() async {
+  Future<void> _onResend(String email) async {
     await ref
         .read(authControllerProvider.notifier)
-        .confirmSignUp(_confirmEmail.text.trim(), _confirmCode.text.trim());
-    final state = ref.read(authControllerProvider);
-    if (!mounted) return;
-    if (state.errorMessage == null) {
-      setState(() {
-        _tab = 0;
-        if (_signInEmail.text.isEmpty) _signInEmail.text = _confirmEmail.text;
-      });
-    }
+        .resendConfirmationCode(email);
+  }
+
+  void _cancelConfirm() {
+    _confirmCode.clear();
+    ref.read(authControllerProvider.notifier).cancelConfirmation();
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final busy = auth.status == AuthStatus.signingIn;
+    final inConfirmFlow =
+        auth.needsConfirmation && (auth.pendingConfirmEmail?.isNotEmpty ?? false);
 
     return Scaffold(
       backgroundColor: _Palette.background,
@@ -107,68 +111,9 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                       border: Border.all(color: _Palette.border),
                     ),
                     padding: const EdgeInsets.all(22),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: _Palette.background,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: _Palette.border),
-                            ),
-                            child: const Icon(
-                              RadixIcons.cube,
-                              size: 18,
-                              color: _Palette.text,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        const Text(
-                          'Agents Cloud',
-                          style: TextStyle(
-                            color: _Palette.text,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Sign in to continue',
-                          style: TextStyle(color: _Palette.muted, fontSize: 13),
-                        ),
-                        const SizedBox(height: 18),
-                        Tabs(
-                          index: _tab,
-                          onChanged: busy
-                              ? (_) {}
-                              : (i) => setState(() => _tab = i),
-                          children: const [
-                            TabItem(child: Text('Sign in')),
-                            TabItem(child: Text('Sign up')),
-                            TabItem(child: Text('Confirm')),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        _buildTabBody(busy),
-                        if (auth.errorMessage != null) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            auth.errorMessage!,
-                            style: const TextStyle(
-                              color: _Palette.danger,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+                    child: inConfirmFlow
+                        ? _buildConfirmCard(auth, busy)
+                        : _buildAuthCard(auth, busy),
                   ),
                   const SizedBox(height: 14),
                   Button.ghost(
@@ -190,16 +135,169 @@ class _SignInPageState extends ConsumerState<SignInPage> {
     );
   }
 
-  Widget _buildTabBody(bool busy) {
-    switch (_tab) {
-      case 1:
-        return _buildSignUp(busy);
-      case 2:
-        return _buildConfirm(busy);
-      case 0:
-      default:
-        return _buildSignIn(busy);
-    }
+  // ---- Sign in / Sign up card ----------------------------------------
+
+  Widget _buildAuthCard(AuthState auth, bool busy) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildHeader(
+          title: 'Agents Cloud',
+          subtitle: _tab == 0
+              ? 'Sign in to continue'
+              : 'Create an account to get started',
+        ),
+        const SizedBox(height: 18),
+        Tabs(
+          index: _tab,
+          onChanged: busy ? (_) {} : (i) => setState(() => _tab = i),
+          children: const [
+            TabItem(child: Text('Sign in')),
+            TabItem(child: Text('Sign up')),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _tab == 0 ? _buildSignIn(busy) : _buildSignUp(busy),
+        if (auth.infoMessage != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            auth.infoMessage!,
+            style: const TextStyle(
+              color: _Palette.info,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+        if (auth.errorMessage != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            auth.errorMessage!,
+            style: const TextStyle(
+              color: _Palette.danger,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ---- Confirm card (replaces the auth tabs entirely while needed) ----
+
+  Widget _buildConfirmCard(AuthState auth, bool busy) {
+    final email = auth.pendingConfirmEmail ?? '';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildHeader(
+          title: 'Verify your email',
+          subtitle: 'Enter the 6-digit code sent to $email.',
+        ),
+        const SizedBox(height: 18),
+        TextField(
+          controller: _confirmCode,
+          enabled: !busy,
+          keyboardType: TextInputType.number,
+          placeholder: const Text('Verification code'),
+          onSubmitted: (_) => busy ? null : _onConfirm(email),
+        ),
+        const SizedBox(height: 14),
+        _buildPrimaryRow(
+          busy: busy,
+          label: 'Verify and continue',
+          onPressed: () => _onConfirm(email),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Button.ghost(
+              enabled: !busy,
+              onPressed: busy ? null : _cancelConfirm,
+              child: const Text(
+                'Back',
+                style: TextStyle(color: _Palette.muted, fontSize: 12),
+              ),
+            ),
+            Button.ghost(
+              enabled: !busy,
+              onPressed: busy ? null : () => _onResend(email),
+              child: const Text(
+                'Resend code',
+                style: TextStyle(color: _Palette.muted, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        if (auth.infoMessage != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            auth.infoMessage!,
+            style: const TextStyle(
+              color: _Palette.info,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+        if (auth.errorMessage != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            auth.errorMessage!,
+            style: const TextStyle(
+              color: _Palette.danger,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ---- Shared bits ----------------------------------------------------
+
+  Widget _buildHeader({required String title, required String subtitle}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: _Palette.background,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _Palette.border),
+            ),
+            child: const Icon(
+              RadixIcons.cube,
+              size: 18,
+              color: _Palette.text,
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          title,
+          style: const TextStyle(
+            color: _Palette.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: const TextStyle(color: _Palette.muted, fontSize: 13),
+        ),
+      ],
+    );
   }
 
   Widget _buildSignIn(bool busy) {
@@ -253,7 +351,7 @@ class _SignInPageState extends ConsumerState<SignInPage> {
           controller: _signUpPassword,
           enabled: !busy,
           obscureText: true,
-          placeholder: const Text('Password'),
+          placeholder: const Text('Password (8+ characters)'),
           onSubmitted: (_) => busy ? null : _onSignUp(),
         ),
         const SizedBox(height: 14),
@@ -262,29 +360,6 @@ class _SignInPageState extends ConsumerState<SignInPage> {
           label: 'Create account',
           onPressed: _onSignUp,
         ),
-      ],
-    );
-  }
-
-  Widget _buildConfirm(bool busy) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: _confirmEmail,
-          enabled: !busy,
-          placeholder: const Text('Email'),
-          keyboardType: TextInputType.emailAddress,
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _confirmCode,
-          enabled: !busy,
-          placeholder: const Text('Confirmation code'),
-          onSubmitted: (_) => busy ? null : _onConfirm(),
-        ),
-        const SizedBox(height: 14),
-        _buildPrimaryRow(busy: busy, label: 'Confirm', onPressed: _onConfirm),
       ],
     );
   }

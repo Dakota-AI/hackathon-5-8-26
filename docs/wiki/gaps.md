@@ -80,22 +80,20 @@ These are different from the skip list — they're missing features that affect 
 
 #### Severity 1 — blocks the headline demo
 
-1. **No real model invocation in worker.** `HERMES_RUNNER_MODE=smoke` returns canned text. Image has no `hermes` binary. Without this, agents don't actually do anything.
-   - Fix: half a day. See [agent-runtime.md](services/agent-runtime.md), [HACKATHON_CRITICAL_PATH.md#1](HACKATHON_CRITICAL_PATH.md).
+1. ~~**No real model invocation in worker.**~~ ✅ **Resolved for resident runner** in commit `d8c2a22`. Image bakes Hermes; `runAdapter` defaults to `hermes-cli`; live ECS task reached OpenAI Codex. ⚠️ Stateless SFN-driven worker still uses smoke. ⚠️ Provider quota hit `429` — needs billing.
 
-2. **No userId → resident runner dispatch.** The "one ECS per user" architecture is unwired. `createRun` always spawns a fresh stateless ECS task via Step Functions; nothing reads `UserRunnersTable` or starts a resident container.
+2. **No userId → resident runner dispatch.** The "one ECS per user" architecture has every component built — image, TaskDef, IAM, Secrets Manager `RUNNER_API_TOKEN` token, `/wake` endpoint, manual ECS proof — except the dispatcher. **Currently the #1 hackathon blocker.**
    - Fix: 1–2 days. See [multi-user-routing.md](flows/multi-user-routing.md), [HACKATHON_CRITICAL_PATH.md#2](HACKATHON_CRITICAL_PATH.md).
 
-3. **No scheduler that calls `ecs:RunTask` for ResidentRunner.** Image is built and pushed, TaskDef exists, IAM is granted, but no caller exists. Required for #2.
-   - Fix: included in #2.
+3. **Resident runner reachability layer.** Even after a task launches, no Cloud Map / Service Discovery / internal ALB target maps `userId → endpoint`. Lambda has no way to call `/wake` — needs the task to register its private IP in `UserRunnersTable` on boot, or a Cloud Map service.
+   - Fix: ~half day, included in #2.
 
 #### Severity 2 — degrades the demo
 
-4. **Resident-runner persists to local FS only.** No DDB/S3 mirror. Task death = lost state.
-   - Fix: a few hours. See [agent-runtime.md](services/agent-runtime.md).
+4. **Resident runner persists to local FS only.** No DDB/S3 mirror. Task death = lost state. Realtime relay never sees resident events because nothing puts them in `EventsTable`.
+   - Fix: half a day to wire `EventSink → EventsTable`, `ArtifactSink → S3 + ArtifactsTable`, `RunnerStateStore → UserRunnersTable`, `SnapshotStore → S3 + RunnerSnapshotsTable`. See [agent-runtime.md](services/agent-runtime.md).
 
-5. **`RUNNER_API_TOKEN` provisioning undefined.** Server requires it in ECS mode but no stack mints/injects it.
-   - Fix: ~1 hour, included in #2.
+5. ~~**`RUNNER_API_TOKEN` provisioning.**~~ ✅ Resolved in `1deaf57` — `ResidentRunnerApiToken` Secrets Manager secret is provisioned in CDK. Dispatcher (#2) needs to inject it.
 
 6. **Resident `wake()` is a serial loop.** Multiple agents in one runner can't run concurrently.
    - Fix: ~30 minutes — change `for` to `Promise.all`.
@@ -103,26 +101,30 @@ These are different from the skip list — they're missing features that affect 
 7. **Worker hardcodes `seq=2,3,4`.** Any retry crashes on conditional-check failures. ECS Spot interruption breaks runs.
    - Fix: ~1 hour.
 
+8. **Worker producers for `tool.approval` and `a2ui.delta` events missing.** Web/Flutter both render them; nothing fires them in production. Local harness already shows the pattern (`local-harness.ts:365`). Resident runner needs the same.
+   - Fix: half day.
+
 #### Severity 3 — UX papercuts
 
 8. ~~**No `GET /runs` user listing.**~~ ✅ **Resolved** — endpoint exists.
 
-9. **WorkDashboard fixture-only on both clients.** API exists, only client is unwired.
-   - Fix: ~2–3 hours web; ~1 day Flutter.
+9. ~~**WorkDashboard fixture-only on web.**~~ ✅ **Resolved on web** in commit `b515e14`. Flutter pages still consume `FixtureWorkRepository` even though `controlApiProvider` is wired — see [flutter.md](clients/flutter.md).
 
-10. ~~**Artifacts read endpoints return 501.**~~ ✅ **Resolved** — `/runs/{id}/artifacts`, `/work-items/{id}/artifacts`, `/runs/{id}/artifacts/{artifactId}`, and `/runs/{id}/artifacts/{artifactId}/download` are live. Web/Flutter still need to render them.
+10. ~~**Artifacts read endpoints return 501.**~~ ✅ **Resolved** — list, get, presigned download all live. ✅ Web `<ArtifactsBoard/>` renders with download buttons. ⚠️ Flutter still fixture.
 
-11. **Web hardcodes `workspaceId: "workspace-web"`.** All users land in one workspace partition. Cross-tenant rows aren't leaked thanks to userId filters, but admin views show everyone's stuff.
-    - Fix: ~30 minutes.
+11. ~~**Web hardcodes `workspaceId: "workspace-web"`.**~~ ✅ **Resolved** — `<WorkspaceProvider>` + `<WorkspaceSwitcher>` in commit `b515e14`. Default still `workspace-web`, but switchable and persisted. ⚠️ Backend doesn't validate userId-to-workspace membership.
 
 12. **`ADMIN_EMAILS` hardcoded in CDK source** — only `seb4594@gmail.com`. To add admins requires source edit + redeploy.
     - Fix: ~5 minutes for the demo (edit + redeploy) or properly env-driven.
 
-13. **Flutter has Amplify configured but no live API/WebSocket calls.** Sign-in UI missing, ID token never retrieved, ControlApiClient never instantiated.
-    - Fix: ~1 day. Or skip and demo from web only.
+13. ~~**Flutter has Amplify configured but no live API/WebSocket calls.**~~ ⚠️ **Partially resolved** in commit `b4d18fc`. Sign-in UI added, ID token retrieved, `ControlApi` and `RealtimeClient` providers declared — but **page bodies still call `FixtureWorkRepository`**. Render paths haven't been migrated to consume the providers.
+    - Fix: ~half day per page (Agents → Kanban → Approvals → Artifacts).
 
 14. **`subscribeRun` doesn't verify ownership.** Topic-squatting possible. Mitigated by relay userId filter.
     - Fix: ~30 minutes.
+
+15. **Web realtime helpers exist but no consumer.** `lib/realtime-client.ts` is implemented; chat polls every 2.5 s instead. Cheap migration win.
+    - Fix: ~1 hour.
 
 #### Severity 4 — nice to have
 
@@ -136,23 +138,18 @@ These are different from the skip list — they're missing features that affect 
 
 ## Recommended trim — what NOT to build for hackathon
 
-Even within the critical path, these can be deferred:
+Most of what I previously called "skippable" has already shipped (artifacts handler, surfaces handler, approvals routes, GenUI renderer, web redesign, real Hermes resident image). What's still genuinely deferrable:
 
-- ❌ Don't build a separate `services/agent-manager/`. Add the dispatcher inside `create-run.ts`.
 - ❌ Don't enable the PreviewIngressStack. Skip preview hosting entirely.
-- ❌ Don't implement Approvals routes unless the demo storyline includes them.
-- ❌ Don't ship validated GenUI rendering. The Flutter local seed demonstrates the capability if needed.
-- ❌ Don't build DataSourceRefs.
 - ❌ Don't build Notifications.
-- ❌ Don't wire Flutter live integration — demo from web only. Flutter remains in the wiki as roadmap.
+- ❌ Don't wire Flutter live integration — demo from web only. Flutter has the auth + transport layer; pages can stay fixture for the demo.
+- ❌ Don't implement local Docker host supervisor (Phase 3 from `USER_RUNNER_LOCAL_ECS_ARCHITECTURE.md`). Use `ecs-fargate` only.
+- ❌ Don't build a separate `services/agent-manager/` — the dispatcher belongs inside `services/control-api/src/`.
 
-This narrows the critical path to ~3 days of work:
-1. Real model in worker (½ day)
-2. Resident-runner dispatcher in control-api (1–2 days)
-3. Resident-runner durable persistence + concurrent agents (½ day)
-4. WorkDashboard live data on web (½ day)
-5. `GET /runs` user listing + Artifacts handler (½ day)
-
-Plus 1–2 hours of polish for hardcoded `ADMIN_EMAILS` / `workspaceId` / etc.
+This narrows the critical path to ~2 days of work:
+1. Resident-runner dispatcher in control-api (1–2 days) — **the only severity-1 blocker**
+2. Resident-runner durable adapters (½ day) so multi-user actually persists
+3. (Optional, if demo uses approvals) worker producer for `tool.approval` (½ day)
+4. (Optional polish) flip web from polling to WebSocket (~1 hour), env-driven `ADMIN_EMAILS` (~5 minutes)
 
 [→ HACKATHON_CRITICAL_PATH](HACKATHON_CRITICAL_PATH.md) · [→ STATUS](STATUS.md) · [← wiki index](README.md)

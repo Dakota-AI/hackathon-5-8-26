@@ -47,11 +47,12 @@ Local harness equivalent: `local-harness.ts:402-420`.
 
 `artifact.created` envelope lands in EventsTable and rides the same DDB-stream path as run.status. No dedicated topic.
 
-## Web UI — ⚠️ via run only
+## Web UI — ✅ dedicated artifacts board (since commit `b515e14`)
 
-`apps/web/components/command-center.tsx:106-108, 276-291` derives `visibleArtifacts` from `deriveRunLedgerView(...).artifacts`. `run-ledger.ts:73-90` extracts `kind / name / uri / previewUrl` from canonical event payloads.
-
-❌ There is no dedicated `/artifacts` page yet — even though backend routes now exist. Artifacts only render in the live run view.
+- `apps/web/app/(console)/artifacts/page.tsx` — route mounting `<ArtifactsBoard/>`.
+- `apps/web/components/app/artifacts-board.tsx` — work-item picker + artifact tiles + GenUI surface preview. Calls `listControlApiWorkItemArtifacts` + `listControlApiWorkItemSurfaces`. Each tile has a "Download" button that fetches a presigned URL via `getControlApiArtifactDownloadUrl({workspaceId, runId, artifactId, expiresIn})` and opens it.
+- Also rendered inline in the `/` work dashboard via `WorkDashboard` per-item bundle.
+- Falls back to demo markdown when signed out.
 
 ## Flutter UI — ⚠️ fixture
 
@@ -65,19 +66,19 @@ Local harness equivalent: `local-harness.ts:402-420`.
 |---|---|
 | Schema | ✅ |
 | Storage | ✅ |
-| API | ✅ implemented (list + get + download) |
+| API | ✅ implemented (list + get + presigned download) |
 | Worker | ✅ |
 | Realtime | ✅ |
-| Web | ⚠️ no dedicated list page yet (only via run events) |
-| Flutter | ⚠️ fixture |
+| Web | ✅ dedicated `/artifacts` board with download |
+| Flutter | ⚠️ fixture (`ControlApi.listArtifacts(workItemId)` exists but not consumed) |
 
 ## What needs to ship for hackathon
 
-- [x] ~~Implement `artifactsHandler`~~ — done; routes `/work-items/{id}/artifacts`, `/runs/{id}/artifacts`, `/runs/{id}/artifacts/{artifactId}`, `/runs/{id}/artifacts/{artifactId}/download` are live
+- [x] ~~Implement `artifactsHandler`~~ — done
 - [x] ~~ArtifactStore interface + Dynamo impl~~ — done
-- [x] ~~Sign S3 URI to presigned URL~~ — done via `/download` route
-- [ ] Add an `ArtifactsPage` to web at `apps/web/app/` rendering by WorkItem; reuse `ArtifactCard` shape from `apps/web/lib/run-ledger.ts:11-16`
-- [ ] (Flutter) replace fixture in `_ArtifactGalleryPanel` with fetch against `/work-items/{id}/artifacts`
+- [x] ~~Sign S3 URI to presigned URL~~ — done via `/download` route (default 5 min, max 15 min, clamped)
+- [x] ~~Add `ArtifactsPage` to web~~ — done at `app/(console)/artifacts/page.tsx`
+- [ ] (Flutter) consume `controlApiProvider` and `ControlApi.listArtifacts(workItemId)` in agent detail / dedicated artifacts page
 
 See [HACKATHON_CRITICAL_PATH.md#7](../HACKATHON_CRITICAL_PATH.md).
 

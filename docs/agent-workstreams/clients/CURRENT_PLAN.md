@@ -379,6 +379,8 @@ Then open local web, inspect the browser console, and verify the first screen pr
 - 2026-05-10: Verified the web slice with `pnpm web:typecheck`, `pnpm web:test`, and `pnpm web:build`. Also dogfooded locally with dev auth bypass at `http://localhost:3002`; page title was `Agents Cloud`, first screen showed the WorkItem dashboard, and browser console reported 0 JavaScript errors.
 - 2026-05-10: Used subagents to audit Flutter `shadcn_flutter` conventions and confirm the safest next slice should preserve the current dark neutral shadcn shell with no major visual changes.
 - 2026-05-10: Added Flutter WorkItem domain models and a fixture repository under `apps/desktop_mobile/lib/src/` with tests under `apps/desktop_mobile/test/domain/` and `apps/desktop_mobile/test/data/`. No visible Flutter UI or navigation changes were made in this groundwork slice.
+- 2026-05-10: Implemented the first visible Flutter WorkItem UI inside the existing shadcn shell. `apps/desktop_mobile/lib/main.dart` now renders a fixture-backed Work board above the command composer with a delegated-work queue, selected WorkItem detail, event timeline, artifact list, disabled approval action, and validated generated-surface preview placeholder. `apps/desktop_mobile/test/widget_test.dart` verifies the WorkItem UI is visible and updates the existing command-center smoke test to scroll to lower GenUI/run panels after the Work board becomes the first screen.
+- 2026-05-10: Verified the Flutter UI slice with `dart format lib test`, `flutter analyze`, `flutter test`, and `flutter build macos --debug`, then launched `apps/desktop_mobile/build/macos/Build/Products/Debug/desktop_mobile.app` for hands-on testing.
 
 ## Completion Criteria
 

@@ -5,6 +5,8 @@ import 'package:markdown_widget/markdown_widget.dart' as md;
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 import 'backend_config.dart';
+import 'src/data/fixture_work_repository.dart';
+import 'src/domain/work_item_models.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -458,6 +460,8 @@ class _CommandCenterPage extends StatelessWidget {
     return ListView(
       padding: EdgeInsets.all(isCompact ? 8 : 14),
       children: [
+        const _WorkDashboard(),
+        SizedBox(height: isCompact ? 8 : 12),
         const _HeroCommandPanel(),
         SizedBox(height: isCompact ? 8 : 12),
         const _MetricsStrip(),
@@ -482,6 +486,479 @@ class _CommandCenterPage extends StatelessWidget {
       ],
     );
   }
+}
+
+class _WorkDashboard extends StatelessWidget {
+  const _WorkDashboard();
+
+  static final WorkRepository _repository = FixtureWorkRepository();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<WorkItem>>(
+      future: _repository.listWorkItems(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const _Panel(
+            child: Text(
+              'Loading work items…',
+              style: TextStyle(color: _Palette.muted),
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          return const _Panel(
+            child: Text(
+              'Work board unavailable; fixture fallback failed.',
+              style: TextStyle(color: _Palette.muted),
+            ),
+          );
+        }
+
+        final items = snapshot.data ?? const <WorkItem>[];
+        if (items.isEmpty) {
+          return const _Panel(
+            child: Text(
+              'No delegated work yet.',
+              style: TextStyle(color: _Palette.muted),
+            ),
+          );
+        }
+
+        final primary = items.first;
+        final isCompact = MediaQuery.sizeOf(context).width < 900;
+        final queue = _WorkQueue(items: items, selectedItemId: primary.id);
+        final detail = _WorkDetail(item: primary);
+
+        return _Panel(
+          padding: EdgeInsets.all(isCompact ? 10 : 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _SectionHeader(
+                title: 'Work board',
+                subtitle:
+                    'Fixture-backed WorkItems are the primary product object: objectives, runs, events, artifacts, approvals, and safe surfaces.',
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _StatusPill(
+                    label: '${items.length} active work items',
+                    color: _Palette.info,
+                  ),
+                  const _StatusPill(
+                    label: 'fixture mode',
+                    color: _Palette.warning,
+                  ),
+                  const _StatusPill(
+                    label: 'Control API adapter next',
+                    color: _Palette.success,
+                  ),
+                ],
+              ),
+              SizedBox(height: isCompact ? 10 : 12),
+              if (isCompact)
+                Column(children: [queue, const SizedBox(height: 10), detail])
+              else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 4, child: queue),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 7, child: detail),
+                  ],
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _WorkQueue extends StatelessWidget {
+  const _WorkQueue({required this.items, required this.selectedItemId});
+
+  final List<WorkItem> items;
+  final String selectedItemId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Delegated work',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 8),
+        for (final item in items) ...[
+          _WorkItemCard(item: item, selected: item.id == selectedItemId),
+          if (item != items.last) const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _WorkItemCard extends StatelessWidget {
+  const _WorkItemCard({required this.item, required this.selected});
+
+  final WorkItem item;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = item.summary;
+    return Card(
+      filled: true,
+      fillColor: selected ? _Palette.input : _Palette.panel,
+      borderColor: selected ? _Palette.text : _Palette.border,
+      borderRadius: BorderRadius.circular(10),
+      padding: const EdgeInsets.all(10),
+      boxShadow: const [],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 5,
+            runSpacing: 5,
+            children: [
+              _StatusPill(label: summary.statusLabel, color: _Palette.info),
+              _StatusPill(
+                label: summary.priorityLabel,
+                color: _Palette.warning,
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            item.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            item.nextAction,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: _Palette.muted,
+              fontSize: 12,
+              height: 1.25,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${summary.runSummary} · ${summary.artifactCount} artifacts · ${summary.pendingApprovalCount} approvals',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: _Palette.muted, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkDetail extends StatelessWidget {
+  const _WorkDetail({required this.item});
+
+  final WorkItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = item.summary;
+    final trustedSurfaces = item.validatedSurfaces;
+    return Card(
+      filled: true,
+      fillColor: _Palette.input,
+      borderColor: _Palette.border,
+      borderRadius: BorderRadius.circular(10),
+      padding: const EdgeInsets.all(12),
+      boxShadow: const [],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _StatusPill(label: summary.statusLabel, color: _Palette.info),
+              _StatusPill(
+                label: 'Owner: ${item.owner}',
+                color: _Palette.success,
+              ),
+              _StatusPill(
+                label: 'Updated ${item.updatedAtLabel}',
+                color: _Palette.warning,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            item.title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            item.objective,
+            style: const TextStyle(
+              color: _Palette.muted,
+              fontSize: 12,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _DetailStatRow(summary: summary),
+          const SizedBox(height: 12),
+          _WorkMiniSection(
+            title: 'Next decision',
+            children: [
+              _SmallSurfaceLine(
+                title: item.nextAction,
+                subtitle:
+                    'Controls are disabled until the live approval API is wired.',
+                leading: RadixIcons.checkCircled,
+              ),
+              const SizedBox(height: 8),
+              const Button.primary(
+                enabled: false,
+                child: Text('Approve weekly monitor'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _WorkMiniSection(
+            title: 'Event timeline',
+            children: [
+              for (final event in item.events.take(3))
+                _SmallSurfaceLine(
+                  title: event.label,
+                  subtitle: '${event.atLabel} · ${event.detail}',
+                  leading: RadixIcons.activityLog,
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _WorkMiniSection(
+            title: 'Artifacts',
+            children: [
+              for (final artifact in item.artifacts.take(3))
+                _SmallSurfaceLine(
+                  title: artifact.name,
+                  subtitle:
+                      '${artifact.kind.label} · ${artifact.state.label} · ${artifact.updatedAtLabel}',
+                  leading: RadixIcons.archive,
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _WorkMiniSection(
+            title: 'Pricing review dashboard',
+            children: trustedSurfaces.isEmpty
+                ? const [
+                    _SmallSurfaceLine(
+                      title: 'No validated surfaces yet',
+                      subtitle:
+                          'Generated UI remains hidden until server validation passes.',
+                      leading: RadixIcons.component1,
+                    ),
+                  ]
+                : [
+                    for (final surface in trustedSurfaces)
+                      _SmallSurfaceLine(
+                        title: surface.title,
+                        subtitle:
+                            '${surface.componentCount} components · ${surface.kind.label} · validated surface',
+                        leading: RadixIcons.component1,
+                      ),
+                  ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailStatRow extends StatelessWidget {
+  const _DetailStatRow({required this.summary});
+
+  final WorkItemSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _TinyStat(
+            label: 'Runs',
+            value: summary.totalRunCount.toString(),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _TinyStat(
+            label: 'Artifacts',
+            value: summary.artifactCount.toString(),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _TinyStat(
+            label: 'Approvals',
+            value: summary.pendingApprovalCount.toString(),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _TinyStat(
+            label: 'Surfaces',
+            value: summary.validatedSurfaceCount.toString(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TinyStat extends StatelessWidget {
+  const _TinyStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+      decoration: BoxDecoration(
+        color: _Palette.panel,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _Palette.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: _Palette.muted, fontSize: 10),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkMiniSection extends StatelessWidget {
+  const _WorkMiniSection({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 7),
+        ...children,
+      ],
+    );
+  }
+}
+
+class _SmallSurfaceLine extends StatelessWidget {
+  const _SmallSurfaceLine({
+    required this.title,
+    required this.subtitle,
+    required this.leading,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData leading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(leading, size: 14, color: _Palette.text),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _Palette.muted,
+                    fontSize: 11,
+                    height: 1.25,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+extension on WorkItemArtifactKind {
+  String get label => switch (this) {
+    WorkItemArtifactKind.report => 'Report',
+    WorkItemArtifactKind.dashboard => 'Dashboard',
+    WorkItemArtifactKind.preview => 'Preview',
+    WorkItemArtifactKind.dataset => 'Dataset',
+    WorkItemArtifactKind.document => 'Document',
+  };
+}
+
+extension on WorkItemArtifactState {
+  String get label => switch (this) {
+    WorkItemArtifactState.ready => 'Ready',
+    WorkItemArtifactState.draft => 'Draft',
+    WorkItemArtifactState.blocked => 'Blocked',
+  };
+}
+
+extension on WorkItemSurfaceKind {
+  String get label => switch (this) {
+    WorkItemSurfaceKind.dashboard => 'Dashboard',
+    WorkItemSurfaceKind.report => 'Report',
+    WorkItemSurfaceKind.tracker => 'Tracker',
+    WorkItemSurfaceKind.table => 'Table',
+  };
 }
 
 class _HeroCommandPanel extends StatelessWidget {

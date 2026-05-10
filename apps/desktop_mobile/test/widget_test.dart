@@ -19,10 +19,44 @@ void main() {
     expect(find.text('Command Center'), findsOneWidget);
     expect(find.text('CEO command center'), findsOneWidget);
     expect(find.text('Autonomous control plane'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Autonomous run timeline'),
+      220,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
     expect(find.text('Live GenUI surface'), findsOneWidget);
     expect(find.text('Google GenUI bridge'), findsOneWidget);
     expect(find.text('A2UI v0.9'), findsOneWidget);
     expect(find.text('Autonomous run timeline'), findsOneWidget);
+  });
+
+  testWidgets('renders fixture-backed WorkItem UI in the command center', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 920);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const ProviderScope(child: AgentsCloudConsoleApp()),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Work board'), findsOneWidget);
+    expect(find.text('Track competitor pricing'), findsWidgets);
+    expect(find.text('Prepare launch preview site'), findsOneWidget);
+    expect(
+      find.text('Review dashboard and approve weekly monitoring'),
+      findsWidgets,
+    );
+    expect(find.text('Dashboard generated'), findsOneWidget);
+    expect(find.text('Pricing review dashboard'), findsOneWidget);
+    expect(find.text('Approve weekly monitor'), findsOneWidget);
   });
 
   testWidgets('navigates to planning pages', (WidgetTester tester) async {

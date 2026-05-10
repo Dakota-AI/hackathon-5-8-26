@@ -1,9 +1,11 @@
+import 'package:fl_chart/fl_chart.dart' as fl;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:genui/genui.dart' as genui;
 import 'package:markdown_widget/markdown_widget.dart' as md;
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import 'backend_config.dart';
 import 'src/data/fixture_work_repository.dart';
@@ -1354,6 +1356,10 @@ class _GenUiLabPage extends StatelessWidget {
           ],
         ),
         SizedBox(height: 12),
+        _GenUiChartGallery(),
+        SizedBox(height: 12),
+        _LiveGenUiSurfaceCard(),
+        SizedBox(height: 12),
         _LoadingStatesPanel(),
       ],
     );
@@ -1407,6 +1413,343 @@ class _GeneratedSurfacePreview extends StatelessWidget {
             title: 'Timeline: run events',
             subtitle: 'run_timeline component renders canonical events only.',
             leading: RadixIcons.activityLog,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GenUiChartGallery extends StatelessWidget {
+  const _GenUiChartGallery();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          _SectionHeader(
+            title: 'FL Chart generated analytics',
+            subtitle:
+                'Real fl_chart widgets used for GenUI analytics previews: trend, workload bars, and approval mix.',
+          ),
+          SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _GeneratedLineChartCard()),
+              SizedBox(width: 10),
+              Expanded(child: _GeneratedBarChartCard()),
+              SizedBox(width: 10),
+              Expanded(child: _GeneratedPieChartCard()),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GeneratedLineChartCard extends StatelessWidget {
+  const _GeneratedLineChartCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _ChartCard(
+      title: 'Run throughput',
+      child: fl.LineChart(
+        fl.LineChartData(
+          minX: 0,
+          maxX: 5,
+          minY: 0,
+          maxY: 8,
+          gridData: fl.FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: 2,
+            getDrawingHorizontalLine: (_) =>
+                fl.FlLine(color: _Palette.border, strokeWidth: 1),
+          ),
+          borderData: fl.FlBorderData(show: false),
+          titlesData: _chartTitles(),
+          lineTouchData: const fl.LineTouchData(enabled: true),
+          lineBarsData: [
+            fl.LineChartBarData(
+              spots: const [
+                fl.FlSpot(0, 1.5),
+                fl.FlSpot(1, 2.8),
+                fl.FlSpot(2, 2.2),
+                fl.FlSpot(3, 5.1),
+                fl.FlSpot(4, 4.7),
+                fl.FlSpot(5, 6.4),
+              ],
+              isCurved: true,
+              color: _Palette.text,
+              barWidth: 2.4,
+              dotData: const fl.FlDotData(show: false),
+              belowBarData: fl.BarAreaData(
+                show: true,
+                color: _Palette.text.withValues(alpha: 0.08),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GeneratedBarChartCard extends StatelessWidget {
+  const _GeneratedBarChartCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _ChartCard(
+      title: 'Work by lane',
+      child: fl.BarChart(
+        fl.BarChartData(
+          alignment: fl.BarChartAlignment.spaceAround,
+          maxY: 8,
+          barTouchData: const fl.BarTouchData(enabled: true),
+          titlesData: _chartTitles(
+            bottomLabels: const ['Todo', 'Run', 'Review', 'Done'],
+          ),
+          borderData: fl.FlBorderData(show: false),
+          gridData: fl.FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: 2,
+            getDrawingHorizontalLine: (_) =>
+                fl.FlLine(color: _Palette.border, strokeWidth: 1),
+          ),
+          barGroups: [
+            _barGroup(0, 3),
+            _barGroup(1, 7),
+            _barGroup(2, 5),
+            _barGroup(3, 2),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static fl.BarChartGroupData _barGroup(int x, double y) =>
+      fl.BarChartGroupData(
+        x: x,
+        barRods: [
+          fl.BarChartRodData(
+            toY: y,
+            width: 14,
+            borderRadius: BorderRadius.circular(4),
+            color: _Palette.text,
+            backDrawRodData: fl.BackgroundBarChartRodData(
+              show: true,
+              toY: 8,
+              color: _Palette.border.withValues(alpha: 0.32),
+            ),
+          ),
+        ],
+      );
+}
+
+class _GeneratedPieChartCard extends StatelessWidget {
+  const _GeneratedPieChartCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _ChartCard(
+      title: 'Approval mix',
+      child: fl.PieChart(
+        fl.PieChartData(
+          centerSpaceRadius: 36,
+          sectionsSpace: 2,
+          pieTouchData: fl.PieTouchData(enabled: true),
+          sections: [
+            _pieSection('Ready', 45, _Palette.text),
+            _pieSection('Waiting', 35, _Palette.muted),
+            _pieSection('Blocked', 20, _Palette.border),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static fl.PieChartSectionData _pieSection(
+    String title,
+    double value,
+    Color color,
+  ) {
+    return fl.PieChartSectionData(
+      title: '${value.toInt()}%',
+      value: value,
+      color: color,
+      radius: 42,
+      titleStyle: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w900,
+        color: _Palette.background,
+      ),
+    );
+  }
+}
+
+class _ChartCard extends StatelessWidget {
+  const _ChartCard({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      filled: true,
+      fillColor: _Palette.input,
+      borderColor: _Palette.border,
+      borderRadius: BorderRadius.circular(10),
+      padding: const EdgeInsets.all(10),
+      boxShadow: const [],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(height: 154, child: child),
+        ],
+      ),
+    );
+  }
+}
+
+fl.FlTitlesData _chartTitles({List<String>? bottomLabels}) {
+  return fl.FlTitlesData(
+    leftTitles: const fl.AxisTitles(
+      sideTitles: fl.SideTitles(showTitles: false),
+    ),
+    rightTitles: const fl.AxisTitles(
+      sideTitles: fl.SideTitles(showTitles: false),
+    ),
+    topTitles: const fl.AxisTitles(
+      sideTitles: fl.SideTitles(showTitles: false),
+    ),
+    bottomTitles: fl.AxisTitles(
+      sideTitles: fl.SideTitles(
+        showTitles: bottomLabels != null,
+        reservedSize: bottomLabels == null ? 0 : 24,
+        getTitlesWidget: (value, meta) {
+          final index = value.toInt();
+          final label =
+              bottomLabels != null && index >= 0 && index < bottomLabels.length
+              ? bottomLabels[index]
+              : '';
+          return fl.SideTitleWidget(
+            meta: meta,
+            child: Text(
+              label,
+              style: const TextStyle(color: _Palette.muted, fontSize: 10),
+            ),
+          );
+        },
+      ),
+    ),
+  );
+}
+
+class _LiveGenUiSurfaceCard extends StatefulWidget {
+  const _LiveGenUiSurfaceCard();
+
+  @override
+  State<_LiveGenUiSurfaceCard> createState() => _LiveGenUiSurfaceCardState();
+}
+
+class _LiveGenUiSurfaceCardState extends State<_LiveGenUiSurfaceCard> {
+  static const _surfaceId = 'genui-lab-live-surface';
+  late final genui.SurfaceController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = genui.SurfaceController(
+      catalogs: [genui.BasicCatalogItems.asCatalog()],
+    );
+    _seedSurface();
+  }
+
+  void _seedSurface() {
+    _controller.handleMessage(
+      const genui.CreateSurface(
+        surfaceId: _surfaceId,
+        catalogId: genui.basicCatalogId,
+      ),
+    );
+    _controller.handleMessage(
+      const genui.UpdateComponents(
+        surfaceId: _surfaceId,
+        components: [
+          genui.Component(
+            id: 'root',
+            type: 'Column',
+            properties: {
+              'children': ['title', 'summary', 'next'],
+            },
+          ),
+          genui.Component(
+            id: 'title',
+            type: 'Text',
+            properties: {'text': 'Live GenUI Surface', 'variant': 'h4'},
+          ),
+          genui.Component(
+            id: 'summary',
+            type: 'Text',
+            properties: {
+              'text':
+                  'This panel is rendered by genui.SurfaceController from A2UI component messages.',
+            },
+          ),
+          genui.Component(
+            id: 'next',
+            type: 'Text',
+            properties: {
+              'text':
+                  'Next: replace fixtures with persisted Surface records and server-validated catalogs.',
+              'variant': 'caption',
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeader(
+            title: 'Live GenUI Surface',
+            subtitle:
+                'Actual genui.Surface widget seeded by local A2UI messages.',
+          ),
+          const SizedBox(height: 12),
+          Card(
+            filled: true,
+            fillColor: _Palette.input,
+            borderColor: _Palette.border,
+            borderRadius: BorderRadius.circular(10),
+            padding: const EdgeInsets.all(12),
+            boxShadow: const [],
+            child: SizedBox(
+              height: 210,
+              child: genui.Surface(
+                surfaceContext: _controller.contextFor(_surfaceId),
+                defaultBuilder: (_) =>
+                    const Center(child: Text('Waiting for generated surface…')),
+              ),
+            ),
           ),
         ],
       ),
@@ -1513,21 +1856,85 @@ class _BrowserPage extends StatefulWidget {
 }
 
 class _BrowserPageState extends State<_BrowserPage> {
-  static const _previewUrl = 'https://launch-demo.preview.solo-ceo.ai';
+  static const _previewUrl = 'https://example.com';
+  late final TextEditingController _urlController;
   WebViewController? _controller;
+  String _status = 'WebView ready';
 
   @override
   void initState() {
     super.initState();
+    _urlController = TextEditingController(text: _previewUrl);
     if (!_runningInWidgetTest) {
-      _controller = WebViewController()
+      final params = WebViewPlatform.instance is WebKitWebViewPlatform
+          ? WebKitWebViewControllerCreationParams(
+              allowsInlineMediaPlayback: true,
+              mediaTypesRequiringUserAction: const <PlaybackMediaTypes>{},
+            )
+          : const PlatformWebViewControllerCreationParams();
+      _controller = WebViewController.fromPlatformCreationParams(params)
         ..setJavaScriptMode(JavaScriptMode.disabled)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPageStarted: (url) => setState(() => _status = 'Loading $url'),
+            onPageFinished: (url) {
+              setState(() {
+                _status = 'WebView ready';
+                _urlController.text = url;
+              });
+            },
+            onWebResourceError: (error) =>
+                setState(() => _status = 'WebView error: ${error.description}'),
+          ),
+        )
         ..loadRequest(Uri.parse(_previewUrl));
     }
   }
 
+  @override
+  void dispose() {
+    _urlController.dispose();
+    super.dispose();
+  }
+
   bool get _runningInWidgetTest =>
       WidgetsBinding.instance.runtimeType.toString().contains('Test');
+
+  Uri? _safeHttpsUri(String raw) {
+    final trimmed = raw.trim();
+    final uri = Uri.tryParse(
+      trimmed.contains('://') ? trimmed : 'https://$trimmed',
+    );
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) return null;
+    return uri;
+  }
+
+  void _loadTypedUrl() {
+    final uri = _safeHttpsUri(_urlController.text);
+    if (uri == null) {
+      setState(() => _status = 'Only https URLs are allowed');
+      return;
+    }
+    _urlController.text = uri.toString();
+    _controller?.loadRequest(uri);
+    setState(() => _status = 'Loading ${uri.host}');
+  }
+
+  void _reload() {
+    _controller?.reload();
+    setState(() => _status = 'Reloading');
+  }
+
+  Future<void> _goBack() async {
+    final controller = _controller;
+    if (controller == null) return;
+    if (await controller.canGoBack()) {
+      await controller.goBack();
+      setState(() => _status = 'Navigated back');
+    } else {
+      setState(() => _status = 'No browser history yet');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1537,7 +1944,7 @@ class _BrowserPageState extends State<_BrowserPage> {
         const _SectionHeader(
           title: 'Embedded browser',
           subtitle:
-              'Dedicated in-app preview browser for generated domains and signed artifact URLs. Web content receives no app secrets.',
+              'Dedicated in-app WKWebView preview browser for generated domains and signed artifact URLs. HTTPS only; Web content receives no app secrets.',
         ),
         const SizedBox(height: 12),
         Card(
@@ -1547,21 +1954,62 @@ class _BrowserPageState extends State<_BrowserPage> {
           borderRadius: BorderRadius.circular(12),
           padding: const EdgeInsets.all(8),
           boxShadow: const [],
-          child: Row(
-            children: const [
-              Icon(RadixIcons.lockClosed, size: 14, color: _Palette.text),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _previewUrl,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: _Palette.text),
-                ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Button.outline(
+                    enabled: false,
+                    child: Text('Open external'),
+                  ),
+                  const SizedBox(width: 6),
+                  Button.outline(onPressed: _goBack, child: const Text('Back')),
+                  const SizedBox(width: 6),
+                  Button.outline(
+                    onPressed: _reload,
+                    child: const Text('Reload'),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _urlController,
+                      placeholder: const Text('https://example.com'),
+                      onSubmitted: (_) => _loadTypedUrl(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Button.primary(
+                    onPressed: _loadTypedUrl,
+                    child: const Text('Load URL'),
+                  ),
+                  const SizedBox(width: 6),
+                  const Button.outline(enabled: false, child: Text('Copy URL')),
+                ],
               ),
-              SizedBox(width: 8),
-              Button.outline(enabled: false, child: Text('Open external')),
-              SizedBox(width: 6),
-              Button.outline(enabled: false, child: Text('Copy URL')),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(
+                    RadixIcons.lockClosed,
+                    size: 14,
+                    color: _Palette.text,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _urlController.text,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: _Palette.text,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _StatusPill(label: _status, color: _Palette.success),
+                ],
+              ),
             ],
           ),
         ),
@@ -1574,17 +2022,17 @@ class _BrowserPageState extends State<_BrowserPage> {
           padding: EdgeInsets.zero,
           boxShadow: const [],
           child: SizedBox(
-            height: 460,
+            height: 520,
             child: _runningInWidgetTest
                 ? const Center(child: Text('Preview opened inside the app'))
                 : Stack(
                     children: [
                       WebViewWidget(controller: _controller!),
-                      const Positioned(
+                      Positioned(
                         left: 12,
                         top: 12,
                         child: _StatusPill(
-                          label: 'Preview opened inside the app',
+                          label: _status,
                           color: _Palette.success,
                         ),
                       ),

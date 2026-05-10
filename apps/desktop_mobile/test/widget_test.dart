@@ -1,4 +1,5 @@
 import 'package:desktop_mobile/main.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
@@ -67,13 +68,31 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('GenUI component lab'), findsOneWidget);
     expect(find.text('Generated surface preview'), findsOneWidget);
-    expect(find.text('Loading states'), findsOneWidget);
+    expect(find.text('Live GenUI Surface'), findsWidgets);
+    expect(find.byType(LineChart), findsOneWidget);
+    expect(find.byType(BarChart), findsOneWidget);
+    expect(find.byType(PieChart), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Agent chat states'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Agent chat states'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Loading states'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Loading states'), findsOneWidget);
 
     await tester.tap(find.byType(NavigationItem).at(2));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Embedded browser'), findsOneWidget);
-    expect(find.text('https://launch-demo.preview.solo-ceo.ai'), findsWidgets);
+    expect(find.text('https://example.com'), findsWidgets);
+    expect(find.text('Load URL'), findsOneWidget);
+    expect(find.text('Back'), findsOneWidget);
+    expect(find.text('Reload'), findsOneWidget);
+    expect(find.text('WebView ready'), findsOneWidget);
     expect(find.text('Preview opened inside the app'), findsOneWidget);
 
     await tester.tap(find.byType(NavigationItem).at(3));
@@ -143,6 +162,10 @@ void main() {
 
     expect(find.text('Embedded browser'), findsOneWidget);
     expect(find.text('Preview opened inside the app'), findsOneWidget);
+    expect(find.text('Load URL'), findsOneWidget);
+    expect(find.text('Back'), findsOneWidget);
+    expect(find.text('Reload'), findsOneWidget);
+    expect(find.text('WebView ready'), findsOneWidget);
     expect(find.text('Open external'), findsOneWidget);
     expect(find.text('Copy URL'), findsOneWidget);
   });

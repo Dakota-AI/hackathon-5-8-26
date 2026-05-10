@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { ResidentRunner, residentRunnerConfigFromPartial, type ResidentAgentProfile } from "../src/resident-runner.js";
+import type { ArtifactSink, EventSink, RuntimeEvent } from "../src/ports.js";
 
 const fixedNow = (): string => "2026-05-10T12:00:00.000Z";
 
@@ -51,7 +52,7 @@ describe("ResidentRunner", () => {
     assert.equal(state.agents.find((agent) => agent.agentId === "agent-researcher")?.sessionId, "session-agent-researcher");
 
     const events = await runner.getEvents();
-    assert.deepEqual(events.map((event) => event.seq), [1, 2, 3, 4, 5, 6]);
+    assert.deepEqual(events.map((event) => event.seq), [2, 3, 4, 5, 6, 7]);
     assert.deepEqual(events.map((event) => event.type), [
       "run.status",
       "run.status",
@@ -65,6 +66,97 @@ describe("ResidentRunner", () => {
     const report = await readFile(result.artifacts[0]?.path ?? "", "utf8");
     assert.match(report, /Resident Runner Heartbeat/);
     assert.match(report, /Build a stock dashboard and produce market context/);
+  });
+
+  it("persists resident wake events and artifacts through durable sinks for the demo run ledger", async () => {
+    const rootDir = await tempRoot();
+    const hermesCommand = await writeFakeHermesCommand(rootDir);
+    const eventSink = new MemoryEventSink();
+    const artifactSink = new MemoryArtifactSink();
+    const runner = new ResidentRunner(residentRunnerConfigFromPartial({
+      rootDir,
+      orgId: "org-test",
+      userId: "user-test",
+      workspaceId: "workspace-test",
+      runnerId: "runner-test",
+      runnerSessionId: "runner-session-test",
+      adapterKind: "hermes-cli",
+      hermesCommand,
+      now: fixedNow,
+      eventSink,
+      artifactSink
+    }));
+
+    await runner.initialize([agentProfile("agent-coder", "Coder Agent")]);
+    const result = await runner.wake({
+      objective: "Produce a durable report.",
+      runId: "run-durable",
+      taskId: "task-durable",
+      workItemId: "workitem-durable"
+    });
+
+    assert.deepEqual(eventSink.events.map((event) => [event.seq, event.type]), [
+      [2, "run.status"],
+      [3, "run.status"],
+      [4, "artifact.created"],
+      [5, "run.status"]
+    ]);
+    assert.deepEqual(eventSink.runStatuses, ["planning", "running", "succeeded"]);
+    assert.deepEqual(eventSink.taskStatuses, ["planning", "running", "succeeded"]);
+    assert.equal(result.artifacts[0].uri, "s3://demo-bucket/workspaces/workspace-test/runs/run-durable/artifacts/artifact-task-durable-agent-coder-heartbeat/heartbeat-report.md");
+    assert.equal(artifactSink.objects.length, 1);
+    assert.equal(artifactSink.records[0]?.workItemId, "workitem-durable");
+    assert.equal(artifactSink.records[0]?.bucket, "demo-bucket");
+    assert.equal(artifactSink.records[0]?.key, "workspaces/workspace-test/runs/run-durable/artifacts/artifact-task-durable-agent-coder-heartbeat/heartbeat-report.md");
+  });
+
+  it("persists only high-signal resident action events emitted by the agent", async () => {
+    const rootDir = await tempRoot();
+    const hermesCommand = await writeFakeHermesCommandWithOutput(rootDir, [
+      "Delegating the app polish slice.",
+      "```agents-cloud-event",
+      JSON.stringify({
+        type: "agent.delegated",
+        payload: {
+          delegatedAgentId: "agent-ui-polish",
+          delegatedAgentRole: "UI Polish Agent",
+          workItemId: "workitem-ui-polish",
+          objective: "Polish the review walkthrough controls"
+        }
+      }),
+      "```",
+      "```agents-cloud-event",
+      JSON.stringify({ type: "tool.call", payload: { toolName: "terminal", command: "pwd" } }),
+      "```",
+      "session_id: session-action-events"
+    ].join("\n"));
+    const runner = new ResidentRunner(residentRunnerConfigFromPartial({
+      rootDir,
+      orgId: "org-test",
+      userId: "user-test",
+      workspaceId: "workspace-test",
+      runnerId: "runner-test",
+      runnerSessionId: "runner-session-test",
+      adapterKind: "hermes-cli",
+      hermesCommand,
+      now: fixedNow
+    }));
+
+    await runner.initialize([agentProfile("agent-delegator", "Agent Delegator")]);
+    const result = await runner.wake({
+      objective: "Delegate UI polish.",
+      runId: "run-action-events",
+      taskId: "task-action-events",
+      workItemId: "workitem-root"
+    });
+
+    assert.equal(result.events.some((event) => event.type === "tool.call"), false);
+    const delegated = result.events.find((event) => event.type === "agent.delegated");
+    assert.ok(delegated);
+    assert.equal(delegated.taskId, "task-action-events");
+    assert.equal(delegated.payload.agentId, "agent-delegator");
+    assert.equal(delegated.payload.delegatedAgentId, "agent-ui-polish");
+    assert.equal(delegated.payload.workItemId, "workitem-ui-polish");
   });
 
   it("rejects logical agents outside the runner tenant boundary", async () => {
@@ -395,6 +487,38 @@ describe("resident runner HTTP API", () => {
   });
 });
 
+class MemoryEventSink implements EventSink {
+  public readonly events: RuntimeEvent[] = [];
+  public readonly runStatuses: string[] = [];
+  public readonly taskStatuses: string[] = [];
+
+  async putEvent(event: RuntimeEvent): Promise<void> {
+    this.events.push(event);
+  }
+
+  async updateRunStatus(status: string): Promise<void> {
+    this.runStatuses.push(status);
+  }
+
+  async updateTaskStatus(status: string): Promise<void> {
+    this.taskStatuses.push(status);
+  }
+}
+
+class MemoryArtifactSink implements ArtifactSink {
+  public readonly objects: Array<{ key: string; body: string; contentType: string }> = [];
+  public readonly records: Record<string, unknown>[] = [];
+
+  async putArtifact(input: { readonly key: string; readonly body: string; readonly contentType: string }): Promise<{ bucket: string; key: string; uri: string }> {
+    this.objects.push(input);
+    return { bucket: "demo-bucket", key: input.key, uri: `s3://demo-bucket/${input.key}` };
+  }
+
+  async putArtifactRecord(record: Record<string, unknown>): Promise<void> {
+    this.records.push(record);
+  }
+}
+
 async function tempRoot(): Promise<string> {
   return await mkdtemp(join(tmpdir(), "agents-cloud-resident-runner-"));
 }
@@ -444,6 +568,17 @@ async function writeFakeHermesCommand(rootDir: string): Promise<string> {
     "console.log(`${agent} completed heartbeat.`);",
     "console.log(prompt);",
     "console.log(`session_id: session-${agent}`);",
+    ""
+  ].join("\n"));
+  await chmod(hermesCommand, 0o755);
+  return hermesCommand;
+}
+
+async function writeFakeHermesCommandWithOutput(rootDir: string, output: string): Promise<string> {
+  const hermesCommand = join(rootDir, `fake-hermes-output-${Date.now()}-${Math.random().toString(16).slice(2)}.mjs`);
+  await writeFile(hermesCommand, [
+    "#!/usr/bin/env node",
+    `process.stdout.write(${JSON.stringify(`${output}\n`)});`,
     ""
   ].join("\n"));
   await chmod(hermesCommand, 0o755);

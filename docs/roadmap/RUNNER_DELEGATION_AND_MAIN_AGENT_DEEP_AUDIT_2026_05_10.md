@@ -762,15 +762,19 @@ output/artifact/events.
 
 ### Do we see tool calls?
 
-Partially.
+We should not optimize the product around ordinary tool-call visibility.
 
-- Direct Hermes CLI: yes, tool calls are visible. The audit observed `┊ 💻 $
-  pwd` and a final response.
-- Resident runner artifact/UI path: not yet enough. The runner currently uses
-  quiet mode and stores final raw output, so structured tool calls are not yet
-  exposed as first-class run transcript events.
+- Direct Hermes CLI can show ordinary tool calls when needed for debugging.
+- The user-facing product should stay focused on high-signal milestones:
+  delegation, WorkItem assignment, Agent Creator/profile changes, artifact
+  creation, webpage publishing, review sessions, and recorded user feedback.
+- Ordinary search/file/browser/tool chatter should remain in runner logs or
+  debug artifacts, not in the main UI.
 
-This should be the next observability fix.
+The resident runner now supports a lighter mechanism: the main agent can emit a
+fenced `agents-cloud-event` JSON block for allowlisted high-signal actions. The
+runner persists only those action events and ignores non-allowlisted telemetry
+such as `tool.call`.
 
 ### Can we actually use this?
 
@@ -820,31 +824,74 @@ Missing pieces:
 - client-visible delegation lineage,
 - structured review/feedback/self-improvement loop.
 
+## Simplified high-signal event contract
+
+The product should use a small set of durable, actionable events rather than a
+full internal tool transcript.
+
+High-signal event families:
+
+- `artifact.created`: a report, dataset, design, exported file, voice-call
+  analysis, or other durable output exists and should be reviewable.
+- `webpage.published`: an agent-created webpage/site/preview is hosted and has a
+  URL the user can open.
+- `agent.delegated`: the main agent handed a meaningful unit of work to another
+  logical agent or specialist profile.
+- `work_item.created` / `work_item.assigned`: Kanban-visible task state changed.
+- `agent.profile.requested` / `agent.profile.revision_proposed` /
+  `agent.profile.promoted`: Agent Creator or self-improvement changed a visible
+  specialist version/evaluation path.
+- `review.session.created`: a phone/review/walkthrough interaction produced a
+  durable session artifact.
+- `review.feedback.recorded`: sentiment/rework/approval feedback was captured and
+  can generate follow-up work.
+
+Explicit non-goals for now:
+
+- No product UI feed for every shell command, search, browser page, or file edit.
+- No mandatory Hermes stdout parser for every ordinary tool call.
+- No graph database or heavyweight issue graph before the Kanban/WorkItem model
+  proves it needs one.
+
+Implementation rule:
+
+- Keep the normal runner heartbeat/report artifact as the debug trail.
+- Ask the resident main agent to emit fenced `agents-cloud-event` JSON only for
+  high-signal milestones.
+- The runner allowlists event types and ignores noisy or unknown telemetry.
+- Voice/call/review evidence should land as S3 artifacts plus background
+  WorkItems, not as a synchronous blocker for the main user session.
+
 ## Recommended immediate next implementation slice
 
-The next implementation should not be voice first. It should be:
+The immediate path should stay simple and high-signal. Do **not** build a full
+Hermes stdout/tool-call parser or UI feed unless debugging evidence later proves
+we need it.
 
-**Runner Transcript + Main Agent Delegation Slice**
+**High-Signal Main-Agent Operating Loop**
 
 Concrete task list:
 
-1. Add structured transcript model to `packages/protocol`.
-2. Add Hermes stdout parser to `services/agent-runtime`, adapted from the
-   Paperclip Hermes adapter parser.
-3. Persist transcript/tool-call records per heartbeat.
-4. Emit transcript/tool-call events or add an ordered transcript endpoint.
-5. Render tool cards in web and Flutter run detail.
-6. Add main-agent capability flags and restrict client-control/delegation tools to
-   the main agent.
-7. Add WorkItem assignment/delegation events from the runner.
-8. Add a smoke that:
-   - creates/wakes the resident main agent,
-   - forces a terminal tool call,
-   - shows the tool call in transcript data,
-   - creates a delegated WorkItem or simulated specialist event,
-   - shows it in the Kanban/realtime path.
+1. Keep `artifact.created` and `webpage.published` as first-class user-visible
+   milestones.
+2. Keep `agent.delegated`, `work_item.created`, and `work_item.assigned` as the
+   main delegation events that power Kanban and agent activity.
+3. Keep `agent.profile.requested`, `agent.profile.revision_proposed`, and
+   `agent.profile.promoted` as the Agent Creator/version-evolution milestones.
+4. Keep `review.session.created` and `review.feedback.recorded` as the bridge
+   from voice/review walkthroughs into async follow-up work.
+5. Store heavy review/call/sentiment evidence as artifacts in S3, then create
+   background WorkItems for agents to analyze later.
+6. Add the main-agent authority model only where it gates special powers:
+   delegation, Agent Creator promotion requests, review feedback capture, and
+   future client-control/voice walkthroughs.
+7. Drive the live Kanban board from WorkItems and these high-signal events rather
+   than from every internal tool call.
+8. Use focused checkpoint tests for major slices instead of retesting every small
+   UI detail.
 
-Only after that should the team build the full review-call/orb experience.
+Only after this lean operating loop is working should the team invest in the full
+voice/orb/review walkthrough layer.
 
 ## Validation artifacts from this audit
 
@@ -865,11 +912,13 @@ validation.
 
 The next problem is not "can an agent answer?" It can.
 
-The next problem is making the system legible, governable, and company-like:
+The next problem is making the system legible, governable, and company-like
+without turning the UI into a low-level tool log:
 
-- show every tool call,
-- show every delegation,
-- make WorkItems the durable task graph,
+- show every artifact, webpage publish, delegation, review session, and feedback
+  capture,
+- keep ordinary search/file/browser/tool chatter in debug logs or artifacts,
+- make WorkItems the durable Kanban/task graph,
 - make the main agent the coherent delegator/reviewer,
 - make specialists versioned and improvable,
 - turn user review feedback into follow-up tasks and profile revisions,

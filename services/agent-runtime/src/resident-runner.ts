@@ -4,8 +4,12 @@ import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
+import type { ArtifactSink, EventSink } from "./ports.js";
+import { AwsArtifactSink } from "./aws-artifact-sink.js";
+import { DynamoEventSink } from "./dynamo-event-sink.js";
 import {
   buildArtifactCreatedEvent,
+  buildCanonicalEvent,
   buildRunStatusEvent,
   type ArtifactKind,
   type CanonicalEventEnvelope,
@@ -25,7 +29,14 @@ export interface ResidentRunnerConfig {
   readonly adapterKind?: ResidentAdapterKind;
   readonly hermesCommand?: string;
   readonly now?: () => string;
+  readonly eventSink?: EventSink;
+  readonly artifactSink?: ArtifactSink;
 }
+
+type ResidentRunnerResolvedConfig = Required<Omit<ResidentRunnerConfig, "eventSink" | "artifactSink">> & {
+  readonly eventSink?: EventSink;
+  readonly artifactSink?: ArtifactSink;
+};
 
 export interface ResidentAgentProfile {
   readonly agentId: string;
@@ -51,6 +62,7 @@ export interface ResidentWakeRequest {
   readonly agentId?: string;
   readonly runId?: string;
   readonly taskId?: string;
+  readonly workItemId?: string;
   readonly wakeReason?: "timer" | "assignment" | "on_demand" | "automation" | "api";
 }
 
@@ -123,6 +135,8 @@ export interface ResidentArtifactRecord {
   readonly name: string;
   readonly path: string;
   readonly uri: string;
+  readonly bucket?: string;
+  readonly key?: string;
   readonly createdAt: string;
 }
 
@@ -142,9 +156,9 @@ export class ResidentRunner {
   private readonly eventsPath: string;
   private readonly artifactsDir: string;
   private readonly logsDir: string;
-  private seq = 0;
+  private seq = 1;
 
-  public constructor(private readonly config: Required<ResidentRunnerConfig>) {
+  public constructor(private readonly config: ResidentRunnerResolvedConfig) {
     this.rootDir = resolve(config.rootDir);
     this.statePath = join(this.rootDir, "state", "resident-runner-state.json");
     this.eventsPath = join(this.rootDir, "state", "events.ndjson");
@@ -183,7 +197,8 @@ export class ResidentRunner {
       runnerSessionId: process.env.RUNNER_SESSION_ID ?? `session-${Date.now()}`,
       adapterKind: adapterKindFromEnv(),
       hermesCommand: process.env.HERMES_COMMAND ?? "hermes",
-      now: () => new Date().toISOString()
+      now: () => new Date().toISOString(),
+      artifactSink: artifactSinkFromEnvironment()
     });
   }
 
@@ -309,7 +324,10 @@ export class ResidentRunner {
         }));
       }
 
-      const artifact = await this.writeHeartbeatArtifact(agent, runId, taskId, adapterResult);
+      const actionableEvents = await this.emitActionableAgentEvents(agent, input, runId, taskId, adapterResult.rawOutput);
+      events.push(...actionableEvents);
+
+      const artifact = await this.writeHeartbeatArtifact(agent, runId, taskId, input.workItemId, adapterResult);
       artifacts.push(artifact);
       events.push(await this.emitArtifact(runId, taskId, artifact));
 
@@ -444,17 +462,53 @@ export class ResidentRunner {
     };
   }
 
+  private async emitActionableAgentEvents(
+    agent: ResidentAgentRuntimeState,
+    input: ResidentWakeRequest,
+    runId: string,
+    taskId: string,
+    rawOutput: string
+  ): Promise<CanonicalEventEnvelope[]> {
+    const extracted = extractActionableAgentEvents(rawOutput);
+    const events: CanonicalEventEnvelope[] = [];
+    for (const item of extracted) {
+      const event = buildCanonicalEvent({
+        id: eventId(runId, this.nextSeq()),
+        seq: this.seq,
+        createdAt: this.config.now(),
+        orgId: this.config.orgId,
+        userId: this.config.userId,
+        workspaceId: this.config.workspaceId,
+        runId,
+        taskId,
+        source: SOURCE,
+        type: item.type,
+        payload: withoutUndefined({
+          agentId: agent.agentId,
+          agentRole: agent.role,
+          profileId: agent.profileId,
+          profileVersion: agent.profileVersion,
+          rootWorkItemId: input.workItemId,
+          ...item.payload
+        })
+      });
+      await this.persistEvent(event);
+      events.push(event);
+    }
+    return events;
+  }
+
   private async writeHeartbeatArtifact(
     agent: ResidentAgentRuntimeState,
     runId: string,
     taskId: string,
+    workItemId: string | undefined,
     adapterResult: AdapterResult
   ): Promise<ResidentArtifactRecord> {
     const artifactId = `artifact-${taskId}-${agent.agentId}-heartbeat`;
-    const path = join(this.artifactsDir, runId, artifactId, "heartbeat-report.md");
+    const filePath = join(this.artifactsDir, runId, artifactId, "heartbeat-report.md");
     const createdAt = this.config.now();
-    await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, [
+    const body = [
       "# Resident Runner Heartbeat",
       "",
       `Runner: ${this.config.runnerId}`,
@@ -476,15 +530,57 @@ export class ResidentRunner {
       adapterResult.rawOutput.trim(),
       "```",
       ""
-    ].join("\n"));
-    return {
+    ].join("\n");
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, body);
+
+    const uploaded = this.config.artifactSink
+      ? await this.config.artifactSink.putArtifact({
+          key: `workspaces/${this.config.workspaceId}/runs/${runId}/artifacts/${artifactId}/heartbeat-report.md`,
+          body,
+          contentType: "text/markdown; charset=utf-8"
+        })
+      : undefined;
+
+    const artifact: ResidentArtifactRecord = {
       artifactId,
       kind: "report",
       name: `${agent.role} heartbeat report`,
-      path,
-      uri: pathToFileURL(path).toString(),
+      path: filePath,
+      uri: uploaded?.uri ?? pathToFileURL(filePath).toString(),
+      bucket: uploaded?.bucket,
+      key: uploaded?.key,
       createdAt
     };
+
+    if (this.config.artifactSink) {
+      await this.config.artifactSink.putArtifactRecord(withoutUndefined({
+        artifactId,
+        runId,
+        taskId,
+        workItemId,
+        workspaceId: this.config.workspaceId,
+        userId: this.config.userId,
+        kind: artifact.kind,
+        name: artifact.name,
+        title: artifact.name,
+        uri: artifact.uri,
+        s3Uri: artifact.uri,
+        bucket: artifact.bucket,
+        key: artifact.key,
+        contentType: "text/markdown; charset=utf-8",
+        sizeBytes: Buffer.byteLength(body),
+        metadata: {
+          runnerId: this.config.runnerId,
+          agentId: agent.agentId,
+          localPath: filePath
+        },
+        createdAt,
+        updatedAt: createdAt
+      }));
+    }
+
+    return artifact;
   }
 
   private async emitStatus(
@@ -533,7 +629,9 @@ export class ResidentRunner {
       contentType: "text/markdown; charset=utf-8",
       metadata: {
         runnerId: this.config.runnerId,
-        localPath: artifact.path
+        localPath: artifact.path,
+        bucket: artifact.bucket,
+        key: artifact.key
       }
     });
     await this.persistEvent(event);
@@ -542,6 +640,16 @@ export class ResidentRunner {
 
   private async persistEvent(event: CanonicalEventEnvelope): Promise<void> {
     await appendFile(this.eventsPath, `${JSON.stringify(event)}\n`);
+    const eventSink = this.config.eventSink ?? eventSinkForEvent(event, this.config.now);
+    if (eventSink) {
+      await eventSink.putEvent(event);
+      if (event.type === "run.status" && typeof event.payload.status === "string") {
+        await Promise.all([
+          eventSink.updateRunStatus(event.payload.status),
+          eventSink.updateTaskStatus(event.payload.status)
+        ]);
+      }
+    }
     this.state = {
       ...this.state,
       metrics: {
@@ -615,7 +723,7 @@ export class ResidentRunner {
   }
 }
 
-export function residentRunnerConfigFromPartial(input: ResidentRunnerConfig): Required<ResidentRunnerConfig> {
+export function residentRunnerConfigFromPartial(input: ResidentRunnerConfig): ResidentRunnerResolvedConfig {
   return {
     ...input,
     adapterKind: input.adapterKind ?? "hermes-cli",
@@ -635,6 +743,8 @@ function renderPrompt(
     "You are {{role}}, a resident Agents Cloud logical agent.",
     "Work autonomously inside the scoped workspace, but do not publish, spend, delete, contact users, change infrastructure, or write source control without platform approval.",
     "Keep durable progress visible through status, artifact, approval, question, or message events. Do not emit noisy internal tool calls.",
+    "Only emit high-signal platform events when something actionable happens: delegated agent/work item created, agent profile requested/promoted, review feedback recorded, or webpage/artifact published.",
+    "To emit one, include a fenced block exactly like ```agents-cloud-event followed by JSON with type and payload, then closing ```.",
     "",
     "Tenant:",
     "- Org: {{orgId}}",
@@ -762,6 +872,90 @@ function adapterKindFromEnv(): ResidentAdapterKind {
     throw new Error(`Unsupported resident adapter: ${adapter}. Resident runners require AGENTS_RESIDENT_ADAPTER=hermes-cli.`);
   }
   return "hermes-cli";
+}
+
+const ACTIONABLE_AGENT_EVENT_TYPES = new Set([
+  "agent.delegated",
+  "agent.profile.requested",
+  "agent.profile.revision_proposed",
+  "agent.profile.promoted",
+  "work_item.created",
+  "work_item.assigned",
+  "review.session.created",
+  "review.feedback.recorded",
+  "webpage.published"
+]);
+
+interface ActionableAgentEvent {
+  readonly type: string;
+  readonly payload: Record<string, unknown>;
+}
+
+function extractActionableAgentEvents(rawOutput: string): ActionableAgentEvent[] {
+  const events: ActionableAgentEvent[] = [];
+  const fencePattern = /```agents-cloud-event\s*\n([\s\S]*?)\n```/g;
+  for (const match of rawOutput.matchAll(fencePattern)) {
+    const rawJson = match[1]?.trim();
+    if (!rawJson) continue;
+    try {
+      const parsed = JSON.parse(rawJson) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+      const record = parsed as Record<string, unknown>;
+      const type = typeof record.type === "string" ? record.type : "";
+      if (!ACTIONABLE_AGENT_EVENT_TYPES.has(type)) continue;
+      const payload = record.payload && typeof record.payload === "object" && !Array.isArray(record.payload)
+        ? record.payload as Record<string, unknown>
+        : {};
+      events.push({ type, payload: sanitizeActionEventPayload(payload) });
+    } catch {
+      continue;
+    }
+  }
+  return events;
+}
+
+function sanitizeActionEventPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(payload).filter(([, value]) => isJsonSafeActionEventValue(value)));
+}
+
+function isJsonSafeActionEventValue(value: unknown): boolean {
+  if (value === null) return true;
+  if (["string", "number", "boolean"].includes(typeof value)) return true;
+  if (Array.isArray(value)) return value.every(isJsonSafeActionEventValue);
+  if (typeof value === "object") return Object.values(value as Record<string, unknown>).every(isJsonSafeActionEventValue);
+  return false;
+}
+
+function eventSinkForEvent(event: CanonicalEventEnvelope, now: () => string): EventSink | undefined {
+  if (!process.env.RUNS_TABLE_NAME || !process.env.TASKS_TABLE_NAME || !process.env.EVENTS_TABLE_NAME) {
+    return undefined;
+  }
+  const runId = stringValue(event.runId);
+  const taskId = stringValue(event.taskId) ?? stringValue(event.payload.taskId);
+  const workspaceId = stringValue(event.workspaceId);
+  const userId = stringValue(event.userId);
+  if (!runId || !taskId || !workspaceId || !userId) {
+    return undefined;
+  }
+  return DynamoEventSink.fromEnvironment({
+    runId,
+    taskId,
+    workspaceId,
+    userId,
+    objective: "resident runner wake",
+    now
+  });
+}
+
+function artifactSinkFromEnvironment(): ArtifactSink | undefined {
+  if (!process.env.ARTIFACTS_BUCKET_NAME || !process.env.ARTIFACTS_TABLE_NAME) {
+    return undefined;
+  }
+  return AwsArtifactSink.fromEnvironment();
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
 }
 
 function eventId(runId: string, seq: number): string {

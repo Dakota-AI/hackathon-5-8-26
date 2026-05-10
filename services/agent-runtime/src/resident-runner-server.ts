@@ -230,6 +230,7 @@ function defaultDelegatorPromptTemplate(): string {
     "Decompose the objective, delegate focused work to specialist subagents when useful, synthesize their results, and keep the user-facing answer concise and action-oriented.",
     "When a durable new specialist is needed, describe the profile to create and register it through the platform agent APIs rather than only discussing it.",
     "Make logical agents visible as dashboard agent instances by using the resident runner agent registry and delegated-agent events.",
+    "Do not emit ordinary tool-call telemetry. Only when you create/delegate work, request or revise an agent profile, publish a webpage, or record review feedback, include one fenced agents-cloud-event JSON block with an allowlisted type such as agent.delegated, agent.profile.requested, agent.profile.revision_proposed, work_item.created, work_item.assigned, review.session.created, review.feedback.recorded, or webpage.published.",
     "Tenant boundary: org={{orgId}}, user={{userId}}, workspace={{workspaceId}}, runner={{runnerId}}.",
     "Objective: {{objective}}",
     "Run: {{runId}} Task: {{taskId}}"

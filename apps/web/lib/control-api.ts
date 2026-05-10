@@ -141,7 +141,8 @@ export type AgentProfileResponse = {
   version?: string;
 };
 
-const mockRuns = new Map<string, { createdAt: number; objective: string; workspaceId: string; taskId: string }>();
+const mockRuns = new Map<string, { createdAt: number; objective: string; workspaceId: string; taskId: string; workItemId?: string }>();
+const mockWorkItems = new Map<string, WorkItemRecord>();
 const mockAgentProfiles = new Map<string, AgentProfileRegistryRecord>();
 
 export function getControlApiHealth(): ControlApiHealth {
@@ -562,6 +563,14 @@ export async function listControlApiWorkItems(options: {
   workspaceId?: string;
   limit?: number;
 } = {}): Promise<{ workItems: WorkItemRecord[] }> {
+  if (isMockMode()) {
+    const workItems = [...mockWorkItems.values()]
+      .filter((item) => !options.workspaceId || item.workspaceId === options.workspaceId)
+      .sort((left, right) => String(right.updatedAt ?? "").localeCompare(String(left.updatedAt ?? "")))
+      .slice(0, options.limit ?? 50);
+    return { workItems };
+  }
+
   const baseUrl = requireControlApiBaseUrl();
   const token = await requireIdToken();
   const params = new URLSearchParams();
@@ -578,6 +587,30 @@ export async function createControlApiWorkItem(input: {
   title?: string;
   priority?: string;
 }): Promise<{ workItem: WorkItemRecord; workItemId: string; status: string }> {
+  if (isMockMode()) {
+    const now = new Date().toISOString();
+    const idempotencyKey = stableBrowserIdempotencyKey(input.workspaceId, input.objective);
+    const workItemId = `work-${idempotencyKey.replace(/^web-/, "")}`;
+    const existing = mockWorkItems.get(workItemMapKey(input.workspaceId, workItemId));
+    if (existing) {
+      return { workItem: existing, workItemId, status: existing.status };
+    }
+    const workItem: WorkItemRecord = {
+      workspaceId: input.workspaceId,
+      workItemId,
+      userId: "local-user",
+      ownerEmail: "local@example.com",
+      title: input.title || titleFromObjective(input.objective),
+      objective: input.objective,
+      status: "open",
+      priority: input.priority ?? "normal",
+      createdAt: now,
+      updatedAt: now
+    };
+    mockWorkItems.set(workItemMapKey(input.workspaceId, workItemId), workItem);
+    return { workItem, workItemId, status: workItem.status };
+  }
+
   const baseUrl = requireControlApiBaseUrl();
   const token = await requireIdToken();
   const response = await fetch(`${baseUrl}/work-items`, {
@@ -598,6 +631,14 @@ export async function getControlApiWorkItem(input: {
   workspaceId: string;
   workItemId: string;
 }): Promise<{ workItem: WorkItemRecord }> {
+  if (isMockMode()) {
+    const workItem = mockWorkItems.get(workItemMapKey(input.workspaceId, input.workItemId));
+    if (!workItem) {
+      throw new Error(`Mock work item ${input.workItemId} was not found.`);
+    }
+    return { workItem };
+  }
+
   const baseUrl = requireControlApiBaseUrl();
   const token = await requireIdToken();
   const params = new URLSearchParams({ workspaceId: input.workspaceId });
@@ -613,6 +654,21 @@ export async function updateControlApiWorkItemStatus(input: {
   workItemId: string;
   status: string;
 }): Promise<{ workItem: WorkItemRecord }> {
+  if (isMockMode()) {
+    const key = workItemMapKey(input.workspaceId, input.workItemId);
+    const workItem = mockWorkItems.get(key);
+    if (!workItem) {
+      throw new Error(`Mock work item ${input.workItemId} was not found.`);
+    }
+    const updated = {
+      ...workItem,
+      status: input.status,
+      updatedAt: new Date().toISOString()
+    };
+    mockWorkItems.set(key, updated);
+    return { workItem: updated };
+  }
+
   const baseUrl = requireControlApiBaseUrl();
   const token = await requireIdToken();
   const params = new URLSearchParams({ workspaceId: input.workspaceId });
@@ -632,6 +688,35 @@ export async function startControlApiWorkItemRun(input: {
   workItemId: string;
   objective?: string;
 }): Promise<{ run: WorkItemRunRecord }> {
+  if (isMockMode()) {
+    const workItem = mockWorkItems.get(workItemMapKey(input.workspaceId, input.workItemId));
+    if (!workItem) {
+      throw new Error(`Mock work item ${input.workItemId} was not found.`);
+    }
+    const created = createMockRun({
+      workspaceId: input.workspaceId,
+      objective: input.objective || workItem.objective,
+      workItemId: input.workItemId
+    });
+    const now = new Date().toISOString();
+    mockWorkItems.set(workItemMapKey(input.workspaceId, input.workItemId), {
+      ...workItem,
+      status: "in_progress",
+      updatedAt: now
+    });
+    return {
+      run: {
+        runId: created.runId,
+        workItemId: input.workItemId,
+        workspaceId: input.workspaceId,
+        status: created.status,
+        objective: input.objective || workItem.objective,
+        createdAt: now,
+        updatedAt: now
+      }
+    };
+  }
+
   const baseUrl = requireControlApiBaseUrl();
   const token = await requireIdToken();
   const response = await fetch(
@@ -653,6 +738,23 @@ export async function listControlApiWorkItemRuns(input: {
   workspaceId: string;
   workItemId: string;
 }): Promise<{ runs: WorkItemRunRecord[] }> {
+  if (isMockMode()) {
+    const runs = [...mockRuns.entries()]
+      .filter(([, run]) => run.workspaceId === input.workspaceId && run.workItemId === input.workItemId)
+      .map(([runId, run]) => ({
+        runId,
+        workItemId: run.workItemId,
+        workspaceId: run.workspaceId,
+        taskId: run.taskId,
+        status: mockRunStatus(run.createdAt),
+        objective: run.objective,
+        createdAt: new Date(run.createdAt).toISOString(),
+        updatedAt: new Date().toISOString()
+      }))
+      .sort((left, right) => String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")));
+    return { runs };
+  }
+
   const baseUrl = requireControlApiBaseUrl();
   const token = await requireIdToken();
   const params = new URLSearchParams({ workspaceId: input.workspaceId });
@@ -668,6 +770,20 @@ export async function listControlApiWorkItemEvents(input: {
   workItemId: string;
   limit?: number;
 }): Promise<{ events: RunEvent[] }> {
+  if (isMockMode()) {
+    const runs = [...mockRuns.entries()].filter(
+      ([, run]) => run.workspaceId === input.workspaceId && run.workItemId === input.workItemId
+    );
+    const events = (await Promise.all(runs.map(([runId]) => listMockRunEvents(runId))))
+      .flat()
+      .sort((left, right) => {
+        const byTime = String(left.createdAt).localeCompare(String(right.createdAt));
+        return byTime || left.seq - right.seq;
+      })
+      .slice(0, input.limit ?? 100);
+    return { events };
+  }
+
   const baseUrl = requireControlApiBaseUrl();
   const token = await requireIdToken();
   const params = new URLSearchParams({ workspaceId: input.workspaceId });
@@ -683,6 +799,24 @@ export async function listControlApiWorkItemArtifacts(input: {
   workspaceId: string;
   workItemId: string;
 }): Promise<{ artifacts: WorkItemArtifactRecord[] }> {
+  if (isMockMode()) {
+    const events = await listControlApiWorkItemEvents(input);
+    return {
+      artifacts: events.events
+        .filter((event) => event.type === "artifact.created")
+        .map((event) => normalizeWorkItemArtifactRecord({
+          artifactId: String(event.payload?.artifactId ?? `${event.runId}-${event.seq}`),
+          runId: event.runId,
+          workItemId: input.workItemId,
+          name: typeof event.payload?.name === "string" ? event.payload.name : "Hermes smoke report",
+          kind: typeof event.payload?.kind === "string" ? event.payload.kind : "report",
+          uri: typeof event.payload?.uri === "string" ? event.payload.uri : undefined,
+          previewUrl: typeof event.payload?.previewUrl === "string" ? event.payload.previewUrl : undefined,
+          createdAt: event.createdAt
+        }))
+    };
+  }
+
   const baseUrl = requireControlApiBaseUrl();
   const token = await requireIdToken();
   const params = new URLSearchParams({ workspaceId: input.workspaceId });
@@ -698,6 +832,10 @@ export async function listControlApiWorkItemSurfaces(input: {
   workspaceId: string;
   workItemId: string;
 }): Promise<{ surfaces: WorkItemSurfaceRecord[] }> {
+  if (isMockMode()) {
+    return { surfaces: [] };
+  }
+
   const baseUrl = requireControlApiBaseUrl();
   const token = await requireIdToken();
   const params = new URLSearchParams({ workspaceId: input.workspaceId });
@@ -840,11 +978,17 @@ function isMockMode(): boolean {
   return process.env.NEXT_PUBLIC_AGENTS_CLOUD_API_MOCK === "1";
 }
 
-function createMockRun(input: { workspaceId: string; objective: string }): CreatedRun {
+function createMockRun(input: { workspaceId: string; objective: string; workItemId?: string }): CreatedRun {
   const suffix = stableBrowserIdempotencyKey(input.workspaceId, input.objective).replace(/^web-/, "");
   const runId = `run-web-self-test-${suffix}`;
   const taskId = `task-web-self-test-${suffix}`;
-  mockRuns.set(runId, { createdAt: Date.now(), objective: input.objective, workspaceId: input.workspaceId, taskId });
+  mockRuns.set(runId, {
+    createdAt: Date.now(),
+    objective: input.objective,
+    workspaceId: input.workspaceId,
+    taskId,
+    workItemId: input.workItemId
+  });
   return {
     runId,
     workspaceId: input.workspaceId,
@@ -855,6 +999,23 @@ function createMockRun(input: { workspaceId: string; objective: string }): Creat
 
 function profileMapKey(workspaceId: string, profileId: string, version: string): string {
   return `${workspaceId}#${profileId}#${version}`;
+}
+
+function workItemMapKey(workspaceId: string, workItemId: string): string {
+  return `${workspaceId}#${workItemId}`;
+}
+
+function titleFromObjective(objective: string): string {
+  const trimmed = objective.trim().replace(/\s+/g, " ");
+  if (trimmed.length <= 64) return trimmed;
+  return `${trimmed.slice(0, 61)}...`;
+}
+
+function mockRunStatus(createdAt: number): string {
+  const elapsed = Date.now() - createdAt;
+  if (elapsed >= 2100) return "succeeded";
+  if (elapsed >= 700) return "running";
+  return "queued";
 }
 
 function requireMockRun(runId: string) {

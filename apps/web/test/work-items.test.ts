@@ -203,3 +203,39 @@ test("listControlApiWorkItemArtifacts maps Control API uri fields for artifact b
     mock.restoreAll();
   }
 });
+
+test("mock Control API WorkItem path creates conversations, starts runs, and returns events", async () => {
+  process.env.NEXT_PUBLIC_AGENTS_CLOUD_API_MOCK = "1";
+  delete process.env.NEXT_PUBLIC_AGENTS_CLOUD_API_URL;
+
+  const mod = await import("../lib/control-api.ts");
+  const created = await mod.createControlApiWorkItem({
+    workspaceId: "ws-mock-chat",
+    objective: "Draft the launch plan"
+  });
+
+  assert.equal(created.workItem.objective, "Draft the launch plan");
+  assert.equal(created.status, "open");
+
+  const listed = await mod.listControlApiWorkItems({ workspaceId: "ws-mock-chat" });
+  assert.equal(listed.workItems.some((item) => item.workItemId === created.workItemId), true);
+
+  const run = await mod.startControlApiWorkItemRun({
+    workspaceId: "ws-mock-chat",
+    workItemId: created.workItemId,
+    objective: "Write the executive summary"
+  });
+  assert.equal(run.run.workItemId, created.workItemId);
+
+  const runs = await mod.listControlApiWorkItemRuns({
+    workspaceId: "ws-mock-chat",
+    workItemId: created.workItemId
+  });
+  assert.equal(runs.runs.length, 1);
+
+  const events = await mod.listControlApiWorkItemEvents({
+    workspaceId: "ws-mock-chat",
+    workItemId: created.workItemId
+  });
+  assert.equal(events.events[0]?.type, "run.status");
+});

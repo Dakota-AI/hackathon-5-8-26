@@ -181,13 +181,25 @@
   --amplify-colors-overlay-10: rgba(255, 255, 255, 0.05);
   --amplify-colors-overlay-20: rgba(255, 255, 255, 0.1);
   --amplify-colors-overlay-90: rgba(0, 0, 0, 0.85);
+  --amplify-components-authenticator-router-background-color: #0a0a0a;
+  --amplify-components-authenticator-router-border-color: #262626;
+  --amplify-components-button-primary-background-color: #ffffff;
+  --amplify-components-button-primary-color: #050505;
+  --amplify-components-button-link-color: #f5f5f5;
+  --amplify-components-fieldcontrol-background-color: #050505;
+  --amplify-components-fieldcontrol-border-color: #262626;
+  --amplify-components-fieldcontrol-color: #f5f5f5;
+  --amplify-components-tabs-item-active-color: #f5f5f5;
+  --amplify-components-tabs-item-active-border-color: #f5f5f5;
 
   --amplify-radii-small: 0.4rem;
   --amplify-radii-medium: 0.45rem;
   --amplify-radii-large: 0.6rem;
 
-  min-height: 100vh;
+  width: 100%;
+  min-height: 0;
   background: transparent;
+  color: #f5f5f5;
 }
 
 [data-amplify-authenticator] [data-amplify-router] {
@@ -198,9 +210,20 @@
   overflow: hidden;
 }
 
+[data-amplify-authenticator] .amplify-authenticator__modal {
+  background: rgba(0, 0, 0, 0.78);
+}
+
 [data-amplify-authenticator] [data-amplify-container] {
   width: 100%;
   max-width: 420px;
+}
+
+[data-amplify-authenticator] .amplify-flex,
+[data-amplify-authenticator] .amplify-field,
+[data-amplify-authenticator] .amplify-field-group,
+[data-amplify-authenticator] .amplify-fieldset {
+  color: #f5f5f5;
 }
 
 [data-amplify-authenticator] .amplify-tabs__list {
@@ -233,7 +256,9 @@
 }
 
 [data-amplify-authenticator] .amplify-input,
-[data-amplify-authenticator] .amplify-field-group__field {
+[data-amplify-authenticator] .amplify-field-group__field,
+[data-amplify-authenticator] .amplify-select,
+[data-amplify-authenticator] .amplify-passwordfield .amplify-field-group__field {
   background: #050505;
   color: #f5f5f5;
   border: 1px solid #262626;
@@ -258,6 +283,14 @@
 }
 [data-amplify-authenticator] .amplify-button--primary:hover {
   background: #f5f5f5;
+}
+[data-amplify-authenticator] .amplify-button:not(.amplify-button--primary):not(.amplify-button--link) {
+  background: #111111;
+  border-color: #262626;
+  color: #f5f5f5;
+}
+[data-amplify-authenticator] .amplify-button:not(.amplify-button--primary):not(.amplify-button--link):hover {
+  background: #1a1a1a;
 }
 [data-amplify-authenticator] .amplify-button--link {
   color: #f5f5f5;

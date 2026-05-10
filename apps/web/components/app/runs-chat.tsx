@@ -82,15 +82,30 @@ export function RunsChat() {
           <SignedOutHero onSignIn={openSignIn} />
         ) : !api.configured ? (
           <CenteredMessage title="Control API not configured" subtitle="Set NEXT_PUBLIC_AGENTS_CLOUD_API_URL." />
-        ) : !selectedId ? (
-          <EmptyChat onRefresh={() => setRefreshTick((n) => n + 1)} />
         ) : (
-          <Conversation
-            key={selectedId}
-            workspaceId={workspaceId}
-            workItem={items.find((i) => i.workItemId === selectedId) ?? null}
-            userLabel={userLabel}
-          />
+          <>
+            <MobileConversationControls
+              items={items}
+              loading={loadingItems}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onRefresh={() => setRefreshTick((n) => n + 1)}
+              onCreated={(item) => {
+                setItems((cur) => [item, ...cur.filter((i) => i.workItemId !== item.workItemId)]);
+                setSelectedId(item.workItemId);
+              }}
+            />
+            {!selectedId ? (
+              <EmptyChat onRefresh={() => setRefreshTick((n) => n + 1)} />
+            ) : (
+              <Conversation
+                key={selectedId}
+                workspaceId={workspaceId}
+                workItem={items.find((i) => i.workItemId === selectedId) ?? null}
+                userLabel={userLabel}
+              />
+            )}
+          </>
         )}
         {error ? (
           <div className="border-t border-app-border bg-[#7F1D1D]/15 px-4 py-2 text-[12px] text-[#ff8f8f]">
@@ -121,16 +136,20 @@ function Sidebar({
   const { workspaceId } = useWorkspace();
   const [creating, setCreating] = React.useState(false);
   const [draft, setDraft] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
 
   async function onCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const objective = draft.trim();
     if (!isAuthed || objective.length < 2) return;
     setCreating(true);
+    setError(null);
     try {
       const r = await createControlApiWorkItem({ workspaceId, objective });
       setDraft("");
       onCreated(r.workItem);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create conversation.");
     } finally {
       setCreating(false);
     }
@@ -139,22 +158,19 @@ function Sidebar({
   return (
     <aside className="hidden md:flex w-[280px] shrink-0 flex-col border-r border-app-border bg-app-sidebar">
       <div className="px-3 pt-3 pb-2">
-        <form onSubmit={onCreate} className="flex flex-col gap-2">
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="New conversation…"
-            className="w-full rounded-[8px] border border-app-border bg-app-input px-2.5 py-2 text-[12px] text-app-text placeholder:text-app-muted focus:outline-none focus:border-app-text/40"
-          />
-          <div className="flex items-center gap-2">
-            <Button type="submit" variant="primary" size="sm" disabled={creating || !isAuthed}>
-              <PlusIcon /> {creating ? "Creating…" : "Start"}
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={onRefresh}>
+        <NewConversationForm
+          draft={draft}
+          creating={creating}
+          disabled={!isAuthed}
+          onDraftChange={setDraft}
+          onSubmit={onCreate}
+          refreshButton={
+            <Button type="button" variant="ghost" size="sm" onClick={onRefresh} aria-label="Refresh conversations">
               <ReloadIcon className={cn(loading && "animate-spin")} />
             </Button>
-          </div>
-        </form>
+          }
+        />
+        {error ? <div className="mt-2 text-[11px] text-[#ff8f8f]">{error}</div> : null}
       </div>
       <div className="px-3 pb-2 text-[10px] font-extrabold uppercase tracking-wider text-app-muted">
         Conversations
@@ -193,6 +209,114 @@ function Sidebar({
         )}
       </div>
     </aside>
+  );
+}
+
+function MobileConversationControls({
+  items,
+  loading,
+  selectedId,
+  onSelect,
+  onRefresh,
+  onCreated
+}: {
+  items: WorkItemRecord[];
+  loading: boolean;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onRefresh: () => void;
+  onCreated: (item: WorkItemRecord) => void;
+}) {
+  const { workspaceId } = useWorkspace();
+  const [creating, setCreating] = React.useState(false);
+  const [draft, setDraft] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function onCreate(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const objective = draft.trim();
+    if (objective.length < 2) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const r = await createControlApiWorkItem({ workspaceId, objective });
+      setDraft("");
+      onCreated(r.workItem);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create conversation.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="border-b border-app-border bg-app-sidebar px-3 py-2 md:hidden">
+      <div className="flex items-center gap-2">
+        <select
+          value={selectedId ?? ""}
+          onChange={(e) => {
+            if (e.target.value) onSelect(e.target.value);
+          }}
+          className="min-w-0 flex-1 rounded-[8px] border border-app-border bg-app-input px-2 py-2 text-[12px] text-app-text focus:outline-none focus:border-app-text/40"
+          aria-label="Select conversation"
+        >
+          <option value="">{loading ? "Loading conversations..." : "Select conversation"}</option>
+          {items.map((item) => (
+            <option key={item.workItemId} value={item.workItemId}>
+              {item.title || item.objective}
+            </option>
+          ))}
+        </select>
+        <Button type="button" variant="ghost" size="icon" onClick={onRefresh} aria-label="Refresh conversations">
+          <ReloadIcon className={cn(loading && "animate-spin")} />
+        </Button>
+      </div>
+      <div className="mt-2">
+        <NewConversationForm
+          draft={draft}
+          creating={creating}
+          onDraftChange={setDraft}
+          onSubmit={onCreate}
+          compact
+        />
+      </div>
+      {error ? <div className="mt-2 text-[11px] text-[#ff8f8f]">{error}</div> : null}
+    </div>
+  );
+}
+
+function NewConversationForm({
+  draft,
+  creating,
+  disabled,
+  onDraftChange,
+  onSubmit,
+  refreshButton,
+  compact
+}: {
+  draft: string;
+  creating: boolean;
+  disabled?: boolean;
+  onDraftChange: (value: string) => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  refreshButton?: React.ReactNode;
+  compact?: boolean;
+}) {
+  return (
+    <form onSubmit={onSubmit} className={cn("flex gap-2", compact ? "items-center" : "flex-col")}>
+      <input
+        value={draft}
+        onChange={(e) => onDraftChange(e.target.value)}
+        placeholder="New conversation..."
+        className="min-w-0 flex-1 rounded-[8px] border border-app-border bg-app-input px-2.5 py-2 text-[12px] text-app-text placeholder:text-app-muted focus:outline-none focus:border-app-text/40"
+      />
+      <div className="flex shrink-0 items-center gap-2">
+        <Button type="submit" variant="primary" size="sm" disabled={creating || disabled}>
+          <PlusIcon /> {creating ? "Creating..." : "Start"}
+        </Button>
+        {refreshButton}
+      </div>
+    </form>
   );
 }
 

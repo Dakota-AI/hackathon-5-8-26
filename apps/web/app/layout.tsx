@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { AmplifyProvider } from "../components/amplify-provider";
-import "./globals.css";
 import "@aws-amplify/ui-react/styles.css";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Agents Cloud — Command center",

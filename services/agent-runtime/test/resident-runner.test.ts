@@ -599,10 +599,10 @@ describe("resident runner HTTP API", () => {
           wakeReason: "on_demand"
         }
       });
-      assert.equal(wake.status, 200);
-      assert.equal(wake.body.heartbeats.length, 1);
+      assert.equal(wake.status, 202);
+      assert.equal(wake.body.status, "wake_accepted");
 
-      const events = await fetchJson(port, "/events", { token: "test-token" });
+      const events = await waitForEvents(port, "test-token", 5);
       assert.equal(events.status, 200);
       assert.deepEqual(events.body.events.map((event: { type: string }) => event.type), [
         "run.status",
@@ -923,6 +923,23 @@ async function waitForHealth(port: number): Promise<void> {
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 50));
   }
   throw new Error(`resident runner did not become healthy: ${String(lastError)}`);
+}
+
+async function waitForEvents(
+  port: number,
+  token: string,
+  minimumCount: number
+): Promise<{ status: number; body: any }> {
+  const deadline = Date.now() + 5000;
+  let last: { status: number; body: any } | undefined;
+  while (Date.now() < deadline) {
+    last = await fetchJson(port, "/events", { token });
+    if (last.status === 200 && Array.isArray(last.body.events) && last.body.events.length >= minimumCount) {
+      return last;
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 50));
+  }
+  return last ?? fetchJson(port, "/events", { token });
 }
 
 async function fetchJson(

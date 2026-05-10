@@ -13,6 +13,7 @@ class MemoryStore implements ControlApiStore {
   async putRun(): Promise<void> {}
   async putTask(): Promise<void> {}
   async putEvent(): Promise<void> {}
+  async createRunLedger(): Promise<void> {}
   async updateRunExecution(): Promise<void> {}
 
   async getRunById(): Promise<RunRecord | undefined> {

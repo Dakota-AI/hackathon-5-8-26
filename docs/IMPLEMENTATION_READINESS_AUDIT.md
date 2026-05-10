@@ -202,13 +202,13 @@ Current progress:
 
 - `services/control-api` checks an idempotency scope for `(userId, workspaceId, idempotencyKey)` before creating a run.
 - Unit tests now prove a duplicate idempotency key returns the same run and does not start duplicate execution.
-- Run, task, and initial event writes happen before Step Functions execution starts.
-- Unit tests now prove a failed durable run write does not start orphan work.
+- Run, task, and initial event writes happen in one DynamoDB transaction before Step Functions execution starts.
+- Unit tests now prove a failed durable ledger write does not start orphan work.
 - DynamoDB writes use conditional expressions for run/task/event item creation.
 
 Remaining risk:
 
-- A dedicated idempotency table/outbox would be stronger for concurrent duplicate requests.
+- A dedicated idempotency table/outbox would be stronger for highly concurrent duplicate requests.
 - The narrow failure case after Step Functions starts but before execution ARN persistence still needs recovery policy.
 - Browser/native clients still need stable persisted idempotency keys for retrying the same user action.
 
@@ -241,6 +241,7 @@ Current progress:
 - Artifact ids are deterministic per task attempt instead of globally fixed.
 - Artifact records and events use protocol-aligned `kind: "report"` and `name` fields.
 - DynamoDB event and artifact writes use conditional expressions to prevent silent overwrite on duplicate attempts.
+- Runtime run/task status updates now require existing records, preventing accidental creation of incomplete items.
 
 Remaining risk:
 

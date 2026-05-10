@@ -37,6 +37,7 @@ export class DynamoEventSink implements EventSink {
         runId: this.context.runId
       },
       UpdateExpression: "SET #status = :status, updatedAt = :updatedAt",
+      ConditionExpression: "attribute_exists(workspaceId) AND attribute_exists(runId)",
       ExpressionAttributeNames: { "#status": "status" },
       ExpressionAttributeValues: {
         ":status": status,
@@ -53,6 +54,7 @@ export class DynamoEventSink implements EventSink {
         taskId: this.context.taskId
       },
       UpdateExpression: "SET #status = :status, updatedAt = :updatedAt",
+      ConditionExpression: "attribute_exists(runId) AND attribute_exists(taskId)",
       ExpressionAttributeNames: { "#status": "status" },
       ExpressionAttributeValues: {
         ":status": status,

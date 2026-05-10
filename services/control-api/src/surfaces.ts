@@ -1,8 +1,41 @@
 import type { AuthenticatedUser, ControlApiStore, SurfaceStore, SurfaceRecord } from "./ports.js";
 
+export const ALLOWED_SURFACE_TYPES = ["dashboard", "report", "preview", "table", "form", "markdown"] as const;
+export type SurfaceType = typeof ALLOWED_SURFACE_TYPES[number];
+export const ALLOWED_SURFACE_STATUSES = ["draft", "review", "published", "archived"] as const;
+const MAX_DEFINITION_BYTES = 64 * 1024;
+
 export interface SurfaceResult {
   readonly statusCode: number;
   readonly body: Record<string, unknown>;
+}
+
+export interface SurfaceValidationError {
+  readonly code: string;
+  readonly message: string;
+}
+
+export function validateSurfaceDefinition(input: { surfaceType: string; definition: Record<string, unknown> }): SurfaceValidationError | undefined {
+  if (!ALLOWED_SURFACE_TYPES.includes(input.surfaceType as SurfaceType)) {
+    return { code: "UNSUPPORTED_SURFACE_TYPE", message: `surfaceType must be one of ${ALLOWED_SURFACE_TYPES.join(", ")}.` };
+  }
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(input.definition);
+  } catch {
+    return { code: "DEFINITION_NOT_SERIALIZABLE", message: "definition must be JSON-serializable." };
+  }
+  if (Buffer.byteLength(serialized, "utf8") > MAX_DEFINITION_BYTES) {
+    return { code: "DEFINITION_TOO_LARGE", message: `definition exceeds ${MAX_DEFINITION_BYTES} bytes.` };
+  }
+  return undefined;
+}
+
+export function validateSurfaceStatus(status: string): SurfaceValidationError | undefined {
+  if (!ALLOWED_SURFACE_STATUSES.includes(status as typeof ALLOWED_SURFACE_STATUSES[number])) {
+    return { code: "INVALID_STATUS", message: `status must be one of ${ALLOWED_SURFACE_STATUSES.join(", ")}.` };
+  }
+  return undefined;
 }
 
 export async function createSurface(deps: {
@@ -37,6 +70,15 @@ export async function createSurface(deps: {
   }
   if (!isRecord(definition)) {
     return badRequest("definition must be an object.");
+  }
+
+  const definitionError = validateSurfaceDefinition({ surfaceType, definition });
+  if (definitionError) {
+    return badRequest(definitionError.message);
+  }
+  const statusError = validateSurfaceStatus(status);
+  if (statusError) {
+    return badRequest(statusError.message);
   }
 
   if (runId) {
@@ -107,6 +149,21 @@ export async function updateSurface(deps: {
   }
 
   const status = cleanOptional(deps.updates.status);
+  if (status) {
+    const statusError = validateSurfaceStatus(status);
+    if (statusError) {
+      return badRequest(statusError.message);
+    }
+  }
+  if (deps.updates.definition !== undefined) {
+    if (!isRecord(deps.updates.definition)) {
+      return badRequest("definition must be an object.");
+    }
+    const definitionError = validateSurfaceDefinition({ surfaceType: surface.surfaceType, definition: deps.updates.definition });
+    if (definitionError) {
+      return badRequest(definitionError.message);
+    }
+  }
   const next = await deps.store.updateSurface({
     workspaceId: deps.workspaceId,
     surfaceId: deps.surfaceId,

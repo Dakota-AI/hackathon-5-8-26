@@ -20,6 +20,7 @@ export class StateStack extends AgentsCloudStack {
   public readonly userRunnersTable: Table;
   public readonly runnerSnapshotsTable: Table;
   public readonly agentInstancesTable: Table;
+  public readonly agentProfilesTable: Table;
 
   public constructor(scope: Construct, id: string, props: AgentsCloudStackProps) {
     super(scope, id, props);
@@ -232,6 +233,20 @@ export class StateStack extends AgentsCloudStack {
       projectionType: ProjectionType.ALL
     });
 
+    this.agentProfilesTable = this.createTable("AgentProfilesTable", "workspaceId", AttributeType.STRING, "profileVersionKey", AttributeType.STRING, props);
+    this.agentProfilesTable.addGlobalSecondaryIndex({
+      indexName: "by-user-created-at",
+      partitionKey: { name: "userId", type: AttributeType.STRING },
+      sortKey: { name: "createdAt", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+    this.agentProfilesTable.addGlobalSecondaryIndex({
+      indexName: "by-lifecycle-updated-at",
+      partitionKey: { name: "lifecycleState", type: AttributeType.STRING },
+      sortKey: { name: "updatedAt", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+
     this.outputTable("WorkItemsTableName", "work-items-table-name", this.workItemsTable, props);
     this.outputTable("RunsTableName", "runs-table-name", this.runsTable, props);
     this.outputTable("TasksTableName", "tasks-table-name", this.tasksTable, props);
@@ -246,6 +261,7 @@ export class StateStack extends AgentsCloudStack {
     this.outputTable("UserRunnersTableName", "user-runners-table-name", this.userRunnersTable, props);
     this.outputTable("RunnerSnapshotsTableName", "runner-snapshots-table-name", this.runnerSnapshotsTable, props);
     this.outputTable("AgentInstancesTableName", "agent-instances-table-name", this.agentInstancesTable, props);
+    this.outputTable("AgentProfilesTableName", "agent-profiles-table-name", this.agentProfilesTable, props);
   }
 
   private createTable(

@@ -30,6 +30,7 @@ Current state:
 - `docs/roadmap/BEST_NEXT_STEPS_EXECUTION_PLAN.md` now consolidates the recommended execution order: WorkItem v0, real web Work page, WorkItem-linked run creation, artifact APIs, DataSourceRef v0, Surface v0/GenUI validator, first scraper/tracker dashboard demo, Flutter WorkBoard/Surface renderer, notifications/approvals, and production worker/provider hardening.
 - `docs/roadmap/WORKITEM_GENUI_IMPLEMENTATION_PLAN.md` expands that roadmap into an implementation-ready TDD plan with protocol, CDK, Control API, artifact, DataSourceRef, Surface validator, web, Flutter, approvals, validation, and subagent execution tasks.
 - `docs/roadmap/WORKITEM_GENUI_INFRA_IMPLEMENTATION.md` documents the completed infrastructure slice for that product spine: WorkItems/DataSources/Surfaces DynamoDB tables, WorkItem lookup GSIs, product-shaped Control API routes behind Cognito with explicit 501 placeholders, scoped IAM grants, Step Functions `workItemId` passthrough, runtime table environment variables, and CDK regression tests.
+- `docs/roadmap/FRONTEND_WIRING_BACKEND_READINESS_2026_05_10.md` records the current frontend/backend readiness decision: frontend wiring can proceed around live Auth, Control API, WorkItems, Runs, Events, Admin, Runners, and realtime, while backend work continues on artifact APIs, surface/data-source handlers, workspace authorization, runner token brokering, resident runner launch, and scoped model/provider execution.
 
 Approximate progress:
 
@@ -128,6 +129,36 @@ Remaining before product-grade realtime:
 2. Promote the browser-level HTTP/WebSocket path into CI-friendly smoke coverage with a persisted or seeded test account.
 3. Add stronger replay/gap repair UX that clearly backfills through `GET /runs/{runId}/events` after reconnect.
 4. Add workspace membership authorization; current smoke uses user-scoped event delivery but not full workspace ACLs.
+
+## Implemented Locally: Agent Profile Registry First Slice
+
+The Agent Workshop/Profile foundation now has a backend registry slice ready for deployment testing:
+
+- Shared profile contracts/validators are used by Control API through `@agents-cloud/agent-profile`.
+- State CDK defines `AgentProfilesTable` keyed by `workspaceId` and `profileVersionKey`, with `by-user-created-at` and `by-lifecycle-updated-at` indexes.
+- Control API has profile routes behind Cognito:
+  - `POST /agent-profiles/drafts`
+  - `GET /agent-profiles`
+  - `GET /agent-profiles/{profileId}/versions/{version}?workspaceId=...`
+  - `POST /agent-profiles/{profileId}/versions/{version}/approve`
+- Profile JSON artifacts are written to the workspace live artifacts bucket under `workspaces/{workspaceId}/agent-profiles/{profileId}/versions/{version}/profile.json`.
+- Draft creation validates shared profile policy before writing DynamoDB/S3 state.
+- Approval records user approval evidence, moves the version to `approved`, and rewrites the profile artifact with approval metadata.
+- Admin web now includes an Agent Workshop playground that creates live drafts, lists profile versions, inspects a selected version, approves it, and explains which lifecycle stages are live versus next.
+- Deep lifecycle documentation is maintained in `docs/roadmap/AGENT_WORKSHOP_LIFECYCLE.md`.
+
+Validation evidence:
+
+- `pnpm control-api:build` passed.
+- `pnpm control-api:test` passed with 28/28 tests, including 4 new profile registry tests.
+- `pnpm --filter @agents-cloud/web run test -- --test-name-pattern 'Agent Workshop|agent workshop'` passed with the new admin lifecycle view-model coverage.
+- `pnpm web:typecheck` passed after the admin Agent Workshop playground wiring.
+- `pnpm web:build` passed with `/` and `/admin` statically exported.
+- `pnpm infra:test` passed with 9/9 CDK assertions.
+- `pnpm infra:synth` passed after adding the profile table, Lambda route, environment, and S3/DynamoDB grants.
+- `git diff --check` passed for touched web/control/profile/infra/docs paths.
+
+Deployment status: implemented and synthesized locally; not yet deployed to AWS in this slice.
 
 ## Completed and Deployed: Amplify Auth Sandbox
 

@@ -9,8 +9,10 @@
     "test": "pnpm build && node --test dist/test/**/*.test.js"
   },
   "dependencies": {
+    "@agents-cloud/agent-profile": "workspace:*",
     "@agents-cloud/protocol": "workspace:*",
     "@aws-sdk/client-dynamodb": "^3.821.0",
+    "@aws-sdk/client-s3": "^3.821.0",
     "@aws-sdk/client-sfn": "^3.821.0",
     "@aws-sdk/lib-dynamodb": "^3.821.0"
   },

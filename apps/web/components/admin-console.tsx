@@ -3,18 +3,30 @@
 import { Authenticator } from "@aws-amplify/ui-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { readAmplifyEnv } from "../lib/amplify-config";
+import {
+  agentWorkshopLifecycle,
+  buildAgentWorkshopDraftProfile,
+  summarizeAgentProfileRecord,
+  summarizeLifecycleReadiness,
+  type AgentProfileDisplaySummary
+} from "../lib/agent-workshop";
 import { resetAmplifyAuthSession } from "../lib/auth-session-reset";
 import { describeAdminLineageEvent, summarizePipelinePosition } from "../lib/admin-lineage";
 import { describeRunnerHealth, sortRunnerRows } from "../lib/admin-runners";
 import {
+  approveControlApiAgentProfile,
+  createControlApiAgentProfileDraft,
+  getControlApiAgentProfile,
   getControlApiHealth,
   listControlApiAdminRunEvents,
   listControlApiAdminRunners,
   listControlApiAdminRuns,
+  listControlApiAgentProfiles,
   type AdminRunnerRecord,
   type AdminRunnersResponse,
   type AdminRunSummary,
   type AdminRunsResponse,
+  type AgentProfileRegistryRecord,
   type RunEvent
 } from "../lib/control-api";
 
@@ -69,6 +81,15 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
   const [error, setError] = useState<string | undefined>();
   const [runnerError, setRunnerError] = useState<string | undefined>();
   const [lastLoadedAt, setLastLoadedAt] = useState<string | undefined>();
+  const [workshopProfiles, setWorkshopProfiles] = useState<AgentProfileRegistryRecord[]>([]);
+  const [selectedProfileKey, setSelectedProfileKey] = useState<string | undefined>();
+  const [workshopStatus, setWorkshopStatus] = useState<string | undefined>();
+  const [workshopError, setWorkshopError] = useState<string | undefined>();
+  const [workshopBusy, setWorkshopBusy] = useState(false);
+  const [draftRole, setDraftRole] = useState("Market Research Strategist");
+  const [draftContext, setDraftContext] = useState("Solo CEO launch planning and operator leverage for a small founder-led company.");
+  const [draftGoals, setDraftGoals] = useState("Find timely market/channel signals\nProduce an executive-ready brief\nAsk before paid APIs or external side effects");
+  const [draftConstraints, setDraftConstraints] = useState("No paid Apify actor runs without approval\nNo public posts or email sends without approval\nCite source quality and uncertainty");
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -130,8 +151,97 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
     };
   }, [api.configured, selectedRunId]);
 
+  const refreshWorkshopProfiles = useCallback(async () => {
+    if (!api.configured) {
+      setWorkshopProfiles([]);
+      return;
+    }
+    setWorkshopError(undefined);
+    try {
+      const response = await listControlApiAgentProfiles({ limit: 25 });
+      setWorkshopProfiles(response.profiles);
+      setSelectedProfileKey((current) => current ?? profileSelectionKey(response.profiles[0]));
+    } catch (caught) {
+      setWorkshopError(caught instanceof Error ? caught.message : "Unable to load Agent Workshop profiles.");
+    }
+  }, [api.configured]);
+
+  useEffect(() => {
+    void refreshWorkshopProfiles();
+  }, [refreshWorkshopProfiles]);
+
+  const createWorkshopDraft = useCallback(async () => {
+    setWorkshopBusy(true);
+    setWorkshopError(undefined);
+    setWorkshopStatus("Creating governed draft profile...");
+    try {
+      const profile = buildAgentWorkshopDraftProfile({
+        workspaceId: "workspace-admin-playground",
+        userId: "browser-user",
+        role: draftRole,
+        projectContext: draftContext,
+        goals: linesFromTextarea(draftGoals),
+        constraints: linesFromTextarea(draftConstraints)
+      });
+      const response = await createControlApiAgentProfileDraft({ workspaceId: profile.workspaceId, profile });
+      setWorkshopProfiles((profiles) => [response.profile, ...profiles.filter((candidate) => profileSelectionKey(candidate) !== profileSelectionKey(response.profile))]);
+      setSelectedProfileKey(profileSelectionKey(response.profile));
+      setWorkshopStatus(`Draft ${response.profile.profileId}@${response.profile.version} stored in DynamoDB and S3.`);
+    } catch (caught) {
+      setWorkshopError(caught instanceof Error ? caught.message : "Unable to create Agent Workshop draft.");
+    } finally {
+      setWorkshopBusy(false);
+    }
+  }, [draftConstraints, draftContext, draftGoals, draftRole]);
+
+  const approveSelectedWorkshopProfile = useCallback(async () => {
+    const selected = workshopProfiles.find((profile) => profileSelectionKey(profile) === selectedProfileKey);
+    if (!selected) {
+      return;
+    }
+    setWorkshopBusy(true);
+    setWorkshopError(undefined);
+    setWorkshopStatus("Recording approval evidence...");
+    try {
+      const response = await approveControlApiAgentProfile({
+        workspaceId: selected.workspaceId,
+        profileId: selected.profileId,
+        version: selected.version,
+        notes: "Approved from admin Agent Workshop playground."
+      });
+      setWorkshopProfiles((profiles) => profiles.map((profile) => profileSelectionKey(profile) === profileSelectionKey(response.profile) ? response.profile : profile));
+      setSelectedProfileKey(profileSelectionKey(response.profile));
+      setWorkshopStatus(`Approved ${response.profile.profileId}@${response.profile.version}; lifecycleState is now ${response.profile.lifecycleState}.`);
+    } catch (caught) {
+      setWorkshopError(caught instanceof Error ? caught.message : "Unable to approve Agent Workshop profile.");
+    } finally {
+      setWorkshopBusy(false);
+    }
+  }, [selectedProfileKey, workshopProfiles]);
+
+  const inspectSelectedWorkshopProfile = useCallback(async () => {
+    const selected = workshopProfiles.find((profile) => profileSelectionKey(profile) === selectedProfileKey);
+    if (!selected) {
+      return;
+    }
+    setWorkshopBusy(true);
+    setWorkshopError(undefined);
+    setWorkshopStatus("Loading full profile version...");
+    try {
+      const response = await getControlApiAgentProfile({ workspaceId: selected.workspaceId, profileId: selected.profileId, version: selected.version });
+      setWorkshopProfiles((profiles) => profiles.map((profile) => profileSelectionKey(profile) === profileSelectionKey(response.profile) ? response.profile : profile));
+      setWorkshopStatus(`Loaded ${response.profile.profileId}@${response.profile.version} from Control API.`);
+    } catch (caught) {
+      setWorkshopError(caught instanceof Error ? caught.message : "Unable to inspect Agent Workshop profile.");
+    } finally {
+      setWorkshopBusy(false);
+    }
+  }, [selectedProfileKey, workshopProfiles]);
+
   const selectedRun = useMemo(() => data.runs.find((run) => run.runId === selectedRunId), [data.runs, selectedRunId]);
   const recentFailures = useMemo(() => data.runs.filter((run) => run.failureCount > 0 || run.status === "failed").slice(0, 5), [data.runs]);
+  const selectedWorkshopProfile = useMemo(() => workshopProfiles.find((profile) => profileSelectionKey(profile) === selectedProfileKey), [selectedProfileKey, workshopProfiles]);
+  const selectedWorkshopSummary = useMemo(() => selectedWorkshopProfile ? summarizeAgentProfileRecord(selectedWorkshopProfile) : undefined, [selectedWorkshopProfile]);
 
   return (
     <main className="admin-shell">
@@ -207,6 +317,29 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
         </div>
       </section>
 
+      <AgentWorkshopPanel
+        busy={workshopBusy}
+        constraints={draftConstraints}
+        context={draftContext}
+        error={workshopError}
+        goals={draftGoals}
+        onApproveSelected={() => void approveSelectedWorkshopProfile()}
+        onCreateDraft={() => void createWorkshopDraft()}
+        onInspectSelected={() => void inspectSelectedWorkshopProfile()}
+        onRefresh={() => void refreshWorkshopProfiles()}
+        onSelectProfile={setSelectedProfileKey}
+        profiles={workshopProfiles}
+        role={draftRole}
+        selectedProfile={selectedWorkshopProfile}
+        selectedProfileKey={selectedProfileKey}
+        selectedSummary={selectedWorkshopSummary}
+        setConstraints={setDraftConstraints}
+        setContext={setDraftContext}
+        setGoals={setDraftGoals}
+        setRole={setDraftRole}
+        status={workshopStatus}
+      />
+
       <section className="admin-grid admin-main-grid">
         <div className="admin-panel runs-panel">
           <div className="panel-heading">
@@ -269,6 +402,166 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
         )}
       </section>
     </main>
+  );
+}
+
+function AgentWorkshopPanel({
+  busy,
+  constraints,
+  context,
+  error,
+  goals,
+  onApproveSelected,
+  onCreateDraft,
+  onInspectSelected,
+  onRefresh,
+  onSelectProfile,
+  profiles,
+  role,
+  selectedProfile,
+  selectedProfileKey,
+  selectedSummary,
+  setConstraints,
+  setContext,
+  setGoals,
+  setRole,
+  status
+}: {
+  busy: boolean;
+  constraints: string;
+  context: string;
+  error?: string;
+  goals: string;
+  onApproveSelected: () => void;
+  onCreateDraft: () => void;
+  onInspectSelected: () => void;
+  onRefresh: () => void;
+  onSelectProfile: (key: string) => void;
+  profiles: AgentProfileRegistryRecord[];
+  role: string;
+  selectedProfile?: AgentProfileRegistryRecord;
+  selectedProfileKey?: string;
+  selectedSummary?: AgentProfileDisplaySummary;
+  setConstraints: (value: string) => void;
+  setContext: (value: string) => void;
+  setGoals: (value: string) => void;
+  setRole: (value: string) => void;
+  status?: string;
+}) {
+  const stages = agentWorkshopLifecycle();
+  return (
+    <section className="admin-panel workshop-panel">
+      <div className="panel-heading workshop-heading">
+        <div>
+          <span className="eyebrow">Agent Workshop</span>
+          <h2>Create, validate, audit, approve</h2>
+          <p>{summarizeLifecycleReadiness(stages)}</p>
+        </div>
+        <div className="workshop-actions">
+          <button type="button" onClick={onRefresh} disabled={busy}>Refresh profiles</button>
+          <button type="button" onClick={onCreateDraft} disabled={busy}>{busy ? "Working" : "Create live draft"}</button>
+        </div>
+      </div>
+
+      {error ? <div className="admin-alert danger inline-alert">{error}</div> : null}
+      {status ? <div className="admin-alert inline-alert">{status}</div> : null}
+
+      <div className="workshop-grid">
+        <div className="workshop-card workshop-form">
+          <h3>Playground input</h3>
+          <label>
+            <span>Specialist role</span>
+            <input value={role} onChange={(event) => setRole(event.target.value)} />
+          </label>
+          <label>
+            <span>Project context</span>
+            <textarea rows={3} value={context} onChange={(event) => setContext(event.target.value)} />
+          </label>
+          <label>
+            <span>Goals, one per line</span>
+            <textarea rows={4} value={goals} onChange={(event) => setGoals(event.target.value)} />
+          </label>
+          <label>
+            <span>Constraints / approval rules</span>
+            <textarea rows={4} value={constraints} onChange={(event) => setConstraints(event.target.value)} />
+          </label>
+          <p className="workshop-copy">Creating a draft calls Control API, validates the shared profile contract, writes DynamoDB registry metadata, and persists the profile JSON bundle in S3.</p>
+        </div>
+
+        <div className="workshop-card">
+          <h3>Lifecycle map</h3>
+          <ol className="workshop-stage-list">
+            {stages.map((stage) => (
+              <li key={stage.id} className={`workshop-stage ${stage.status}`}>
+                <span>{stage.status}</span>
+                <strong>{stage.title}</strong>
+                <p>{stage.operatorSummary}</p>
+                <small>{stage.durableEvidence.join(" · ")}</small>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <div className="workshop-card">
+          <h3>Profile registry</h3>
+          <div className="workshop-profile-list">
+            {profiles.length ? profiles.map((profile) => {
+              const summary = summarizeAgentProfileRecord(profile);
+              const key = profileSelectionKey(profile);
+              return (
+                <button className={key === selectedProfileKey ? "workshop-profile-row selected" : "workshop-profile-row"} key={key} onClick={() => onSelectProfile(key)} type="button">
+                  <span className={`status-dot ${statusClassName(summary.lifecycleState)}`} />
+                  <span>
+                    <strong>{summary.title}</strong>
+                    <small>{summary.subtitle} · {formatDate(summary.updatedAt)}</small>
+                  </span>
+                </button>
+              );
+            }) : <div className="empty-state">No profiles yet. Create a draft to hit the live registry.</div>}
+          </div>
+        </div>
+
+        <div className="workshop-card">
+          <h3>Selected version</h3>
+          {selectedProfile && selectedSummary ? (
+            <div className="workshop-selected">
+              <div className="workshop-selected-head">
+                <div>
+                  <strong>{selectedSummary.title}</strong>
+                  <small>{selectedSummary.id}</small>
+                </div>
+                <span className={`status-badge ${selectedSummary.lifecycleState}`}>{selectedSummary.lifecycleState}</span>
+              </div>
+              <ul>
+                {selectedSummary.toolPosture.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+              <dl className="detail-grid compact">
+                <Detail label="Workspace" value={selectedProfile.workspaceId} code />
+                <Detail label="Artifact" value={selectedProfile.artifactS3Uri || "not written"} code />
+                <Detail label="Review ready" value={selectedSummary.reviewReady ? "yes" : "no"} />
+                <Detail label="Promotion ready" value={selectedSummary.promotionReady ? "yes" : "no"} />
+              </dl>
+              <div className="workshop-actions left">
+                <button type="button" onClick={onInspectSelected} disabled={busy}>Inspect from API</button>
+                <button type="button" onClick={onApproveSelected} disabled={busy || selectedProfile.lifecycleState === "approved" || selectedProfile.lifecycleState === "promoted"}>Approve version</button>
+              </div>
+              <details className="json-details compact-json">
+                <summary>Profile policy snapshot</summary>
+                <pre>{JSON.stringify({
+                  mission: selectedProfile.profile.mission,
+                  toolPolicy: selectedProfile.profile.toolPolicy,
+                  mcpPolicy: selectedProfile.profile.mcpPolicy,
+                  evalPack: selectedProfile.profile.evalPack,
+                  approval: selectedProfile.profile.approval
+                }, null, 2)}</pre>
+              </details>
+            </div>
+          ) : (
+            <div className="empty-state">Select or create a profile version to inspect approval and policy posture.</div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -393,6 +686,18 @@ function formatDate(value?: string): string {
 
 function statusClassName(status: string): string {
   return /^[a-z0-9_-]+$/i.test(status) ? status.toLowerCase() : "unknown";
+}
+
+function profileSelectionKey(profile: Pick<AgentProfileRegistryRecord, "workspaceId" | "profileId" | "version">): string;
+function profileSelectionKey(profile?: Pick<AgentProfileRegistryRecord, "workspaceId" | "profileId" | "version">): string | undefined {
+  if (!profile) {
+    return undefined;
+  }
+  return `${profile.workspaceId}#${profile.profileId}#${profile.version}`;
+}
+
+function linesFromTextarea(value: string): string[] {
+  return value.split("\n").map((line) => line.trim()).filter(Boolean);
 }
 
 function formatFailure(run: AdminRunSummary): string {

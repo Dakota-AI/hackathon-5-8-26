@@ -785,6 +785,226 @@ code {
   margin-top: 12px;
 }
 
+.workshop-panel {
+  min-height: auto;
+  margin-bottom: 12px;
+}
+
+.workshop-heading {
+  align-items: flex-start;
+}
+
+.workshop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.workshop-actions.left {
+  justify-content: flex-start;
+}
+
+.workshop-actions button {
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.workshop-actions button:first-child,
+.workshop-actions.left button:first-child {
+  background: transparent;
+  color: var(--soft);
+}
+
+.workshop-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.workshop-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.15fr) minmax(280px, 0.95fr) minmax(320px, 1.2fr);
+  gap: 12px;
+  padding: 16px;
+}
+
+.workshop-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.workshop-card h3 {
+  margin: 0 0 12px;
+  color: var(--soft);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.workshop-form {
+  display: grid;
+  gap: 10px;
+}
+
+.workshop-form label,
+.workshop-form label span {
+  display: grid;
+  gap: 6px;
+}
+
+.workshop-form label span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workshop-form input,
+.workshop-form textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.24);
+  color: var(--soft);
+  padding: 9px 10px;
+  resize: vertical;
+}
+
+.workshop-copy,
+.workshop-stage p,
+.workshop-stage small,
+.workshop-selected small,
+.workshop-selected li {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.workshop-copy {
+  margin: 2px 0 0;
+}
+
+.workshop-stage-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.workshop-stage {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.workshop-stage.live {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.workshop-stage.next {
+  opacity: 0.72;
+}
+
+.workshop-stage span {
+  display: inline-flex;
+  margin-bottom: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workshop-stage strong,
+.workshop-stage small {
+  display: block;
+}
+
+.workshop-stage p {
+  margin: 6px 0;
+}
+
+.workshop-profile-list {
+  display: grid;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.workshop-profile-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  padding: 11px 0;
+  text-align: left;
+}
+
+.workshop-profile-row:hover,
+.workshop-profile-row.selected {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.workshop-profile-row strong,
+.workshop-profile-row small,
+.workshop-selected-head strong,
+.workshop-selected-head small {
+  display: block;
+}
+
+.workshop-profile-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workshop-selected {
+  display: grid;
+  gap: 12px;
+}
+
+.workshop-selected-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workshop-selected ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.detail-grid.compact {
+  grid-template-columns: 1fr;
+  padding: 0;
+}
+
+.compact-json {
+  margin: 0;
+}
+
+.failure-panel {
+  margin-top: 12px;
+}
+
 .failure-row {
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr) minmax(220px, 0.75fr);
@@ -822,7 +1042,8 @@ code {
   .stats-grid,
   .admin-main-grid,
   .detail-grid,
-  .failure-row {
+  .failure-row,
+  .workshop-grid {
     grid-template-columns: 1fr;
   }
 }

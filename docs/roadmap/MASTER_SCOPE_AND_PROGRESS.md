@@ -611,20 +611,21 @@ Current status:
 
 - [x] ADR selects the general harness posture.
 - [ ] No agent manager service exists.
-- [ ] No specialist registry exists.
-- [ ] No agent definition format exists.
-- [ ] No eval suite exists.
-- [ ] No promotion/quarantine workflow exists.
+- [x] First specialist profile registry slice exists locally and is ready for deploy: DynamoDB registry, S3 profile artifact, Control API draft/list/get/approve routes, and admin playground UI.
+- [x] Shared `@agents-cloud/agent-profile` format exists for versioned governed profile drafts with behavior policy, tool policy, MCP policy, eval pack, scorecard, approval, and changelog fields.
+- [ ] Automated quarantine eval runner is not wired yet.
+- [ ] Runtime promotion into resident Hermes/ECS runner context is not wired yet.
+- [ ] Conversational Agent Creator interview/research loop is not productized yet.
 
 Required next work:
 
-- [ ] Define `AgentDefinition` schema.
-- [ ] Define `ToolPolicy` schema.
-- [ ] Define specialist registry DynamoDB table or table entity.
+- [x] Define first `AgentProfileVersion` schema.
+- [x] Define first `ToolPolicy` schema.
+- [x] Define specialist registry DynamoDB table/entity for profile versions.
 - [ ] Add research brief artifact format.
-- [ ] Add eval plan artifact format.
+- [ ] Add automated eval result artifact format.
 - [ ] Add agent capability manifest.
-- [ ] Add agent versioning and promotion states.
+- [x] Add agent versioning and approval states for draft/review/approved/promoted/retired.
 - [ ] Add tests that compare specialist output against accepted rubrics.
 - [ ] Add rollback and disable controls.
 

@@ -1,3 +1,4 @@
+import type { AgentProfileVersion, ProfileLifecycleState, ValidationResult } from "@agents-cloud/agent-profile";
 import { fetchAuthSession } from "aws-amplify/auth";
 
 export type ControlApiHealth = {
@@ -114,7 +115,34 @@ export type AdminRunnersResponse = {
   totals: AdminRunnerTotals;
 };
 
+export type AgentProfileRegistryRecord = {
+  workspaceId: string;
+  profileVersionKey?: string;
+  profileId: string;
+  version: string;
+  userId?: string;
+  ownerEmail?: string;
+  lifecycleState: ProfileLifecycleState;
+  role: string;
+  artifactS3Uri?: string;
+  profile: AgentProfileVersion;
+  validationSummary?: ValidationResult["summary"];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type AgentProfilesResponse = {
+  profiles: AgentProfileRegistryRecord[];
+};
+
+export type AgentProfileResponse = {
+  profile: AgentProfileRegistryRecord;
+  profileId?: string;
+  version?: string;
+};
+
 const mockRuns = new Map<string, { createdAt: number; objective: string; workspaceId: string; taskId: string }>();
+const mockAgentProfiles = new Map<string, AgentProfileRegistryRecord>();
 
 export function getControlApiHealth(): ControlApiHealth {
   const baseUrl = process.env.NEXT_PUBLIC_AGENTS_CLOUD_API_URL;
@@ -335,6 +363,130 @@ export async function listControlApiAdminRunEvents(runId: string, options: { lim
   return parseJsonResponse<AdminRunEventsResponse>(response);
 }
 
+export async function createControlApiAgentProfileDraft(input: {
+  workspaceId: string;
+  profile: AgentProfileVersion;
+}): Promise<AgentProfileResponse> {
+  if (isMockMode()) {
+    const now = new Date().toISOString();
+    const record: AgentProfileRegistryRecord = {
+      workspaceId: input.workspaceId,
+      profileVersionKey: `${input.profile.profileId}#${input.profile.version}`,
+      profileId: input.profile.profileId,
+      version: input.profile.version,
+      userId: "local-user",
+      ownerEmail: "local@example.com",
+      lifecycleState: input.profile.lifecycleState,
+      role: input.profile.role,
+      artifactS3Uri: `s3://mock-agents-cloud-artifacts/workspaces/${input.workspaceId}/agent-profiles/${input.profile.profileId}/versions/${input.profile.version}/profile.json`,
+      profile: input.profile,
+      validationSummary: {
+        allowedToolCount: input.profile.toolPolicy.allowedTools.length,
+        approvalRequiredToolCount: input.profile.toolPolicy.approvalRequiredTools.length,
+        evalScenarioCount: input.profile.evalPack.scenarios.length,
+        mcpServerCount: input.profile.mcpPolicy.allowedServers.length
+      },
+      createdAt: now,
+      updatedAt: now
+    };
+    mockAgentProfiles.set(profileMapKey(record.workspaceId, record.profileId, record.version), record);
+    return { profile: record, profileId: record.profileId, version: record.version };
+  }
+
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const response = await fetch(`${baseUrl}/agent-profiles/drafts`, {
+    method: "POST",
+    headers: {
+      "authorization": `Bearer ${token}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ workspaceId: input.workspaceId, profile: input.profile })
+  });
+  return parseJsonResponse<AgentProfileResponse>(response);
+}
+
+export async function listControlApiAgentProfiles(options: { workspaceId?: string; limit?: number } = {}): Promise<AgentProfilesResponse> {
+  if (isMockMode()) {
+    const profiles = [...mockAgentProfiles.values()]
+      .filter((profile) => !options.workspaceId || profile.workspaceId === options.workspaceId)
+      .sort((left, right) => String(right.updatedAt ?? "").localeCompare(String(left.updatedAt ?? "")))
+      .slice(0, options.limit ?? 50);
+    return { profiles };
+  }
+
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const params = new URLSearchParams({ limit: String(options.limit ?? 50) });
+  if (options.workspaceId) {
+    params.set("workspaceId", options.workspaceId);
+  }
+  const response = await fetch(`${baseUrl}/agent-profiles?${params.toString()}`, {
+    headers: { "authorization": `Bearer ${token}` }
+  });
+  return parseJsonResponse<AgentProfilesResponse>(response);
+}
+
+export async function getControlApiAgentProfile(input: { workspaceId: string; profileId: string; version: string }): Promise<AgentProfileResponse> {
+  if (isMockMode()) {
+    const profile = mockAgentProfiles.get(profileMapKey(input.workspaceId, input.profileId, input.version));
+    if (!profile) {
+      throw new Error(`Mock profile ${input.profileId}@${input.version} was not found.`);
+    }
+    return { profile };
+  }
+
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const params = new URLSearchParams({ workspaceId: input.workspaceId });
+  const response = await fetch(`${baseUrl}/agent-profiles/${encodeURIComponent(input.profileId)}/versions/${encodeURIComponent(input.version)}?${params.toString()}`, {
+    headers: { "authorization": `Bearer ${token}` }
+  });
+  return parseJsonResponse<AgentProfileResponse>(response);
+}
+
+export async function approveControlApiAgentProfile(input: {
+  workspaceId: string;
+  profileId: string;
+  version: string;
+  notes?: string;
+}): Promise<AgentProfileResponse> {
+  if (isMockMode()) {
+    const key = profileMapKey(input.workspaceId, input.profileId, input.version);
+    const current = mockAgentProfiles.get(key);
+    if (!current) {
+      throw new Error(`Mock profile ${input.profileId}@${input.version} was not found.`);
+    }
+    const approvedAt = new Date().toISOString();
+    const approvedProfile: AgentProfileVersion = {
+      ...current.profile,
+      lifecycleState: "approved",
+      approval: {
+        approvedByUserId: "local-user",
+        approvedAt,
+        approvalEventId: `approval-${Date.now().toString(36)}`,
+        notes: input.notes
+      }
+    };
+    const updated = { ...current, lifecycleState: "approved" as const, profile: approvedProfile, updatedAt: approvedAt };
+    mockAgentProfiles.set(key, updated);
+    return { profile: updated };
+  }
+
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const params = new URLSearchParams({ workspaceId: input.workspaceId });
+  const response = await fetch(`${baseUrl}/agent-profiles/${encodeURIComponent(input.profileId)}/versions/${encodeURIComponent(input.version)}/approve?${params.toString()}`, {
+    method: "POST",
+    headers: {
+      "authorization": `Bearer ${token}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ notes: input.notes })
+  });
+  return parseJsonResponse<AgentProfileResponse>(response);
+}
+
 export async function requireIdToken(): Promise<string> {
   const session = await fetchAuthSession();
   const token = session.tokens?.idToken?.toString();
@@ -384,6 +536,10 @@ function createMockRun(input: { workspaceId: string; objective: string }): Creat
     taskId,
     status: "queued"
   };
+}
+
+function profileMapKey(workspaceId: string, profileId: string, version: string): string {
+  return `${workspaceId}#${profileId}#${version}`;
 }
 
 function requireMockRun(runId: string) {

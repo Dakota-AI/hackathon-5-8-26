@@ -1,3 +1,5 @@
+import type { AgentProfileVersion, ProfileLifecycleState, ValidationResult } from "@agents-cloud/agent-profile";
+
 export interface AuthenticatedUser {
   readonly userId: string;
   readonly email?: string;
@@ -109,6 +111,33 @@ export interface EventRecord {
     readonly version?: string;
   };
   readonly payload: Record<string, unknown>;
+}
+
+export interface AgentProfileRecord {
+  readonly workspaceId: string;
+  readonly profileVersionKey: string;
+  readonly profileId: string;
+  readonly version: string;
+  readonly userId: string;
+  readonly ownerEmail?: string;
+  readonly lifecycleState: ProfileLifecycleState;
+  readonly role: string;
+  readonly artifactS3Uri: string;
+  readonly profile: AgentProfileVersion;
+  readonly validationSummary: ValidationResult["summary"];
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface AgentProfileRegistryStore {
+  putAgentProfileVersion(record: AgentProfileRecord): Promise<void>;
+  getAgentProfileVersion(input: { readonly workspaceId: string; readonly profileId: string; readonly version: string }): Promise<AgentProfileRecord | undefined>;
+  listAgentProfilesForUser(input: { readonly userId: string; readonly workspaceId?: string; readonly limit?: number }): Promise<AgentProfileRecord[]>;
+  updateAgentProfileVersion(input: { readonly workspaceId: string; readonly profileId: string; readonly version: string; readonly updates: Partial<AgentProfileRecord> }): Promise<AgentProfileRecord | undefined>;
+}
+
+export interface AgentProfileBundleStore {
+  putAgentProfileArtifact(input: { readonly key: string; readonly body: string; readonly contentType: string }): Promise<{ readonly s3Uri: string }>;
 }
 
 export interface ControlApiStore {

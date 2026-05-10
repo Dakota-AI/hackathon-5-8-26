@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { APIGatewayProxyStructuredResultV2, APIGatewayProxyEventV2WithJWTAuthorizer } from "aws-lambda";
+import { approveAgentProfileVersion, createAgentProfileDraft, getAgentProfileVersion, listAgentProfiles, S3AgentProfileBundleStore } from "./agent-profiles.js";
 import { createRun } from "./create-run.js";
 import { DynamoControlApiStore } from "./dynamo-store.js";
 import { getRun, listAdminRunEvents, listAdminRuns, listRunEvents } from "./query-runs.js";
@@ -10,6 +11,7 @@ import type { AuthenticatedUser } from "./ports.js";
 
 const store = DynamoControlApiStore.fromEnvironment();
 const executions = StepFunctionsExecutionStarter.fromEnvironment();
+const profileBundles = S3AgentProfileBundleStore.fromEnvironment();
 
 export async function createRunHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
   const user = userFromEvent(event);
@@ -310,6 +312,70 @@ export async function workItemsHandler(event: APIGatewayProxyEventV2WithJWTAutho
   return notImplemented("This WorkItem route is provisioned in infrastructure and will be implemented in the next Control API phase.");
 }
 
+export async function agentProfilesHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
+  const user = userFromEvent(event);
+  const routeKey = event.routeKey;
+
+  if (routeKey === "POST /agent-profiles/drafts") {
+    const body = parseJsonBody(event.body);
+    const result = await createAgentProfileDraft({
+      store,
+      bundles: profileBundles,
+      user,
+      now: () => new Date().toISOString(),
+      request: {
+        workspaceId: stringField(body, "workspaceId"),
+        profile: recordField(body, "profile") as never
+      }
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /agent-profiles") {
+    const result = await listAgentProfiles({
+      store,
+      user,
+      workspaceId: event.queryStringParameters?.workspaceId,
+      limit: parseOptionalInteger(event.queryStringParameters?.limit)
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /agent-profiles/{profileId}/versions/{version}") {
+    const profileId = event.pathParameters?.profileId;
+    const version = event.pathParameters?.version;
+    const workspaceId = event.queryStringParameters?.workspaceId;
+    if (!workspaceId || !profileId || !version) {
+      return json(400, { error: "BadRequest", message: "workspaceId query parameter, profileId path parameter, and version path parameter are required." });
+    }
+    const result = await getAgentProfileVersion({ store, user, workspaceId, profileId, version });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "POST /agent-profiles/{profileId}/versions/{version}/approve") {
+    const profileId = event.pathParameters?.profileId;
+    const version = event.pathParameters?.version;
+    const body = parseJsonBody(event.body);
+    const workspaceId = optionalStringField(body, "workspaceId") ?? event.queryStringParameters?.workspaceId;
+    if (!workspaceId || !profileId || !version) {
+      return json(400, { error: "BadRequest", message: "workspaceId, profileId, and version are required." });
+    }
+    const result = await approveAgentProfileVersion({
+      store,
+      bundles: profileBundles,
+      user,
+      now: () => new Date().toISOString(),
+      workspaceId,
+      profileId,
+      version,
+      notes: optionalStringField(body, "notes")
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  return notImplemented("This AgentProfile route is provisioned in infrastructure and will be implemented in the next Control API phase.");
+}
+
 export async function notImplementedArtifactsHandler(): Promise<APIGatewayProxyStructuredResultV2> {
   return notImplemented("Artifact API is provisioned in infrastructure and will be implemented in the Control API phase.");
 }
@@ -356,6 +422,10 @@ function optionalStringField(body: Record<string, unknown>, key: string): string
 function optionalRecordField(body: Record<string, unknown>, key: string): Record<string, unknown> | undefined {
   const value = body[key];
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function recordField(body: Record<string, unknown>, key: string): Record<string, unknown> {
+  return optionalRecordField(body, key) ?? {};
 }
 
 function parseOptionalInteger(value: string | undefined): number | undefined {

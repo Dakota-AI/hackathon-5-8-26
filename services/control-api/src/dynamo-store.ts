@@ -1,6 +1,6 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, ScanCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import type { ControlApiStore, EventRecord, HostNodeRecord, RunRecord, TaskRecord, UserRunnerRecord, WorkItemRecord } from "./ports.js";
+import type { AgentProfileRecord, ControlApiStore, EventRecord, HostNodeRecord, RunRecord, TaskRecord, UserRunnerRecord, WorkItemRecord } from "./ports.js";
 
 export class DynamoControlApiStore implements ControlApiStore {
   public constructor(
@@ -12,6 +12,7 @@ export class DynamoControlApiStore implements ControlApiStore {
       readonly eventsTableName: string;
       readonly hostNodesTableName?: string;
       readonly userRunnersTableName?: string;
+      readonly agentProfilesTableName?: string;
     }
   ) {}
 
@@ -22,14 +23,74 @@ export class DynamoControlApiStore implements ControlApiStore {
     const eventsTableName = mustEnv("EVENTS_TABLE_NAME");
     const hostNodesTableName = mustEnv("HOST_NODES_TABLE_NAME");
     const userRunnersTableName = mustEnv("USER_RUNNERS_TABLE_NAME");
+    const agentProfilesTableName = mustEnv("AGENT_PROFILES_TABLE_NAME");
     return new DynamoControlApiStore(DynamoDBDocumentClient.from(new DynamoDBClient({})), {
       workItemsTableName,
       runsTableName,
       tasksTableName,
       eventsTableName,
       hostNodesTableName,
-      userRunnersTableName
+      userRunnersTableName,
+      agentProfilesTableName
     });
+  }
+
+  async putAgentProfileVersion(record: AgentProfileRecord): Promise<void> {
+    await this.client.send(new PutCommand({
+      TableName: requiredTable(this.tables.agentProfilesTableName, "AGENT_PROFILES_TABLE_NAME"),
+      Item: record,
+      ConditionExpression: "attribute_not_exists(workspaceId) AND attribute_not_exists(profileVersionKey)"
+    }));
+  }
+
+  async getAgentProfileVersion(input: { readonly workspaceId: string; readonly profileId: string; readonly version: string }): Promise<AgentProfileRecord | undefined> {
+    const result = await this.client.send(new GetCommand({
+      TableName: requiredTable(this.tables.agentProfilesTableName, "AGENT_PROFILES_TABLE_NAME"),
+      Key: { workspaceId: input.workspaceId, profileVersionKey: `${input.profileId}#${input.version}` }
+    }));
+    return result.Item as AgentProfileRecord | undefined;
+  }
+
+  async listAgentProfilesForUser(input: { readonly userId: string; readonly workspaceId?: string; readonly limit?: number }): Promise<AgentProfileRecord[]> {
+    const values: Record<string, unknown> = { ":userId": input.userId };
+    const result = await this.client.send(new QueryCommand({
+      TableName: requiredTable(this.tables.agentProfilesTableName, "AGENT_PROFILES_TABLE_NAME"),
+      IndexName: "by-user-created-at",
+      KeyConditionExpression: "userId = :userId",
+      ExpressionAttributeValues: input.workspaceId ? { ...values, ":workspaceId": input.workspaceId } : values,
+      Limit: Math.min(Math.max(input.limit ?? 50, 1), 100),
+      ScanIndexForward: false,
+      ...(input.workspaceId ? { FilterExpression: "workspaceId = :workspaceId" } : {})
+    }));
+    return (result.Items ?? []) as AgentProfileRecord[];
+  }
+
+  async updateAgentProfileVersion(input: { readonly workspaceId: string; readonly profileId: string; readonly version: string; readonly updates: Partial<AgentProfileRecord> }): Promise<AgentProfileRecord | undefined> {
+    const names: Record<string, string> = {};
+    const values: Record<string, unknown> = {};
+    const assignments = Object.entries(input.updates)
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value], index) => {
+        const nameKey = `#n${index}`;
+        const valueKey = `:v${index}`;
+        names[nameKey] = key;
+        values[valueKey] = value;
+        return `${nameKey} = ${valueKey}`;
+      });
+
+    if (assignments.length === 0) {
+      return this.getAgentProfileVersion(input);
+    }
+
+    const result = await this.client.send(new UpdateCommand({
+      TableName: requiredTable(this.tables.agentProfilesTableName, "AGENT_PROFILES_TABLE_NAME"),
+      Key: { workspaceId: input.workspaceId, profileVersionKey: `${input.profileId}#${input.version}` },
+      UpdateExpression: `SET ${assignments.join(", ")}`,
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: values,
+      ReturnValues: "ALL_NEW"
+    }));
+    return result.Attributes as AgentProfileRecord | undefined;
   }
 
   async putWorkItem(item: WorkItemRecord): Promise<void> {

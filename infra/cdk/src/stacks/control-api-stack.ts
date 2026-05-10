@@ -13,9 +13,11 @@ import { AgentsCloudStack } from "./agents-cloud-stack.js";
 import type { AgentsCloudStackProps } from "./agents-cloud-stack.js";
 import type { OrchestrationStack } from "./orchestration-stack.js";
 import type { StateStack } from "./state-stack.js";
+import type { StorageStack } from "./storage-stack.js";
 
 export interface ControlApiStackProps extends AgentsCloudStackProps {
   readonly state: StateStack;
+  readonly storage: StorageStack;
   readonly orchestration: OrchestrationStack;
 }
 
@@ -55,6 +57,8 @@ export class ControlApiStack extends AgentsCloudStack {
       SURFACES_TABLE_NAME: props.state.surfacesTable.tableName,
       HOST_NODES_TABLE_NAME: props.state.hostNodesTable.tableName,
       USER_RUNNERS_TABLE_NAME: props.state.userRunnersTable.tableName,
+      AGENT_PROFILES_TABLE_NAME: props.state.agentProfilesTable.tableName,
+      PROFILE_BUNDLES_BUCKET_NAME: props.storage.workspaceLiveArtifactsBucket.bucketName,
       STATE_MACHINE_ARN: props.orchestration.simpleRunStateMachine.stateMachineArn,
       ADMIN_EMAILS: "seb4594@gmail.com"
     };
@@ -122,6 +126,15 @@ export class ControlApiStack extends AgentsCloudStack {
       environment: commonEnvironment
     });
 
+    const agentProfilesFunction = new NodejsFunction(this, "AgentProfilesFunction", {
+      runtime: Runtime.NODEJS_22_X,
+      entry: controlApiEntry,
+      handler: "agentProfilesHandler",
+      timeout: Duration.seconds(15),
+      memorySize: 256,
+      environment: commonEnvironment
+    });
+
     const artifactsFunction = new NodejsFunction(this, "ArtifactsFunction", {
       runtime: Runtime.NODEJS_22_X,
       entry: controlApiEntry,
@@ -172,6 +185,9 @@ export class ControlApiStack extends AgentsCloudStack {
 
     props.state.hostNodesTable.grantReadWriteData(runnerStateFunction);
     props.state.userRunnersTable.grantReadWriteData(runnerStateFunction);
+
+    props.state.agentProfilesTable.grantReadWriteData(agentProfilesFunction);
+    props.storage.workspaceLiveArtifactsBucket.grantReadWrite(agentProfilesFunction);
 
     props.state.workItemsTable.grantReadData(artifactsFunction);
     props.state.runsTable.grantReadData(artifactsFunction);
@@ -245,6 +261,20 @@ export class ControlApiStack extends AgentsCloudStack {
         path: route.path,
         methods: route.methods,
         integration: new HttpLambdaIntegration(`RunnerStateIntegration${route.path.replace(/[^A-Za-z0-9]/g, "")}${route.methods.join("")}`, runnerStateFunction),
+        authorizer
+      });
+    }
+
+    for (const route of [
+      { path: "/agent-profiles/drafts", methods: [HttpMethod.POST] },
+      { path: "/agent-profiles", methods: [HttpMethod.GET] },
+      { path: "/agent-profiles/{profileId}/versions/{version}", methods: [HttpMethod.GET] },
+      { path: "/agent-profiles/{profileId}/versions/{version}/approve", methods: [HttpMethod.POST] }
+    ]) {
+      this.api.addRoutes({
+        path: route.path,
+        methods: route.methods,
+        integration: new HttpLambdaIntegration(`AgentProfilesIntegration${route.path.replace(/[^A-Za-z0-9]/g, "")}${route.methods.join("")}`, agentProfilesFunction),
         authorizer
       });
     }

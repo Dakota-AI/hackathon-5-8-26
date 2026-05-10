@@ -51,7 +51,7 @@ function synthPlatform() {
   const cluster = new ClusterStack(app, "ClusterUnderTest", { config, env: testEnv, network });
   const runtime = new RuntimeStack(app, "RuntimeUnderTest", { config, env: testEnv, cluster, storage, state });
   const orchestration = new OrchestrationStack(app, "OrchestrationUnderTest", { config, env: testEnv, cluster, network });
-  const controlApi = new ControlApiStack(app, "ControlApiUnderTest", { config, env: testEnv, state, orchestration });
+  const controlApi = new ControlApiStack(app, "ControlApiUnderTest", { config, env: testEnv, state, storage, orchestration });
 
   return {
     state: Template.fromStack(state),
@@ -133,7 +133,9 @@ describe("WorkItem/GenUI infrastructure", () => {
           DATA_SOURCES_TABLE_NAME: Match.anyValue(),
           SURFACES_TABLE_NAME: Match.anyValue(),
           HOST_NODES_TABLE_NAME: Match.anyValue(),
-          USER_RUNNERS_TABLE_NAME: Match.anyValue()
+          USER_RUNNERS_TABLE_NAME: Match.anyValue(),
+          AGENT_PROFILES_TABLE_NAME: Match.anyValue(),
+          PROFILE_BUNDLES_BUCKET_NAME: Match.anyValue()
         })
       }
     });
@@ -166,7 +168,11 @@ describe("WorkItem/GenUI infrastructure", () => {
       "GET /user-runners/{runnerId}",
       "PATCH /user-runners/{runnerId}",
       "POST /user-runners/{runnerId}/heartbeat",
-      "GET /admin/runners"
+      "GET /admin/runners",
+      "POST /agent-profiles/drafts",
+      "GET /agent-profiles",
+      "GET /agent-profiles/{profileId}/versions/{version}",
+      "POST /agent-profiles/{profileId}/versions/{version}/approve"
     ]) {
       controlApi.hasResourceProperties("AWS::ApiGatewayV2::Route", { RouteKey: routeKey });
     }
@@ -192,6 +198,30 @@ describe("WorkItem/GenUI infrastructure", () => {
             Match.objectLike({ Name: "WORK_ITEMS_TABLE_NAME" }),
             Match.objectLike({ Name: "DATA_SOURCES_TABLE_NAME" }),
             Match.objectLike({ Name: "SURFACES_TABLE_NAME" })
+          ])
+        })
+      ])
+    });
+  });
+
+  it("defines a separate resident user-runner ECS task with runner state dependencies", () => {
+    const { runtime } = synthPlatform();
+
+    runtime.hasResourceProperties("AWS::ECS::TaskDefinition", {
+      ContainerDefinitions: Match.arrayWith([
+        Match.objectLike({
+          Name: "resident-runner",
+          PortMappings: Match.arrayWith([Match.objectLike({ ContainerPort: 8787 })]),
+          Environment: Match.arrayWith([
+            Match.objectLike({ Name: "AGENTS_RUNTIME_MODE", Value: "ecs-resident" }),
+            Match.objectLike({ Name: "AGENTS_RESIDENT_ADAPTER", Value: "smoke" }),
+            Match.objectLike({ Name: "EVENTS_TABLE_NAME" }),
+            Match.objectLike({ Name: "HOST_NODES_TABLE_NAME" }),
+            Match.objectLike({ Name: "USER_RUNNERS_TABLE_NAME" }),
+            Match.objectLike({ Name: "RUNNER_SNAPSHOTS_TABLE_NAME" }),
+            Match.objectLike({ Name: "AGENT_INSTANCES_TABLE_NAME" }),
+            Match.objectLike({ Name: "AGENT_PROFILES_TABLE_NAME" }),
+            Match.objectLike({ Name: "ARTIFACTS_BUCKET_NAME" })
           ])
         })
       ])

@@ -212,13 +212,19 @@ Recommended next admin slice:
 
 ### Flutter Desktop/Mobile
 
-Recommended next Flutter slice:
+Status (2026-05-10): live Control API wiring complete. `HttpWorkRepository`
+delegates to `ControlApi` with hardened failure policy (real errors
+propagate; only unauthenticated falls back to fixtures). Trust default
+flipped so unknown surface validation tokens are treated as unvalidated.
+See `docs/roadmap/CLIENT_REAL_API_WIRING_2026_05_10.md`.
 
-1. Keep the shadcn_flutter UI shell, but move domain repositories from fixture-only toward Control API adapters.
-2. Add Cognito/Auth client wiring parity.
-3. Add WorkItem list/detail API adapter with fixture fallback.
-4. Add event timeline rendering from ordered canonical events.
-5. Add generated-surface renderer only after server-side validation exists.
+Remaining Flutter follow-ups:
+
+1. Wire artifact presigned-download into the artifact tile UI (endpoint
+   client method shipped; UI button pending).
+2. Wire admin/runner observability screens against `/admin/*` routes.
+3. Generated-surface renderer once component-level catalog validation
+   is in place server-side.
 
 ## What Backend Should Be Finished Before Claiming Product Completion
 

@@ -1,5 +1,5 @@
-import { CommandCenter } from "../components/command-center";
+import { HostRoutedHome } from "../components/host-routed-home";
 
-export default function HomePage() {
-  return <CommandCenter />;
+export default function Home() {
+  return <HostRoutedHome />;
 }

@@ -7,6 +7,9 @@ docs
 infra
 apps
 packages
+!packages
+!packages/protocol
+!packages/protocol/**
 tools
 services/control-api
 services/agent-runtime/README.md

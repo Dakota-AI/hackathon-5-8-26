@@ -7,13 +7,16 @@ ENV NODE_ENV=production \
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY packages/protocol/package.json packages/protocol/package.json
 COPY services/agent-runtime/package.json services/agent-runtime/package.json
 RUN corepack enable \
   && corepack prepare pnpm@10.0.0 --activate \
-  && pnpm install --filter @agents-cloud/agent-runtime --frozen-lockfile
+  && pnpm install --filter @agents-cloud/protocol --filter @agents-cloud/agent-runtime --frozen-lockfile --prod=false
 
+COPY packages/protocol packages/protocol
 COPY services/agent-runtime services/agent-runtime
-RUN pnpm --filter @agents-cloud/agent-runtime run build
+RUN pnpm --filter @agents-cloud/protocol run build \
+  && pnpm --filter @agents-cloud/agent-runtime run build
 
 # The worker defaults to HERMES_RUNNER_MODE=smoke so the durable ECS ->
 # DynamoDB/S3 lifecycle can be verified before model/provider secrets are

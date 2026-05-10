@@ -1,0 +1,94 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  buildWorkItemDetailView,
+  deriveWorkItemSummary,
+  filterWorkItemsByState,
+  getPrimaryWorkItem,
+  listFixtureWorkItems,
+  normalizeWorkItemState,
+  rejectUnsafeSurfacePayload,
+  type WorkItemDetail
+} from "../lib/work-items.ts";
+
+test("listFixtureWorkItems returns WorkItems ordered by urgency and recent activity", () => {
+  const items = listFixtureWorkItems();
+
+  assert.ok(items.length >= 3);
+  assert.deepEqual(
+    items.slice(0, 3).map((item) => item.id),
+    ["work_competitor_pricing", "work_launch_preview", "work_miro_research"]
+  );
+});
+
+test("deriveWorkItemSummary makes WorkItem status more important than raw run state", () => {
+  const item = getPrimaryWorkItem();
+  const summary = deriveWorkItemSummary(item);
+
+  assert.equal(summary.title, "Track competitor pricing");
+  assert.equal(summary.primaryStatusLabel, "Needs review");
+  assert.equal(summary.nextAction, "Review dashboard and approve weekly monitoring");
+  assert.equal(summary.runSummary, "1 active / 3 total");
+  assert.equal(summary.artifactSummary, "4 artifacts");
+  assert.equal(summary.surfaceSummary, "2 generated surfaces");
+});
+
+test("buildWorkItemDetailView exposes runs, events, artifacts, approvals, and validated surfaces", () => {
+  const detail = buildWorkItemDetailView(getPrimaryWorkItem());
+
+  assert.equal(detail.id, "work_competitor_pricing");
+  assert.equal(detail.sections.runs.length, 3);
+  assert.equal(detail.sections.events[0]?.label, "Dashboard generated");
+  assert.equal(detail.sections.artifacts.map((artifact) => artifact.kind).includes("report"), true);
+  assert.equal(detail.sections.approvals[0]?.decision, "pending");
+  assert.deepEqual(
+    detail.sections.surfaces.map((surface) => surface.validation),
+    ["server-validated", "server-validated"]
+  );
+});
+
+test("filterWorkItemsByState covers loading, empty, denied, offline, stale, and ready states", () => {
+  const ready = filterWorkItemsByState({ kind: "ready", items: listFixtureWorkItems() });
+  const loading = filterWorkItemsByState({ kind: "loading" });
+  const empty = filterWorkItemsByState({ kind: "ready", items: [] });
+  const denied = filterWorkItemsByState({ kind: "denied", message: "No workspace access" });
+  const offline = filterWorkItemsByState({ kind: "offline" });
+  const stale = filterWorkItemsByState({ kind: "stale", items: [getPrimaryWorkItem()], lastUpdatedLabel: "7 min ago" });
+
+  assert.equal(ready.mode, "ready");
+  assert.equal(ready.items.length, listFixtureWorkItems().length);
+  assert.equal(loading.mode, "loading");
+  assert.equal(empty.mode, "empty");
+  assert.equal(denied.mode, "denied");
+  assert.equal(offline.mode, "offline");
+  assert.equal(stale.mode, "stale");
+  assert.equal(stale.statusText, "Last saved update was 7 min ago");
+});
+
+test("normalizeWorkItemState keeps product labels stable for clients", () => {
+  assert.equal(normalizeWorkItemState("new"), "Intake");
+  assert.equal(normalizeWorkItemState("planning"), "Planning");
+  assert.equal(normalizeWorkItemState("running"), "In progress");
+  assert.equal(normalizeWorkItemState("needs_review"), "Needs review");
+  assert.equal(normalizeWorkItemState("blocked"), "Blocked");
+  assert.equal(normalizeWorkItemState("done"), "Done");
+});
+
+test("rejectUnsafeSurfacePayload fails closed for unvalidated generated UI", () => {
+  const detail: WorkItemDetail = buildWorkItemDetailView(getPrimaryWorkItem());
+
+  assert.equal(rejectUnsafeSurfacePayload(detail.sections.surfaces[0]), false);
+  assert.equal(
+    rejectUnsafeSurfacePayload({
+      id: "surface_raw_html",
+      title: "Raw HTML preview",
+      kind: "dashboard",
+      validation: "unvalidated",
+      componentCount: 1,
+      dataSources: ["inline-data"],
+      lastUpdated: "now"
+    }),
+    true
+  );
+});

@@ -3,7 +3,7 @@
 Workstream: Clients
 Owner: Clients Workstream Agent
 Updated: 2026-05-10
-Status: scoped; ready for smallest client slice after plan approval/continuation
+Status: first web WorkItem slice implemented; ready for backend adapter or Flutter parity next
 
 ## Current Scope
 
@@ -224,14 +224,15 @@ Smallest next client slice should avoid backend/infra files and stay in client-o
 
 Expected web files for the recommended next slice:
 
-- Create: `apps/web/lib/work-items.ts`
-- Create: `apps/web/test/work-items.test.ts`
-- Create or modify: `apps/web/components/work-board.tsx`
-- Create or modify: `apps/web/components/work-item-detail.tsx`
-- Modify: `apps/web/components/command-center.tsx` or `apps/web/components/host-routed-home.tsx` to make WorkItems primary in normal UX
+- Create: `apps/web/lib/work-items.ts` ✅ implemented
+- Create: `apps/web/test/work-items.test.ts` ✅ implemented
+- Create or modify: `apps/web/components/work-dashboard.tsx` ✅ implemented as combined WorkItem list/detail surface
+- Create or modify later: `apps/web/components/work-board.tsx`
+- Create or modify later: `apps/web/components/work-item-detail.tsx`
+- Modify: `apps/web/components/command-center.tsx` or `apps/web/components/host-routed-home.tsx` to make WorkItems primary in normal UX ✅ `command-center.tsx` now renders WorkItems before the composer
 - Modify: `apps/web/app/page.tsx` only if needed to route the static-export-compatible Work shell
-- Modify: `apps/web/app/globals.css` for dense WorkItem layout states
-- Modify: `docs/agent-workstreams/clients/CURRENT_PLAN.md`
+- Modify: `apps/web/app/globals.css` for dense WorkItem layout states ✅ implemented
+- Modify: `docs/agent-workstreams/clients/CURRENT_PLAN.md` ✅ updated with implementation progress
 
 Potential later Flutter files:
 
@@ -372,7 +373,10 @@ Then open local web, inspect the browser console, and verify the first screen pr
 - 2026-05-10: Ran `git status --short --branch`; working tree has many unrelated backend/infra/docs changes. No app code diff was found in `apps/web` or `apps/desktop_mobile` before this planning update.
 - 2026-05-10: Audited current web app files: `command-center.tsx`, `admin-console.tsx`, `host-routed-home.tsx`, `control-api.ts`, `run-ledger.ts`, fixtures, and tests.
 - 2026-05-10: Audited current Flutter files: `main.dart`, `backend_config.dart`, and widget tests.
-- 2026-05-10: Created this Clients current plan. No broad UI work has started yet.
+- 2026-05-10: Created this Clients current plan. No broad UI work had started yet.
+- 2026-05-10: Implemented the first fixture-backed web WorkItem slice in client-owned files only: `apps/web/lib/work-items.ts`, `apps/web/test/work-items.test.ts`, `apps/web/components/work-dashboard.tsx`, `apps/web/components/command-center.tsx`, and `apps/web/app/globals.css`.
+- 2026-05-10: Added TDD coverage for WorkItem ordering, summary/detail aggregation, loading/empty/denied/offline/stale view states, status labels, and fail-closed generated-surface validation.
+- 2026-05-10: Verified the web slice with `pnpm web:typecheck`, `pnpm web:test`, and `pnpm web:build`. Also dogfooded locally with dev auth bypass at `http://localhost:3002`; page title was `Agents Cloud`, first screen showed the WorkItem dashboard, and browser console reported 0 JavaScript errors.
 
 ## Completion Criteria
 

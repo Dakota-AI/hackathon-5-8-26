@@ -22,6 +22,7 @@ import {
   serializeUnsubscribeRunMessage
 } from "../lib/realtime-client";
 import { deriveRunLedgerView, isSmokeWorkerArtifact, mergeRunEvents } from "../lib/run-ledger";
+import { WorkDashboard } from "./work-dashboard";
 
 const defaultObjective = "";
 
@@ -68,7 +69,7 @@ function CommandCenterApp({ userLabel, onSignOut }: { userLabel: string; onSignO
       <header className="chat-header">
         <div>
           <strong>Agents Cloud</strong>
-          <span>Ask for work. Review the result.</span>
+          <span>Delegate outcomes. Track durable work.</span>
         </div>
         <div className="account-menu">
           <span>{userLabel}</span>
@@ -79,6 +80,7 @@ function CommandCenterApp({ userLabel, onSignOut }: { userLabel: string; onSignO
           ) : null}
         </div>
       </header>
+      <WorkDashboard />
       <CreateRunPanel apiConfigured={api.configured} mockMode={api.mockMode} />
     </main>
   );

@@ -18,14 +18,14 @@ Current state:
 - A Step Functions -> ECS Fargate -> CloudWatch smoke test succeeded.
 - Amplify Gen 2 Auth sandbox is deployed and healthy.
 - Amplify Hosting app exists, is connected to the private GitHub repo, and now deploys successfully with an explicit `amplify.yml` build spec.
-- The main missing product/backend piece is still the Control API that creates/query runs and bridges Amplify Auth to the CDK platform backend.
+- The first Control API slice is deployed: create/query run endpoints, Cognito JWT authorizer, DynamoDB run/event writes, and Step Functions start. The next backend gap is replacing the placeholder ECS runtime with a minimal real worker that writes durable status/artifact events.
 
 Approximate progress:
 
-- Infrastructure foundation: 55-65% of the first foundation layer.
-- Backend application/runtime: 15-25%.
-- Product/API/UI layer: 5-10%.
-- Overall MVP: 20-30%.
+- Infrastructure foundation: 65-75% of the first foundation layer.
+- Backend application/runtime: 25-35%.
+- Product/API/UI layer: 10-15%.
+- Overall MVP: 25-35%.
 
 ## AWS Environment
 
@@ -54,6 +54,7 @@ The following CDK stacks are deployed and verified as `CREATE_COMPLETE`:
 | `agents-cloud-dev-cluster` | Complete | ECS cluster and CloudWatch log group. |
 | `agents-cloud-dev-runtime` | Complete | Placeholder Fargate task definition and IAM grants, including preview deployment registry access. |
 | `agents-cloud-dev-orchestration` | Complete | Step Functions state machine that launches the Fargate task. |
+| `agents-cloud-dev-control-api` | Complete | API Gateway HTTP API, Cognito JWT authorizer, and Lambda handlers for create/query run lifecycle. |
 
 Smoke test result:
 
@@ -70,6 +71,7 @@ Important deployed resources:
 - Preview static bucket: `agents-cloud-dev-storage-previewstaticbucket42b307-oyrfiakvhnf8`
 - Preview deployments table: `agents-cloud-dev-state-PreviewDeploymentsTable37B54DE6-WEG6QR56NMCX`
 - Runtime task definition: `arn:aws:ecs:us-east-1:625250616301:task-definition/agents-cloud-dev-agent-runtime:1`
+- Control API URL: `https://ajmonuqk61.execute-api.us-east-1.amazonaws.com`
 
 ## Completed and Deployed: Amplify Auth Sandbox
 
@@ -139,13 +141,27 @@ These are pushed to:
 
 ### Control API
 
-Not built yet.
+Deployed foundation slice; authenticated product smoke still pending.
 
-Needed endpoints:
+Implemented in this repo:
 
-- `POST /runs`
-- `GET /runs/{runId}`
-- `GET /runs/{runId}/events`
+- CDK `ControlApiStack` with an API Gateway HTTP API.
+- Cognito JWT authorizer wired to the current Amplify Auth user pool/client.
+- Lambda handlers for:
+  - `POST /runs`
+  - `GET /runs/{runId}`
+  - `GET /runs/{runId}/events`
+- DynamoDB write/query helpers for run, task, and event records.
+- Step Functions start helper for the existing simple-run state machine.
+- Unit tests for create-run durability, request validation, owned-run reads,
+  cross-user denial, and ordered event cursor queries.
+
+Still needed before calling this product-complete:
+
+- Smoke-test an authenticated Cognito request end-to-end.
+- Add true idempotency handling for repeated `POST /runs` requests.
+- Replace the placeholder ECS runtime with a minimal worker that writes running,
+  artifact, and terminal status events.
 
 Responsibilities:
 

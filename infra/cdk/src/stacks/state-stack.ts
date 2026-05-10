@@ -23,6 +23,11 @@ export class StateStack extends AgentsCloudStack {
       sortKey: { name: "createdAt", type: AttributeType.STRING },
       projectionType: ProjectionType.ALL
     });
+    this.runsTable.addGlobalSecondaryIndex({
+      indexName: "by-run-id",
+      partitionKey: { name: "runId", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
 
     this.tasksTable = this.createTable("TasksTable", "runId", AttributeType.STRING, "taskId", AttributeType.STRING, props);
     this.tasksTable.addGlobalSecondaryIndex({

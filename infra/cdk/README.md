@@ -4,7 +4,7 @@ This package contains the first deployable AWS CDK foundation for `agents-cloud`
 
 ## Current Status
 
-Implemented and synthesizing:
+Implemented, deployed, and synthesizing:
 
 - `FoundationStack`
   - Shared app/environment SSM parameters.
@@ -46,6 +46,14 @@ Implemented and synthesizing:
   - First Step Functions state machine.
   - Runs the placeholder Fargate task with Step Functions `RUN_JOB` integration.
 
+- `ControlApiStack`
+  - API Gateway HTTP API for durable run lifecycle endpoints.
+  - Cognito JWT authorizer wired to the Amplify Auth user pool/client.
+  - Lambda handlers for `POST /runs`, `GET /runs/{runId}`, and
+    `GET /runs/{runId}/events`.
+  - IAM grants for DynamoDB run/task/event access and Step Functions execution
+    start.
+
 - Optional `PreviewIngressStack`
   - Gated by `AGENTS_CLOUD_PREVIEW_INGRESS_ENABLED=true`.
   - Creates the public HTTPS ALB and placeholder ECS `preview-router` service.
@@ -55,14 +63,14 @@ Implemented and synthesizing:
     certificate with `AGENTS_CLOUD_PREVIEW_CERTIFICATE_ARN` and leaving DNS
     record creation outside CDK.
 
-Not implemented yet:
+Not complete yet:
 
 - Real worker application image.
-- Lambda/API Gateway Control API.
 - EventBridge/SQS event relay.
 - Cloudflare realtime stack.
-- Direct integration from the CDK Control API to the Amplify Auth/Cognito user
-  pool.
+- The Cognito user pool/client defaults point at the current Amplify sandbox and
+  can be overridden with `AGENTS_CLOUD_COGNITO_USER_POOL_ID` and
+  `AGENTS_CLOUD_COGNITO_USER_POOL_CLIENT_ID`.
 
 Related implementation that lives outside this package:
 
@@ -235,6 +243,7 @@ Default `dev` synth creates these stack ids:
 - `agents-cloud-dev-cluster`
 - `agents-cloud-dev-runtime`
 - `agents-cloud-dev-orchestration`
+- `agents-cloud-dev-control-api`
 
 To inspect one synthesized template:
 
@@ -246,8 +255,8 @@ pnpm --filter @agents-cloud/infra-cdk synth -- agents-cloud-dev-state
 
 The next infra/application layer should add:
 
-1. `control-api` Lambda/API Gateway skeleton to create and query runs.
+1. A real `agent-runtime` image/script that receives `RUN_ID`, writes a test artifact, emits canonical status events, and exits.
 2. EventBridge/SQS resources for durable event movement between workers, Control API, and realtime relay.
-3. A real `agent-runtime` image/script that receives `RUN_ID`, writes a test artifact, emits canonical status events, and exits.
+3. Real-client Control API calls using Cognito tokens from the web/native shells.
 4. `ClusterStack` expansion for separate worker classes (`agent-light`, `agent-code`, `agent-builder-heavy`, `agent-eval`, `preview-app`).
 5. Cloudflare Worker/Durable Object realtime skeleton for run status fanout.

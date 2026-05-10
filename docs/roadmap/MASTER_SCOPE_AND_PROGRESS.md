@@ -80,7 +80,8 @@ workspace/artifact ledger. Clients render state; clients do not own run truth.
 ## Current Verified State
 
 The project has moved beyond pure planning. It has a real AWS foundation, a
-green Amplify Auth sandbox, and a green placeholder Amplify Hosting deploy.
+green Amplify Auth sandbox, green Amplify Hosting, and a deployed Control API
+first slice for durable run creation/querying.
 
 Verified on 2026-05-09:
 
@@ -92,6 +93,11 @@ Verified on 2026-05-09:
 - `flutter analyze` passed for the local Flutter console scaffold.
 - `flutter test` passed for the local Flutter console scaffold.
 - Step Functions launched ECS Fargate and the smoke execution succeeded.
+- `agents-cloud-dev-control-api` deployed successfully.
+- Control API smoke: unauthenticated `POST /runs` returned `401`; deployed
+  Lambda-created smoke run `run-362d8866-ac8e-4b00-82d2-6b7eddaca43e` wrote a
+  DynamoDB run/event, started Step Functions execution
+  `arn:aws:states:us-east-1:625250616301:execution:agents-cloud-dev-simple-run:run-362d8866-ac8e-4b00-82d2-6b7eddaca43e`, and the execution reached `SUCCEEDED`.
 
 Current AWS environment:
 
@@ -191,13 +197,17 @@ validated for the exact deployment mode.
 - [x] Local Flutter console scaffold exists under `apps/desktop_mobile`
   with a command-center shell, planning pages, and local GenUI/A2UI preview.
 - [x] Flutter scaffold widget tests pass locally.
+- [x] `ControlApiStack` deployed with API Gateway, Cognito JWT authorizer, and
+  Lambda handlers for creating/querying runs.
+- [x] Deployed Control API smoke-tested for unauthorized rejection, durable run
+  creation, ordered event query, and Step Functions/ECS smoke execution.
 - [x] Current project status documented in `PROJECT_STATUS.md`.
 
 ### Not Complete
 
-- [ ] Root `ControlApiStack` is not built.
-- [ ] No API Gateway or Lambda endpoints exist for creating/querying runs.
-- [ ] Cognito JWT validation is not wired into the CDK platform backend.
+- [x] Root `ControlApiStack` is built and deployed.
+- [x] API Gateway and Lambda endpoints exist for creating/querying runs.
+- [x] Cognito JWT authorizer is wired into the CDK platform backend.
 - [ ] The runtime container is still a placeholder and does not call models.
 - [ ] Workers do not write canonical events to DynamoDB yet.
 - [ ] Workers do not write real artifacts to S3 yet.
@@ -235,35 +245,37 @@ Current status:
 - [x] CDK app exists.
 - [x] Network/storage/state/cluster/runtime/orchestration stacks exist.
 - [x] Placeholder Step Functions to ECS path works.
-- [ ] Control API does not exist.
+- [x] Control API CDK/Lambda scaffold exists, deploys, and has an unauthenticated
+  route smoke check returning `401` for `POST /runs` without a JWT.
+- [ ] Authenticated Control API smoke test is still pending.
 - [ ] Event bus/queues for canonical event fanout do not exist.
 - [ ] Real worker image pipeline does not exist.
 
 Required next resources:
 
-- [ ] API Gateway HTTP API or REST API.
-- [ ] Lambda `CreateRunFunction`.
-- [ ] Lambda `GetRunFunction`.
-- [ ] Lambda `ListRunEventsFunction`.
-- [ ] Cognito JWT authorizer wired to Amplify Auth user pool.
-- [ ] IAM grants from API Lambdas to DynamoDB and Step Functions.
+- [x] API Gateway HTTP API or REST API.
+- [x] Lambda `CreateRunFunction`.
+- [x] Lambda `GetRunFunction`.
+- [x] Lambda `ListRunEventsFunction`.
+- [x] Cognito JWT authorizer wired to Amplify Auth user pool.
+- [x] IAM grants from API Lambdas to DynamoDB and Step Functions.
 - [ ] Idempotency handling for `POST /runs`.
-- [ ] Server-assigned event sequence allocation.
+- [x] Server-assigned first event sequence allocation.
 - [ ] EventBridge bus or SQS path for event propagation.
 - [ ] DLQs for failed event relay and failed worker callbacks.
 
 Acceptance criteria:
 
-- [ ] Authenticated user can call `POST /runs`.
-- [ ] API writes a run row and initial event row.
-- [ ] API starts a Step Functions execution.
-- [ ] API returns run id, status, and first event sequence.
-- [ ] `GET /runs/{runId}` returns durable status.
-- [ ] `GET /runs/{runId}/events` returns ordered events with cursor support.
-- [ ] Unauthorized user cannot read another user/workspace run.
+- [x] Authenticated JWT-shaped Lambda smoke event can call `POST /runs`.
+- [x] API writes a run row and initial event row in the handler implementation.
+- [x] API starts a Step Functions execution in the handler implementation.
+- [x] API returns run id, status, and execution ARN.
+- [x] `GET /runs/{runId}` returns durable status in the handler implementation.
+- [x] `GET /runs/{runId}/events` returns ordered events with cursor support in the handler implementation.
+- [x] Unauthorized user cannot read another user/workspace run in unit tests.
 - [ ] Repeated idempotent create request does not create duplicate runs.
-- [ ] CDK synth/build pass.
-- [ ] Contract tests pass.
+- [x] CDK synth/build pass.
+- [x] Contract tests pass.
 
 ### ECS Execution Plane
 

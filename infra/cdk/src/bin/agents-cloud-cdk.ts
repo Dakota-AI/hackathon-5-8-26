@@ -2,6 +2,7 @@
 import { App, Tags } from "aws-cdk-lib";
 import { loadConfig, stackName } from "../config/environments.js";
 import { ClusterStack } from "../stacks/cluster-stack.js";
+import { ControlApiStack } from "../stacks/control-api-stack.js";
 import { FoundationStack } from "../stacks/foundation-stack.js";
 import { NetworkStack } from "../stacks/network-stack.js";
 import { OrchestrationStack } from "../stacks/orchestration-stack.js";
@@ -30,6 +31,12 @@ const orchestration = new OrchestrationStack(app, stackName(config, "orchestrati
   network,
   runtime
 });
+const controlApi = new ControlApiStack(app, stackName(config, "control-api"), {
+  config,
+  env,
+  state,
+  orchestration
+});
 
 const previewIngress = config.previewIngress.enabled
   ? new PreviewIngressStack(app, stackName(config, "preview-ingress"), {
@@ -50,6 +57,8 @@ runtime.addDependency(cluster);
 runtime.addDependency(storage);
 runtime.addDependency(state);
 orchestration.addDependency(runtime);
+controlApi.addDependency(orchestration);
+controlApi.addDependency(state);
 if (previewIngress) {
   previewIngress.addDependency(cluster);
   previewIngress.addDependency(storage);

@@ -1,7 +1,7 @@
 # Foundation Next Steps
 
 Date: 2026-05-09
-Status: Current post-CDK implementation starter plan
+Status: Current post-Control API first-slice deployment plan
 
 ## Current Foundation State
 
@@ -19,10 +19,10 @@ Completed:
 - [x] Amplify Hosting placeholder is green.
 - [x] Preview deployment registry table exists.
 - [x] Optional preview ingress stack is scaffolded.
+- [x] Control API first slice is deployed and smoke-tested.
 
 Still missing:
 
-- [ ] Control API.
 - [ ] Real worker runtime.
 - [ ] Worker event/artifact writes.
 - [ ] Event relay.
@@ -37,18 +37,18 @@ Use `MASTER_SCOPE_AND_PROGRESS.md` for the full scope and detailed checklists.
 
 ## Highest-Value Next Step
 
-Build the first app-callable durable run lifecycle.
+Build the minimal real worker behind the app-callable durable run lifecycle.
 
 The next concrete slice is:
 
 ```text
-Amplify Auth user
-  -> Control API
-  -> DynamoDB run/event records
+Control API-created run
   -> Step Functions execution
-  -> ECS worker
-  -> durable status/events/artifacts
-  -> queryable run detail
+  -> ECS worker receives run/task/workspace context
+  -> worker writes running status event
+  -> worker writes one S3 artifact + artifact event
+  -> worker writes terminal status event
+  -> clients can poll durable run detail/events
 ```
 
 Do not begin with a large UI, Miro integration, Codex worker, Hermes worker, or
@@ -57,19 +57,13 @@ contract, and worker lifecycle underneath them.
 
 ## Implementation Order
 
-1. Tighten protocol contracts where the current package is too loose.
-2. Add `ControlApiStack` to `infra/cdk`.
-3. Add Lambda handlers for:
-   - `POST /runs`
-   - `GET /runs/{runId}`
-   - `GET /runs/{runId}/events`
-4. Validate Cognito JWTs from the Amplify Auth user pool.
-5. Write run and initial event rows to DynamoDB.
-6. Start the existing Step Functions state machine.
-7. Query ordered events with cursor support.
-8. Replace the placeholder ECS task with a minimal real worker.
-9. Have the worker write status events and one artifact to S3.
-10. Add event relay and Cloudflare realtime after durable polling works.
+1. Replace the placeholder ECS task with a minimal real worker.
+2. Define the worker context contract: run id, task id, workspace id, user id, objective, event sink, artifact sink.
+3. Have the worker write `running`, artifact-created, and terminal status events.
+4. Have the worker write one small S3 artifact and corresponding artifact metadata.
+5. Add true idempotency behavior for repeated `POST /runs`.
+6. Exercise Control API with a real Cognito token from the first client.
+7. Add event relay and Cloudflare realtime after durable polling works.
 
 ## User Inputs Needed Soon
 
@@ -99,28 +93,28 @@ Can wait:
 
 Build:
 
-- [ ] API Gateway.
-- [ ] Cognito JWT authorizer.
-- [ ] `CreateRunFunction`.
-- [ ] `GetRunFunction`.
-- [ ] `ListRunEventsFunction`.
-- [ ] DynamoDB access helpers.
-- [ ] Step Functions start helper.
+- [x] API Gateway.
+- [x] Cognito JWT authorizer.
+- [x] `CreateRunFunction`.
+- [x] `GetRunFunction`.
+- [x] `ListRunEventsFunction`.
+- [x] DynamoDB access helpers.
+- [x] Step Functions start helper.
 - [ ] Request and response schemas.
-- [ ] Idempotency key support for run creation.
+- [ ] Full idempotency key support for repeated run creation.
 
 Exit criteria:
 
-- [ ] Authenticated user can create a run.
-- [ ] Unauthorized requests fail.
-- [ ] User cannot read another user's run.
-- [ ] Run row is created.
-- [ ] Initial status event is created.
-- [ ] Step Functions execution starts.
-- [ ] Ordered event query works.
-- [ ] `pnpm contracts:test` passes.
-- [ ] `pnpm infra:build` passes.
-- [ ] `pnpm infra:synth` passes.
+- [x] JWT-shaped authenticated Lambda smoke event can create a run.
+- [x] Unauthorized HTTP requests fail.
+- [x] User cannot read another user's run in unit tests.
+- [x] Run row is created in the handler implementation.
+- [x] Initial status event is created in the handler implementation.
+- [x] Step Functions execution starts in the handler implementation.
+- [x] Ordered event query works in unit tests.
+- [x] `pnpm contracts:test` passes.
+- [x] `pnpm infra:build` passes.
+- [x] `pnpm infra:synth` passes.
 
 ## Phase 2: Minimal Real Worker
 
@@ -137,7 +131,7 @@ Build:
 
 Exit criteria:
 
-- [ ] API-created run launches worker.
+- [x] API-created run launches the current placeholder ECS worker via Step Functions.
 - [ ] Worker writes `running`.
 - [ ] Worker writes a test artifact.
 - [ ] Worker writes `succeeded` or `failed`.
@@ -191,7 +185,7 @@ pnpm --filter @agents-cloud/infra-amplify run typecheck
 pnpm amplify:hosting:build
 ```
 
-The first deployed API smoke test should prove:
+The deployed API smoke test on 2026-05-09 proved:
 
 ```text
 POST /runs
@@ -199,5 +193,8 @@ POST /runs
   -> DynamoDB event row
   -> Step Functions execution
   -> ECS task
-  -> terminal status visible through GET /runs/{runId}/events
+  -> placeholder ECS task succeeds
+
+Still to add: worker-authored running/artifact/terminal events visible through
+`GET /runs/{runId}/events`.
 ```

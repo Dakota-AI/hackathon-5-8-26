@@ -264,15 +264,85 @@ p {
   color: white;
 }
 
-.command-box button {
-  cursor: not-allowed;
+.command-box button,
+.secondary-button {
+  cursor: pointer;
   border: 0;
   border-radius: 14px;
   padding: 12px 14px;
   background: linear-gradient(135deg, rgba(121, 167, 255, 0.7), rgba(124, 244, 200, 0.45));
   color: white;
   font-weight: 800;
-  opacity: 0.72;
+}
+
+.command-box button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.secondary-button {
+  width: 100%;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+}
+
+.topbar-status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.form-note,
+.run-result p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.form-error {
+  color: var(--red);
+}
+
+.run-result {
+  display: grid;
+  gap: 7px;
+  border: 1px solid rgba(124, 244, 200, 0.28);
+  border-radius: 15px;
+  padding: 12px;
+  background: rgba(124, 244, 200, 0.06);
+}
+
+.run-result span,
+.run-result li {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.run-result strong {
+  overflow-wrap: anywhere;
+  color: white;
+  font-size: 13px;
+}
+
+.run-result ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+[data-amplify-authenticator] {
+  min-height: 100vh;
+  background: transparent;
+}
+
+.amplify-tabs__item,
+.amplify-label,
+.amplify-text,
+.amplify-heading {
+  color: var(--text);
 }
 
 .metric-grid {

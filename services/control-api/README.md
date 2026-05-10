@@ -26,12 +26,13 @@ command/query boundary; it must not become an in-memory run owner.
 ## Durability notes
 
 The current create-run path closes the most dangerous ordering gap from the audit:
-execution does not start until the run/task/initial-event writes have succeeded.
-Repeated requests with the same `(userId, workspaceId, idempotencyKey)` return the
-existing run in unit tests and do not start duplicate work.
+execution does not start until the run/task/initial-event ledger has been written
+as one DynamoDB transaction. Repeated requests with the same `(userId,
+workspaceId, idempotencyKey)` return the existing run in unit tests and do not
+start duplicate work.
 
-The DynamoDB implementation uses conditional puts for run/task/event creation and
-queries the runs table through the `by-idempotency-scope` GSI.
+The DynamoDB implementation uses transactional conditional puts for run/task/event
+ledger creation and queries the runs table through the `by-idempotency-scope` GSI.
 
 Remaining gaps before declaring the broader run lifecycle complete:
 

@@ -250,7 +250,7 @@ export function ArtifactsBoard() {
               </div>
             </Panel>
           ) : (
-            <Panel padding={14}>
+            <Panel id="document" padding={14}>
               <SectionHeader
                 title="Markdown document viewer"
                 subtitle="In-app rendering of report-style artifacts."

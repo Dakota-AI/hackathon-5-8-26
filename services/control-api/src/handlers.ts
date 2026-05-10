@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { APIGatewayProxyStructuredResultV2, APIGatewayProxyEventV2WithJWTAuthorizer } from "aws-lambda";
+import { getRunArtifact, listRunArtifacts, listWorkItemArtifacts } from "./artifacts.js";
 import { approveAgentProfileVersion, createAgentProfileDraft, getAgentProfileVersion, listAgentProfiles, S3AgentProfileBundleStore } from "./agent-profiles.js";
 import { createRun } from "./create-run.js";
 import { DynamoControlApiStore } from "./dynamo-store.js";
@@ -376,8 +377,51 @@ export async function agentProfilesHandler(event: APIGatewayProxyEventV2WithJWTA
   return notImplemented("This AgentProfile route is provisioned in infrastructure and will be implemented in the next Control API phase.");
 }
 
-export async function notImplementedArtifactsHandler(): Promise<APIGatewayProxyStructuredResultV2> {
-  return notImplemented("Artifact API is provisioned in infrastructure and will be implemented in the Control API phase.");
+export async function artifactsHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
+  const user = userFromEvent(event);
+  const routeKey = event.routeKey;
+
+  if (routeKey === "GET /work-items/{workItemId}/artifacts") {
+    const workItemId = event.pathParameters?.workItemId;
+    const workspaceId = event.queryStringParameters?.workspaceId;
+    if (!workItemId || !workspaceId) {
+      return json(400, { error: "BadRequest", message: "workspaceId query parameter and workItemId path parameter are required." });
+    }
+    const result = await listWorkItemArtifacts({
+      store,
+      user,
+      workspaceId,
+      workItemId,
+      limit: parseOptionalInteger(event.queryStringParameters?.limit)
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /runs/{runId}/artifacts") {
+    const runId = event.pathParameters?.runId;
+    if (!runId) {
+      return json(400, { error: "BadRequest", message: "runId path parameter is required." });
+    }
+    const result = await listRunArtifacts({
+      store,
+      user,
+      runId,
+      limit: parseOptionalInteger(event.queryStringParameters?.limit)
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /runs/{runId}/artifacts/{artifactId}") {
+    const runId = event.pathParameters?.runId;
+    const artifactId = event.pathParameters?.artifactId;
+    if (!runId || !artifactId) {
+      return json(400, { error: "BadRequest", message: "runId and artifactId path parameters are required." });
+    }
+    const result = await getRunArtifact({ store, user, runId, artifactId });
+    return json(result.statusCode, result.body);
+  }
+
+  return notImplemented("This Artifact route is provisioned in infrastructure but does not yet have a handler implementation.");
 }
 
 export async function notImplementedDataSourceRefsHandler(): Promise<APIGatewayProxyStructuredResultV2> {

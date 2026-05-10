@@ -226,7 +226,7 @@ Recommended next Flutter slice:
 
 1. Workspace membership authorization.
 2. Access-code admitted onboarding path.
-3. Real WorkItem artifact APIs.
+3. Real WorkItem artifact APIs. Read endpoints (list by run, list by WorkItem, get by id) are deployed; presigned-download is still pending. See `docs/roadmap/ARTIFACT_API_DEPLOYMENT_2026_05_10.md`.
 4. Real Surface/DataSourceRef APIs.
 5. Runner token broker and trusted supervisor/runner auth. The current resident runner ECS task has a generated Secrets Manager bearer token so it is not open by default, but that token still needs production brokering, rotation, and supervisor-scoped issuance before launch.
 6. Resident runner launch path: local Docker first, ECS second.

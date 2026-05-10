@@ -138,7 +138,7 @@ export class ControlApiStack extends AgentsCloudStack {
     const artifactsFunction = new NodejsFunction(this, "ArtifactsFunction", {
       runtime: Runtime.NODEJS_22_X,
       entry: controlApiEntry,
-      handler: "notImplementedArtifactsHandler",
+      handler: "artifactsHandler",
       timeout: Duration.seconds(10),
       memorySize: 256,
       environment: commonEnvironment

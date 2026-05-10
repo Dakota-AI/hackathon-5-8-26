@@ -1,8 +1,8 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, ScanCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import type { AgentProfileRecord, ControlApiStore, EventRecord, HostNodeRecord, RunRecord, TaskRecord, UserRunnerRecord, WorkItemRecord } from "./ports.js";
+import type { AgentProfileRecord, ArtifactRecord, ArtifactStore, ControlApiStore, EventRecord, HostNodeRecord, RunRecord, TaskRecord, UserRunnerRecord, WorkItemRecord } from "./ports.js";
 
-export class DynamoControlApiStore implements ControlApiStore {
+export class DynamoControlApiStore implements ControlApiStore, ArtifactStore {
   public constructor(
     private readonly client: DynamoDBDocumentClient,
     private readonly tables: {
@@ -10,6 +10,7 @@ export class DynamoControlApiStore implements ControlApiStore {
       readonly runsTableName: string;
       readonly tasksTableName: string;
       readonly eventsTableName: string;
+      readonly artifactsTableName?: string;
       readonly hostNodesTableName?: string;
       readonly userRunnersTableName?: string;
       readonly agentProfilesTableName?: string;
@@ -21,6 +22,7 @@ export class DynamoControlApiStore implements ControlApiStore {
     const runsTableName = mustEnv("RUNS_TABLE_NAME");
     const tasksTableName = mustEnv("TASKS_TABLE_NAME");
     const eventsTableName = mustEnv("EVENTS_TABLE_NAME");
+    const artifactsTableName = mustEnv("ARTIFACTS_TABLE_NAME");
     const hostNodesTableName = mustEnv("HOST_NODES_TABLE_NAME");
     const userRunnersTableName = mustEnv("USER_RUNNERS_TABLE_NAME");
     const agentProfilesTableName = mustEnv("AGENT_PROFILES_TABLE_NAME");
@@ -29,6 +31,7 @@ export class DynamoControlApiStore implements ControlApiStore {
       runsTableName,
       tasksTableName,
       eventsTableName,
+      artifactsTableName,
       hostNodesTableName,
       userRunnersTableName,
       agentProfilesTableName
@@ -379,6 +382,58 @@ export class DynamoControlApiStore implements ControlApiStore {
     );
     return (result.Items ?? []) as EventRecord[];
   }
+  async listArtifactsForRun(input: { readonly runId: string; readonly limit?: number }): Promise<ArtifactRecord[]> {
+    const result = await this.client.send(new QueryCommand({
+      TableName: requiredTable(this.tables.artifactsTableName, "ARTIFACTS_TABLE_NAME"),
+      KeyConditionExpression: "runId = :runId",
+      ExpressionAttributeValues: { ":runId": input.runId },
+      Limit: clampDynamoLimit(input.limit),
+      ScanIndexForward: false
+    }));
+    return ((result.Items ?? []) as ArtifactRecord[]).filter(isCompleteArtifactRecord);
+  }
+
+  async listArtifactsForWorkItem(input: { readonly workItemId: string; readonly limit?: number }): Promise<ArtifactRecord[]> {
+    const result = await this.client.send(new QueryCommand({
+      TableName: requiredTable(this.tables.artifactsTableName, "ARTIFACTS_TABLE_NAME"),
+      IndexName: "by-workitem-created-at",
+      KeyConditionExpression: "workItemId = :workItemId",
+      ExpressionAttributeValues: { ":workItemId": input.workItemId },
+      Limit: clampDynamoLimit(input.limit),
+      ScanIndexForward: false
+    }));
+    return ((result.Items ?? []) as ArtifactRecord[]).filter(isCompleteArtifactRecord);
+  }
+
+  async getArtifact(input: { readonly runId: string; readonly artifactId: string }): Promise<ArtifactRecord | undefined> {
+    const result = await this.client.send(new GetCommand({
+      TableName: requiredTable(this.tables.artifactsTableName, "ARTIFACTS_TABLE_NAME"),
+      Key: { runId: input.runId, artifactId: input.artifactId }
+    }));
+    if (!result.Item) {
+      return undefined;
+    }
+    return isCompleteArtifactRecord(result.Item) ? result.Item : undefined;
+  }
+}
+
+function isCompleteArtifactRecord(value: unknown): value is ArtifactRecord {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const item = value as Partial<ArtifactRecord>;
+  return (
+    typeof item.runId === "string" &&
+    typeof item.artifactId === "string" &&
+    typeof item.workspaceId === "string" &&
+    typeof item.userId === "string" &&
+    typeof item.uri === "string" &&
+    typeof item.createdAt === "string"
+  );
+}
+
+function clampDynamoLimit(value: number | undefined): number {
+  return Math.min(Math.max(value ?? 50, 1), 100);
 }
 
 function isCompleteRunRecord(value: unknown): value is RunRecord {

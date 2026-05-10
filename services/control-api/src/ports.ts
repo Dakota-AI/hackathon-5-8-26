@@ -140,6 +140,29 @@ export interface AgentProfileBundleStore {
   putAgentProfileArtifact(input: { readonly key: string; readonly body: string; readonly contentType: string }): Promise<{ readonly s3Uri: string }>;
 }
 
+export interface ArtifactRecord {
+  readonly runId: string;
+  readonly artifactId: string;
+  readonly workspaceId: string;
+  readonly workItemId?: string;
+  readonly userId: string;
+  readonly taskId?: string;
+  readonly kind: string;
+  readonly name: string;
+  readonly bucket: string;
+  readonly key: string;
+  readonly uri: string;
+  readonly contentType: string;
+  readonly createdAt: string;
+  readonly metadata?: Record<string, unknown>;
+}
+
+export interface ArtifactStore {
+  listArtifactsForRun(input: { readonly runId: string; readonly limit?: number }): Promise<ArtifactRecord[]>;
+  listArtifactsForWorkItem(input: { readonly workItemId: string; readonly limit?: number }): Promise<ArtifactRecord[]>;
+  getArtifact(input: { readonly runId: string; readonly artifactId: string }): Promise<ArtifactRecord | undefined>;
+}
+
 export interface ControlApiStore {
   createRunLedger(input: { readonly run: RunRecord; readonly task: TaskRecord; readonly event: EventRecord }): Promise<void>;
   putWorkItem(item: WorkItemRecord): Promise<void>;

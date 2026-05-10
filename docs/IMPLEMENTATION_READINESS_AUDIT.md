@@ -64,10 +64,7 @@ contract-correct.
   production worker policy boundary.
 - Cloudflare realtime can accept WebSocket sessions and relay events to a
   Durable Object, but it does not yet do replay, gap repair, or signed relay.
-- AWS-native realtime can synthesize a WebSocket API, store connections/subscriptions,
-  and relay DynamoDB event stream records to subscribed clients. The required
-  StateStack update is deployed, but the WebSocket API stack is not deployed or
-  client-smoke-tested yet.
+- AWS-native realtime WebSocket first slice is deployed. It can store connections/subscriptions and relay DynamoDB event stream records to subscribed clients; direct Lambda smoke has verified authorizer deny, connect/subscribe/ping/disconnect, and stale/malformed connection cleanup. Real browser/native token smoke is still pending.
 - Web creates a Control API run when configured, but the run list, artifacts,
   approvals, and status panels remain mostly fixture-backed.
 - Flutter configures Amplify and contains a Control API client, but the user
@@ -77,8 +74,8 @@ contract-correct.
 
 - Workspace/organization membership model.
 - Tenant authorization enforcement across Control API, runtime, and realtime.
-- Canonical service-side event producer library.
-- Event relay from AWS to Cloudflare or AWS WebSocket clients.
+- Canonical service-side event producer library beyond the first protocol helpers.
+- Event relay from AWS to Cloudflare clients; AWS-native WebSocket relay first slice is deployed.
 - Durable replay cursor protocol.
 - Production agent runtime with model/provider secrets, workspace policy, and
   isolation.
@@ -89,58 +86,30 @@ contract-correct.
 - Production deployment policy for live environment retention and deletion
   protection.
 
-## Active WIP / Resume Point: 2026-05-10 Realtime Deploy
+## Completed / Resume Point: 2026-05-10 Runtime + Realtime Deploy
 
-The latest realtime/control/runtime hardening is committed and pushed, but the
-deployment is intentionally incomplete.
+The latest realtime/control/runtime hardening has now been committed, pushed, deployed, and smoke-tested.
 
 Deployed successfully:
 
-- `agents-cloud-dev-state` reached `UPDATE_COMPLETE` after the realtime deploy
-  attempt.
-- EventsTable DynamoDB Streams are enabled.
-- RunsTable has the idempotency-scope GSI.
-- `RealtimeConnectionsTable` exists.
+- `agents-cloud-dev-state` is `UPDATE_COMPLETE`; EventsTable stream is enabled, RunsTable has the idempotency-scope GSI, and `RealtimeConnectionsTable` exists.
+- `agents-cloud-dev-runtime` is `UPDATE_COMPLETE` with task definition revision `agents-cloud-dev-agent-runtime:7`.
+- `agents-cloud-dev-control-api` is `UPDATE_COMPLETE` with transactional run ledger/idempotency hardening.
+- `agents-cloud-dev-realtime-api` is `UPDATE_COMPLETE` with WebSocket URL `wss://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev`.
 
-Not deployed yet:
+Smoke evidence:
 
-- `agents-cloud-dev-realtime-api` WebSocket stack.
-- Latest `agents-cloud-dev-control-api` Lambda code containing transactional run
-  ledger/idempotency hardening.
-- Latest `agents-cloud-dev-runtime` Docker image containing protocol-aligned
-  runtime event changes.
+- Control API-created run `run-idem-191fa7003b2441188aa1ebbc` reached Step Functions `SUCCEEDED` and ECS task definition `:7`.
+- EventsTable contains canonical `run.status/queued`, `run.status/running`, `artifact.created`, and `run.status/succeeded` events for that run.
+- Duplicate create-run invocation with the same idempotency key returned the existing run and did not add events.
+- S3 artifact verified at `s3://agents-cloud-dev-storage-workspaceliveartifactsbuc-8br4g70cte0m/workspaces/workspace-audit-smoke/runs/run-idem-191fa7003b2441188aa1ebbc/artifacts/artifact-task-idem-191fa7003b2441188aa1ebbc-0001/hermes-report.md`.
+- Realtime direct Lambda smoke verified missing-token Deny, connect/subscribe/ping/disconnect, and relay cleanup of malformed stored connection ids.
 
-Why deployment stopped:
+Remaining resume point:
 
-- The CDK deploy tried to rebuild `AgentRuntimeImage`.
-- The Docker build failed because `services/agent-runtime` now imports
-  `@agents-cloud/protocol`, but the Docker build context still excluded or did
-  not copy the `packages/protocol` workspace package.
-
-Current local WIP files for the build-context fix:
-
-- `.dockerignore`
-- `services/agent-runtime/Dockerfile`
-
-Before resuming deploy:
-
-1. Finish the Dockerfile/.dockerignore fix so the runtime image can copy and
-   build `packages/protocol`.
-2. Verify with:
-
-   ```bash
-   docker build --platform linux/amd64 \
-     -f services/agent-runtime/Dockerfile \
-     -t agents-cloud-agent-runtime:verify .
-   pnpm agent-runtime:test
-   pnpm infra:build
-   pnpm infra:synth
-   ```
-
-3. Commit and push the Docker fix.
-4. Redeploy `agents-cloud-dev-runtime`, `agents-cloud-dev-control-api`, and
-   `agents-cloud-dev-realtime-api`.
-5. Capture WebSocket outputs and perform a real Cognito-token WebSocket smoke.
+1. Use a real Cognito ID token from web/native to perform an actual WebSocket connection to the deployed URL.
+2. Wire client polling against `GET /runs/{runId}/events` first, then subscribe to realtime for live fanout.
+3. Add replay/gap repair and workspace membership authorization before calling realtime production-grade.
 
 ## Locked Architecture Decisions
 

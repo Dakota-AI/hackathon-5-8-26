@@ -20,9 +20,9 @@ Current state:
 - A Step Functions -> ECS Fargate -> CloudWatch smoke test succeeded.
 - Amplify Gen 2 Auth sandbox is deployed and healthy.
 - Amplify Hosting app exists and deploys successfully with an explicit `amplify.yml` build spec.
-- The first Control API slice is deployed: create/query run endpoints, Cognito JWT authorizer, DynamoDB run/event writes, and Step Functions start. The latest transactional ledger/idempotency hardening is committed but still needs redeployment after the runtime Docker build-context fix below.
-- The first real worker slice is deployed: a Hermes-boundary ECS runtime writes `running`, `artifact.created`, and terminal status events plus one S3 report artifact. It currently defaults to `HERMES_RUNNER_MODE=smoke`; real CLI/model execution needs scoped provider secret brokering before enabling in ECS.
-- An AWS-native realtime WebSocket first slice is implemented, tested, and synth-validates. The required `agents-cloud-dev-state` update has been deployed, including the EventsTable stream, RunsTable idempotency GSI, and RealtimeConnectionsTable. The `agents-cloud-dev-realtime-api` stack itself is still WIP/not deployed because the combined CDK deploy stopped while building the runtime Docker asset.
+- The first Control API slice is deployed: create/query run endpoints, Cognito JWT authorizer, DynamoDB transactional run/task/initial-event ledger writes, scoped idempotency lookup, and Step Functions start.
+- The first real worker slice is deployed: a Hermes-boundary ECS runtime writes canonical `run.status`, `artifact.created`, and terminal status events plus one deterministic S3 report artifact. It currently defaults to `HERMES_RUNNER_MODE=smoke`; real CLI/model execution needs scoped provider secret brokering before enabling in ECS.
+- An AWS-native realtime WebSocket first slice is deployed: API Gateway WebSocket API, Lambda `$connect` authorizer, connection/subscription handlers, DynamoDB stream relay, and stale-connection cleanup. Clients are not wired yet and live browser smoke still needs a real Cognito ID token.
 
 Approximate progress:
 
@@ -51,9 +51,10 @@ The following CDK stacks are deployed and verified as `CREATE_COMPLETE`:
 | `agents-cloud-dev-storage` | Complete | S3 buckets for live artifacts, audit logs, previews, and research datasets. |
 | `agents-cloud-dev-state` | Complete, updated 2026-05-10 | DynamoDB run/task/event/artifact/approval tables plus preview deployment registry, EventsTable stream, RunsTable idempotency GSI, and RealtimeConnectionsTable. |
 | `agents-cloud-dev-cluster` | Complete | ECS cluster and CloudWatch log group. |
-| `agents-cloud-dev-runtime` | Complete | Agent runtime Fargate task definition and IAM grants for the current smoke/Hermes worker path. |
+| `agents-cloud-dev-runtime` | Complete, updated 2026-05-10 | Agent runtime Fargate task definition and IAM grants for the current smoke/Hermes worker path. |
 | `agents-cloud-dev-orchestration` | Complete | Step Functions state machine that launches the Fargate task. |
-| `agents-cloud-dev-control-api` | Complete | API Gateway HTTP API, Cognito JWT authorizer, and Lambda handlers for create/query run lifecycle. |
+| `agents-cloud-dev-control-api` | Complete, updated 2026-05-10 | API Gateway HTTP API, Cognito JWT authorizer, and Lambda handlers for create/query run lifecycle. |
+| `agents-cloud-dev-realtime-api` | Complete, deployed 2026-05-10 | API Gateway WebSocket API, Cognito-token Lambda authorizer, connection handlers, and DynamoDB stream relay. |
 
 Smoke test result:
 
@@ -71,12 +72,14 @@ Important deployed resources:
 - Preview deployments table: `agents-cloud-dev-state-PreviewDeploymentsTable37B54DE6-WEG6QR56NMCX`
 - Realtime connections table: `agents-cloud-dev-state-RealtimeConnectionsTableD1B843C7-1NHZWIIGT5G91`
 - Events table stream: enabled on `agents-cloud-dev-state-EventsTableD24865E5-N2IHC3AJ25VW`
-- Runtime task definition: `arn:aws:ecs:us-east-1:625250616301:task-definition/agents-cloud-dev-agent-runtime:6`
+- Runtime task definition: `arn:aws:ecs:us-east-1:625250616301:task-definition/agents-cloud-dev-agent-runtime:7`
 - Control API URL: `https://ajmonuqk61.execute-api.us-east-1.amazonaws.com`
+- Realtime WebSocket URL: `wss://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev`
+- Realtime callback URL: `https://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev`
 
-## WIP: 2026-05-10 Realtime Deployment Attempt
+## Completed: 2026-05-10 Audit-Hardened Runtime/Realtime Deploy
 
-The realtime implementation and supporting hardening have been committed and pushed to `origin/main`.
+The realtime implementation, transactional Control API hardening, canonical event builders, and runtime Docker build-context fix have been committed, pushed, deployed, and smoke-tested in `625250616301/us-east-1`.
 
 Latest relevant commits:
 
@@ -84,70 +87,40 @@ Latest relevant commits:
 - `74e5059 fix(control-api): make run ledger creation transactional`
 - `dc42d1c docs: capture realtime readiness hardening`
 - `8464da3 docs: clarify transactional run ledger`
+- `03862c0 fix(runtime): build protocol in worker image`
+- `b553a91 fix(infra): include protocol package in runtime asset`
 
-Validation before deployment attempt passed:
+Validation and deployment evidence:
 
-- `pnpm install --frozen-lockfile`
-- `pnpm contracts:test`
-- `pnpm control-api:test`
-- `pnpm agent-runtime:test`
-- `pnpm realtime-api:test`
-- `pnpm cloudflare:test`
-- `pnpm web:typecheck`
-- `pnpm web:build`
-- `pnpm amplify:hosting:build`
-- `pnpm infra:build`
-- `pnpm infra:synth`
+- `pnpm contracts:test`, `pnpm control-api:test`, `pnpm agent-runtime:test`, `pnpm realtime-api:test`, `pnpm infra:build`, and `pnpm infra:synth` passed before deploy.
+- Runtime Docker image built locally and inside CDK asset publishing after `packages/protocol` was included in the runtime asset context.
+- Deployed stacks: `agents-cloud-dev-state`, `agents-cloud-dev-runtime`, `agents-cloud-dev-orchestration`, `agents-cloud-dev-control-api`, and `agents-cloud-dev-realtime-api`.
+- Runtime task definition advanced to `agents-cloud-dev-agent-runtime:7`.
+- Realtime stack output: `wss://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev`.
 
-Deploy command attempted from `infra/cdk` with profile `agents-cloud-source`:
+Audit smoke run:
 
-```bash
-AWS_PROFILE=agents-cloud-source \
-AWS_REGION=us-east-1 \
-AWS_DEFAULT_REGION=us-east-1 \
-AGENTS_CLOUD_AWS_REGION=us-east-1 \
-pnpm exec cdk deploy \
-  --app 'node dist/bin/agents-cloud-cdk.js' \
-  agents-cloud-dev-state \
-  agents-cloud-dev-runtime \
-  agents-cloud-dev-control-api \
-  agents-cloud-dev-realtime-api \
-  --require-approval never
-```
+- Control API Lambda create-run smoke returned `202` for `run-idem-191fa7003b2441188aa1ebbc`.
+- Step Functions execution `arn:aws:states:us-east-1:625250616301:execution:agents-cloud-dev-simple-run:run-idem-191fa7003b2441188aa1ebbc` reached `SUCCEEDED`.
+- ECS used task definition `arn:aws:ecs:us-east-1:625250616301:task-definition/agents-cloud-dev-agent-runtime:7`.
+- DynamoDB EventsTable contains four canonical events: `run.status/queued`, `run.status/running`, `artifact.created`, `run.status/succeeded`.
+- Duplicate create-run invocation with the same idempotency key returned the existing succeeded run and the event count stayed at `4`.
+- Artifact metadata uses deterministic id `artifact-task-idem-191fa7003b2441188aa1ebbc-0001` and `kind: report` / `name: Hermes worker report`.
+- S3 artifact verified at `s3://agents-cloud-dev-storage-workspaceliveartifactsbuc-8br4g70cte0m/workspaces/workspace-audit-smoke/runs/run-idem-191fa7003b2441188aa1ebbc/artifacts/artifact-task-idem-191fa7003b2441188aa1ebbc-0001/hermes-report.md`.
 
-Deployment result:
+Realtime smoke:
 
-- `agents-cloud-dev-state` updated successfully and is now `UPDATE_COMPLETE`.
-- The deploy then stopped at `agents-cloud-dev-runtime` while building the `AgentRuntimeImage` Docker asset.
-- `agents-cloud-dev-control-api` and `agents-cloud-dev-realtime-api` were not redeployed in that run.
-- No live WebSocket URL has been created yet.
+- Deployed authorizer denies missing-token `$connect` requests.
+- Deployed connect/default/disconnect Lambdas save a connection, subscribe to a run, answer `ping` with `pong`, and delete the connection.
+- Direct relay smoke initially exposed that API Gateway can return `BadRequestException: Invalid connectionId` for malformed stored connection ids; the relay now treats that as stale connection state and deletes it, covered by regression test.
+- Deployed relay Lambda was re-updated and direct relay smoke returned success while deleting the malformed fake connection.
 
-Docker asset failure:
+Remaining before product-grade realtime:
 
-```text
-src/ports.ts: Cannot find module '@agents-cloud/protocol'
-src/worker.ts: Cannot find module '@agents-cloud/protocol'
-Failed to build asset AgentRuntimeImage
-```
-
-Cause:
-
-- `services/agent-runtime` now imports `@agents-cloud/protocol`.
-- `services/agent-runtime/Dockerfile` and `.dockerignore` still need a clean committed build-context update so the Docker image can copy/build the `packages/protocol` workspace package.
-
-Current local WIP files for that fix:
-
-- `.dockerignore`
-- `services/agent-runtime/Dockerfile`
-
-Next resume point:
-
-1. Finish and verify the Docker build-context fix.
-2. Run `docker build --platform linux/amd64 -f services/agent-runtime/Dockerfile -t agents-cloud-agent-runtime:verify .`.
-3. Re-run `pnpm agent-runtime:test`, `pnpm infra:build`, and `pnpm infra:synth`.
-4. Commit/push the Docker fix.
-5. Redeploy `agents-cloud-dev-runtime`, `agents-cloud-dev-control-api`, and `agents-cloud-dev-realtime-api`.
-6. Capture the WebSocket stack output and smoke-test with a real Cognito ID token.
+1. Exercise the WebSocket endpoint from a real browser/native client with a real Cognito ID token.
+2. Wire clients to subscribe after the polling event ledger path works.
+3. Add replay/gap repair UX that falls back to `GET /runs/{runId}/events` after reconnect.
+4. Add workspace membership authorization; current smoke uses user-scoped event delivery but not full workspace ACLs.
 
 ## Completed and Deployed: Amplify Auth Sandbox
 

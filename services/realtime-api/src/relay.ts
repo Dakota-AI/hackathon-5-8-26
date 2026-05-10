@@ -29,7 +29,7 @@ export async function publishRealtimeEvent(
       try {
         await publisher.postToConnection(connection.connectionId, message);
       } catch (error) {
-        if (isGone(error)) {
+        if (isStaleConnectionError(error)) {
           await store.deleteConnection(connection.connectionId);
           return;
         }
@@ -107,9 +107,13 @@ function isRealtimeEventRecord(value: Record<string, unknown>): boolean {
   );
 }
 
-function isGone(error: unknown): boolean {
-  const maybe = error as { readonly name?: string; readonly $metadata?: { readonly httpStatusCode?: number } };
-  return maybe.name === "GoneException" || maybe.$metadata?.httpStatusCode === 410;
+function isStaleConnectionError(error: unknown): boolean {
+  const maybe = error as { readonly name?: string; readonly message?: string; readonly $metadata?: { readonly httpStatusCode?: number } };
+  return (
+    maybe.name === "GoneException" ||
+    maybe.$metadata?.httpStatusCode === 410 ||
+    (maybe.name === "BadRequestException" && maybe.$metadata?.httpStatusCode === 400 && maybe.message?.includes("Invalid connectionId") === true)
+  );
 }
 
 function mustEnv(name: string): string {

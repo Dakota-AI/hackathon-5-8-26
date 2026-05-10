@@ -46,9 +46,22 @@ pnpm infra:build
 pnpm infra:synth
 ```
 
+Deployed dev stack:
+
+- Stack: `agents-cloud-dev-realtime-api`
+- WebSocket URL: `wss://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev`
+- Callback URL for API Gateway Management API: `https://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev`
+
+2026-05-10 deployed smoke evidence:
+
+- Missing-token authorizer invocation returned a Deny policy.
+- Connect/default/disconnect Lambda invocations saved a connection, subscribed to `run-idem-191fa7003b2441188aa1ebbc`, returned `pong`, and removed the connection.
+- Direct relay invocation against a malformed stored connection id returned success after deleting the stale/fake connection.
+- Regression test covers both `GoneException`/410 and API Gateway `BadRequestException: Invalid connectionId` stale-connection cleanup.
+
 ## Current limitations
 
-- Not deployed yet.
+- Browser/native WebSocket smoke with a real Cognito ID token is still pending.
 - Workspace membership authorization is not implemented yet.
 - Replay/gap repair is expected through Control API event query, but clients are not wired yet.
 - Notification-specific event schemas still need to be added to `packages/protocol`.

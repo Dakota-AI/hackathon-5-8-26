@@ -6,11 +6,18 @@ import { InMemoryRealtimeStore } from "../src/subscriptions.js";
 class RecordingPublisher {
   public readonly sent: Array<{ connectionId: string; payload: unknown }> = [];
   public readonly stale = new Set<string>();
+  public readonly invalid = new Set<string>();
 
   async postToConnection(connectionId: string, payload: unknown): Promise<void> {
     if (this.stale.has(connectionId)) {
       const error = new Error("Gone");
       (error as Error & { $metadata?: { httpStatusCode?: number } }).$metadata = { httpStatusCode: 410 };
+      throw error;
+    }
+    if (this.invalid.has(connectionId)) {
+      const error = new Error(`Invalid connectionId: ${connectionId}`);
+      (error as Error & { name?: string; $metadata?: { httpStatusCode?: number } }).name = "BadRequestException";
+      (error as Error & { $metadata?: { httpStatusCode?: number } }).$metadata = { httpStatusCode: 400 };
       throw error;
     }
     this.sent.push({ connectionId, payload });
@@ -121,5 +128,35 @@ test("publishRealtimeEvent deletes stale connections when API Gateway returns go
   );
 
   assert.equal(await store.getConnection("conn-1"), undefined);
+  assert.deepEqual(await store.listConnectionsForRun("workspace-1", "run-1"), []);
+});
+
+test("publishRealtimeEvent deletes malformed stored connections when API Gateway rejects the connection id", async () => {
+  const store = new InMemoryRealtimeStore();
+  const publisher = new RecordingPublisher();
+  publisher.invalid.add("fake-conn");
+  await store.saveConnection({
+    connectionId: "fake-conn",
+    userId: "user-1",
+    domainName: "abc.execute-api.us-east-1.amazonaws.com",
+    stage: "dev",
+    connectedAt: "2026-05-10T00:00:00.000Z"
+  });
+  await store.subscribeRun({ connectionId: "fake-conn", workspaceId: "workspace-1", runId: "run-1", userId: "user-1" });
+
+  await publishRealtimeEvent(
+    {
+      runId: "run-1",
+      workspaceId: "workspace-1",
+      seq: 2,
+      type: "run.status",
+      createdAt: "2026-05-10T00:00:01.000Z",
+      payload: { status: "running" }
+    },
+    store,
+    publisher
+  );
+
+  assert.equal(await store.getConnection("fake-conn"), undefined);
   assert.deepEqual(await store.listConnectionsForRun("workspace-1", "run-1"), []);
 });

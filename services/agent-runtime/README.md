@@ -57,46 +57,18 @@ pnpm infra:synth
 docker build -f services/agent-runtime/Dockerfile -t agents-cloud-agent-runtime:local .
 ```
 
-## Active WIP: Docker Build Context
+## Deployed smoke evidence
 
-The latest runtime code imports `@agents-cloud/protocol` so runtime events can
-use the shared canonical event builders. Local TypeScript builds pass, but the
-2026-05-10 CDK deploy exposed a Docker build-context issue: the runtime image did
-not include the `packages/protocol` workspace package, and `.dockerignore`
-excluded `packages/` from the image build context.
+Latest deployed audit smoke from 2026-05-10:
 
-Observed deploy failure:
-
-```text
-src/ports.ts: Cannot find module '@agents-cloud/protocol'
-src/worker.ts: Cannot find module '@agents-cloud/protocol'
-Failed to build asset AgentRuntimeImage
-```
-
-Current local WIP files for the fix:
-
-- `.dockerignore`
-- `services/agent-runtime/Dockerfile`
-
-Before redeploying runtime, verify the image explicitly:
-
-```bash
-docker build --platform linux/amd64 \
-  -f services/agent-runtime/Dockerfile \
-  -t agents-cloud-agent-runtime:verify .
-```
-
-Only after that passes should the CDK runtime/control/realtime deploy be resumed.
-
-Deployed smoke evidence from 2026-05-10:
-
-- Step Functions execution: `run-hermes-ecs-smoke-1778376731`
+- Control API-created run: `run-idem-191fa7003b2441188aa1ebbc`
 - State machine status: `SUCCEEDED`
-- ECS task definition family/revision: `agents-cloud-dev-agent-runtime:6`
-- Events written: canonical `run.status/running`, `artifact.created`, `run.status/succeeded`
-- Artifact written: `s3://agents-cloud-dev-storage-workspaceliveartifactsbuc-8br4g70cte0m/workspaces/workspace-smoke/runs/run-hermes-ecs-smoke-1778376731/artifacts/artifact-0001/hermes-report.md`
+- ECS task definition family/revision: `agents-cloud-dev-agent-runtime:7`
+- Events written: canonical `run.status/queued`, `run.status/running`, `artifact.created`, `run.status/succeeded`
+- Duplicate create-run smoke with the same idempotency key returned the existing run and event count remained `4`.
+- Artifact written: `s3://agents-cloud-dev-storage-workspaceliveartifactsbuc-8br4g70cte0m/workspaces/workspace-audit-smoke/runs/run-idem-191fa7003b2441188aa1ebbc/artifacts/artifact-task-idem-191fa7003b2441188aa1ebbc-0001/hermes-report.md`
 
-Current local implementation hardening after the audit:
+Current implementation hardening after the audit:
 
 - Worker events are built through `@agents-cloud/protocol` helpers and include canonical envelope fields.
 - Artifact events use protocol `kind: "report"` and `name`, not the earlier smoke-only `kind: "hermes-report"` / `title` shape.

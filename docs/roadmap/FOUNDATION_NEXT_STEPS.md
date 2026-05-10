@@ -1,7 +1,7 @@
 # Foundation Next Steps
 
 Date: 2026-05-09
-Status: Current post-Control API + minimal worker first-slice deployment plan; realtime deploy WIP
+Status: Current post-Control API + minimal worker + AWS-native realtime first-slice deployment plan
 
 ## Current Foundation State
 
@@ -25,9 +25,9 @@ Still missing:
 
 - [x] Minimal real worker runtime first slice.
 - [x] Worker event/artifact writes first slice.
-- [~] Event relay: AWS-native DynamoDB Streams relay is implemented and tested, but not deployed yet.
-- [x] AWS-native realtime WebSocket first slice implemented and synth-validated.
-- [~] Deploy AWS realtime WebSocket stack and wire clients: StateStack support is deployed; WebSocket stack is blocked by runtime Docker asset build-context fix.
+- [x] Event relay first slice: AWS-native DynamoDB Streams relay is deployed and direct-smoke-tested.
+- [x] AWS-native realtime WebSocket first slice implemented, deployed, and Lambda-smoke-tested.
+- [x] Deploy AWS realtime WebSocket stack foundation: live URL is `wss://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev`; client wiring and real-token browser smoke remain pending.
 - [ ] Deployed Cloudflare realtime plane and AWS relay integration, deferred unless edge fanout is needed.
 - [ ] Next.js command center.
 - [ ] Production desktop/mobile client integration.
@@ -63,58 +63,23 @@ contract, and worker lifecycle underneath them.
 2. Define the worker context contract: run id, task id, workspace id, user id, objective, event sink, artifact sink. Done in `services/agent-runtime`.
 3. Have the worker write `running`, artifact-created, and terminal status events. Done in deployed smoke.
 4. Have the worker write one small S3 artifact and corresponding artifact metadata. Done in deployed smoke.
-5. Add true idempotency behavior for repeated `POST /runs`. First unit-tested slice is done; authenticated HTTP smoke and post-execution-ARN recovery are still pending.
+5. Add true idempotency behavior for repeated `POST /runs`. First deployed slice is done and smoke-tested; full concurrent idempotency/outbox recovery remains pending.
 6. Exercise Control API with a real Cognito token from the first client.
 7. Enable real Hermes CLI/model execution with scoped provider secrets after the smoke path is stable.
-8. Add AWS-native realtime WebSocket streaming after the event ledger is stable; Cloudflare remains deferred unless edge fanout is needed. Current WIP: StateStack realtime support is deployed, but the WebSocket API stack still needs deployment after the runtime Docker asset build-context fix.
+8. Use the deployed AWS-native realtime WebSocket stack after the event ledger polling path is wired; Cloudflare remains deferred unless edge fanout is needed.
 
-## Active WIP: Realtime Deploy Resume Point
+## Completed: Realtime Deploy Resume Point
 
-The 2026-05-10 CDK deploy partially succeeded:
+The 2026-05-10 deploy has been resumed and completed:
 
-- `agents-cloud-dev-state` updated successfully.
-- EventsTable stream is enabled.
-- RealtimeConnectionsTable exists.
-- RunsTable idempotency-scope GSI is deployed.
+- Runtime Docker build context now includes `packages/protocol`.
+- `agents-cloud-dev-runtime` deployed task definition revision `7`.
+- `agents-cloud-dev-control-api` redeployed the transactional/idempotent create-run handler.
+- `agents-cloud-dev-realtime-api` deployed successfully with WebSocket URL `wss://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev`.
+- Audit smoke run `run-idem-191fa7003b2441188aa1ebbc` verified Control API -> Step Functions -> ECS task definition `:7` -> DynamoDB canonical events -> S3 deterministic artifact.
+- Direct realtime Lambda smoke verified missing-token authorizer deny, connect/subscribe/ping/disconnect, and relay cleanup of malformed stored connection ids.
 
-The deploy stopped before `agents-cloud-dev-runtime`, `agents-cloud-dev-control-api`, and `agents-cloud-dev-realtime-api` finished because the ECS runtime Docker asset could not resolve the new `@agents-cloud/protocol` workspace dependency inside the Docker build context.
-
-Current local WIP files:
-
-- `.dockerignore`
-- `services/agent-runtime/Dockerfile`
-
-Before the next deploy attempt, verify the runtime image directly:
-
-```bash
-docker build --platform linux/amd64 \
-  -f services/agent-runtime/Dockerfile \
-  -t agents-cloud-agent-runtime:verify .
-```
-
-Then rerun:
-
-```bash
-pnpm agent-runtime:test
-pnpm infra:build
-pnpm infra:synth
-```
-
-After that, commit/push the Docker fix and deploy the remaining stacks:
-
-```bash
-cd infra/cdk
-AWS_PROFILE=agents-cloud-source \
-AWS_REGION=us-east-1 \
-AWS_DEFAULT_REGION=us-east-1 \
-AGENTS_CLOUD_AWS_REGION=us-east-1 \
-pnpm exec cdk deploy \
-  --app 'node dist/bin/agents-cloud-cdk.js' \
-  agents-cloud-dev-runtime \
-  agents-cloud-dev-control-api \
-  agents-cloud-dev-realtime-api \
-  --require-approval never
-```
+Remaining realtime work is client-facing: use a real Cognito ID token from web/native, connect to the deployed WebSocket URL, subscribe to a real run, and rely on Control API event queries for reconnect replay/gap repair.
 
 ## User Inputs Needed Soon
 

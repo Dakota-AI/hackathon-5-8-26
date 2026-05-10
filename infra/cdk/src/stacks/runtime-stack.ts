@@ -46,7 +46,6 @@ export class RuntimeStack extends AgentsCloudStack {
         "apps",
         "docs",
         "infra",
-        "packages",
         "services/control-api",
         "services/agent-runtime/README.md",
         "services/agent-runtime/dist",

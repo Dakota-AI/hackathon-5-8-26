@@ -130,6 +130,7 @@ Use these docs in this order:
 13. `docs/roadmap/SHADCN_FLUTTER_UI_SYSTEM.md`
 14. `docs/roadmap/GENUI_MARKDOWN_CHAT_BROWSER_AUDIT.md`
 15. `docs/roadmap/PAPERCLIP_KANBAN_UI_UX_AUDIT.md`
+16. `docs/roadmap/WORK_BOARD_FLUTTER_KANBAN_ROI_AUDIT.md`
 
 The long roadmap and architecture docs are still useful, but this master
 document and `PROJECT_STATUS.md` reflect the current implementation position.
@@ -216,7 +217,7 @@ validated for the exact deployment mode.
 - [ ] EventBridge/SQS event movement is not implemented.
 - [ ] Cloudflare Worker/Durable Object realtime plane is not deployed or wired
   to AWS event relay and clients yet.
-- [ ] Next.js app needs full backend and realtime product integration.
+- [x] Next.js app needs full backend and realtime product integration first slice: the command panel creates durable runs, subscribes to the AWS-native WebSocket for live run events, and uses Control API event queries as replay/backfill. Run listing, workspace selection, artifact downloads, and production-grade reconnect cursor UX remain incomplete.
 - [ ] Production desktop/mobile app is not connected to Auth, Control
   API, Cloudflare realtime, notifications, or real A2UI event streams.
 - [ ] A2UI/GenUI renderers are not implemented in either client.

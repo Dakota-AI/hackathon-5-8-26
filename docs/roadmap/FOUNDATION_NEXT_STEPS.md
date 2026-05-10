@@ -27,8 +27,8 @@ Still missing:
 - [x] Worker event/artifact writes first slice.
 - [x] Event relay first slice: AWS-native DynamoDB Streams relay is deployed and direct-smoke-tested.
 - [x] AWS-native realtime WebSocket first slice implemented, deployed, and Lambda-smoke-tested.
-- [x] Deploy AWS realtime WebSocket stack foundation: live URL is `wss://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev`; client wiring and real-token browser smoke remain pending.
-- [x] Next.js command center first product run loop: authenticated create-run helper, durable event polling, terminal-state detection, event timeline, artifact cards, local browser self-test mode, and real HTTP e2e smoke with a temporary Cognito user.
+- [x] Deploy AWS realtime WebSocket stack foundation: live URL is `wss://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev`; web client wiring exists and real-token browser dogfood remains pending.
+- [x] Next.js command center first live product run loop: authenticated create-run helper, AWS-native realtime WebSocket subscription, durable event query replay/backfill after reconnect, terminal-state detection, event timeline, artifact cards, local browser self-test mode, and real HTTP/WebSocket e2e smoke scripts with temporary Cognito users.
 - [x] Real WebSocket e2e smoke with temporary Cognito user: create run, subscribe to run channel, receive live worker events from deployed API Gateway WebSocket relay.
 - [ ] Deployed Cloudflare realtime plane and AWS relay integration, deferred unless edge fanout is needed.
 - [ ] Production desktop/mobile client integration.
@@ -80,7 +80,7 @@ The 2026-05-10 deploy has been resumed and completed:
 - Audit smoke run `run-idem-191fa7003b2441188aa1ebbc` verified Control API -> Step Functions -> ECS task definition `:7` -> DynamoDB canonical events -> S3 deterministic artifact.
 - Direct realtime Lambda smoke verified missing-token authorizer deny, connect/subscribe/ping/disconnect, and relay cleanup of malformed stored connection ids.
 
-Remaining realtime work is client-facing: use a real Cognito ID token from web/native, connect to the deployed WebSocket URL, subscribe to a real run, and rely on Control API event queries for reconnect replay/gap repair.
+Remaining realtime work is client-hardening: browser-dogfood the web command panel with a real Cognito ID token against the deployed WebSocket URL, promote the HTTP/WebSocket smoke path into CI-friendly coverage, add stronger replay/gap repair UI, and enforce workspace membership authorization before production use.
 
 ## User Inputs Needed Soon
 
@@ -186,7 +186,7 @@ Build:
 - [ ] Run list.
 - [ ] Run detail timeline.
 - [ ] Artifact list.
-- [ ] WebSocket connection after realtime exists.
+- [x] WebSocket connection after realtime exists: first web command-panel integration opens the AWS-native socket, sends `subscribeRun`, merges live messages, and uses Control API event queries for reconnect backfill. Production-grade cursor UX and workspace ACLs remain pending.
 
 Exit criteria:
 

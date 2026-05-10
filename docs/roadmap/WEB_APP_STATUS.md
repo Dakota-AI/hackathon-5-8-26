@@ -30,9 +30,9 @@ apps/web             -> Next.js web app
 - [x] Added `public/status.json` so the documented hosting health endpoint is emitted into the static artifact.
 - [x] Added root web scripts.
 - [x] Updated `amplify.yml` to build `apps/web`.
-- [ ] Auth UI is not production-wired yet.
-- [ ] Control API calls are not real yet because `ControlApiStack` is not built.
-- [ ] Cloudflare realtime is not implemented yet.
+- [x] Auth UI is wired through Amplify Authenticator for the current client shell; production auth polish is still pending.
+- [x] Control API calls are real when `NEXT_PUBLIC_AGENTS_CLOUD_API_URL` is configured, with local mock mode available for self-test.
+- [x] AWS-native realtime WebSocket first slice is wired in the command panel when `NEXT_PUBLIC_AGENTS_CLOUD_REALTIME_URL` is configured.
 - [ ] Server-validated GenUI catalog rendering is not implemented yet.
 
 ## Files Created
@@ -51,6 +51,8 @@ apps/web/components/amplify-provider.tsx
 apps/web/components/command-center.tsx
 apps/web/lib/amplify-config.ts
 apps/web/lib/control-api.ts
+apps/web/lib/realtime-client.ts
+apps/web/lib/run-ledger.ts
 apps/web/lib/fixtures.ts
 ```
 
@@ -108,11 +110,14 @@ The runtime model should stay:
 
 ```text
 User objective
-  -> Control API
+  -> Amplify Auth / Cognito token
+  -> Control API for durable commands
   -> durable run/task/event records
   -> Step Functions/ECS worker
   -> runtime adapter: Hermes / Codex / Claude / OpenCode / custom
-  -> canonical events
+  -> canonical events in DynamoDB/S3
+  -> AWS-native WebSocket realtime fanout
+  -> Control API event query replay/backfill
   -> web + desktop/mobile render the same product state
 ```
 
@@ -135,6 +140,7 @@ From repo root:
 
 ```bash
 pnpm install
+pnpm web:test
 pnpm web:typecheck
 pnpm web:build
 pnpm amplify:hosting:build
@@ -152,9 +158,8 @@ pnpm amplify:hosting:build
 
 ## Next Steps
 
-1. Replace fixture data with a typed client repository layer.
-2. Add authenticated shell using Amplify Authenticator or custom Cognito UI.
-3. Build `ControlApiStack` and expose `NEXT_PUBLIC_AGENTS_CLOUD_API_URL`.
-4. Add run creation and run detail views.
-5. Add Cloudflare Durable Objects realtime client.
-6. Add a safe web GenUI renderer that accepts validated `genui.patch` events.
+1. Browser-dogfood the command panel with a real temporary or seeded Cognito account against both Control API and WebSocket.
+2. Replace fixture-backed run/team/artifact panels with typed backend repositories.
+3. Add real run list and run detail routes on top of the durable ledger.
+4. Add workspace selection and authorization-aware UI once workspace membership APIs exist.
+5. Add a safe web GenUI renderer that accepts validated `genui.patch` events.

@@ -22,11 +22,11 @@ Current state:
 - Amplify Hosting app exists and deploys successfully with an explicit `amplify.yml` build spec.
 - The first Control API slice is deployed: create/query run endpoints, Cognito JWT authorizer, DynamoDB transactional run/task/initial-event ledger writes, scoped idempotency lookup, and Step Functions start.
 - The first real worker slice is deployed: a Hermes-boundary ECS runtime writes canonical `run.status`, `artifact.created`, and terminal status events plus one deterministic S3 report artifact. It currently defaults to `HERMES_RUNNER_MODE=smoke`; real CLI/model execution needs scoped provider secret brokering before enabling in ECS.
-- An AWS-native realtime WebSocket first slice is deployed: API Gateway WebSocket API, Lambda `$connect` authorizer, connection/subscription handlers, DynamoDB stream relay, and stale-connection cleanup. A real WebSocket e2e smoke with temporary Cognito credentials now verifies live run-event delivery; product clients are not wired yet.
-- The Next.js command center now has the first product run loop: create a run from the objective panel, poll the deployed Control API event ledger, render ordered `run.status`/`artifact.created` events, stop on terminal status, and show artifact cards. It has unit coverage for ledger merging/view-model behavior and was browser-dogfooded in local self-test mode.
+- An AWS-native realtime WebSocket first slice is deployed: API Gateway WebSocket API, Lambda `$connect` authorizer, connection/subscription handlers, DynamoDB stream relay, and stale-connection cleanup. A real WebSocket e2e smoke with temporary Cognito credentials verifies live run-event delivery, and the web command panel now uses that socket for live updates with HTTP event-query backfill.
+- The Next.js command center now has the first live product run loop: create a run from the objective panel, subscribe to the AWS-native realtime WebSocket for live run events, backfill missed events through Control API ordered event queries, render ordered `run.status`/`artifact.created` events, stop on terminal status, and show artifact cards. It has unit coverage for ledger merging/view-model behavior and realtime URL/message parsing, with browser self-test mode for local dogfooding.
 - A real authenticated HTTP e2e smoke now exists and passed with a temporary Cognito user: `scripts/smoke-web-http-e2e.sh` created run `run-idem-40e5c2eeae1183234f86c187`, Step Functions returned `SUCCEEDED`, Control API returned run status `succeeded`, four canonical events, and an artifact event.
 - A real WebSocket e2e smoke now exists and passed with a temporary Cognito user: `scripts/smoke-websocket-e2e.sh` created run `run-idem-32b971ea09ad7c024e8cd6ee` and received live `run.status/running`, `artifact.created`, and `run.status/succeeded` messages from the deployed WebSocket API.
-- Reference UI/UX audits now exist for GenUI/Markdown/artifacts/browser surfaces and for Paperclip/Hermes-style Kanban/work-item control-plane UX. The key product gap is a durable Work Item layer above Runs so Board, Inbox, Run Ledger, Approvals, Artifacts, and GenUI surfaces share one auditable work object.
+- Reference UI/UX audits now exist for GenUI/Markdown/artifacts/browser surfaces, Paperclip/Hermes-style Kanban/work-item control-plane UX, and Flutter Kanban/package alternatives. The highest-ROI next product slice is a durable Work Item layer above Runs so Board, Inbox, Run Ledger, Approvals, Artifacts, and GenUI surfaces share one auditable work object.
 
 Approximate progress:
 
@@ -121,9 +121,9 @@ Realtime smoke:
 
 Remaining before product-grade realtime:
 
-1. Exercise the WebSocket endpoint from a real browser/native client with a real Cognito ID token.
-2. Wire clients to subscribe after the polling event ledger path works.
-3. Add replay/gap repair UX that falls back to `GET /runs/{runId}/events` after reconnect.
+1. Browser-dogfood the web command panel from a real browser/native client with a real Cognito ID token against both Control API and WebSocket.
+2. Promote the browser-level HTTP/WebSocket path into CI-friendly smoke coverage with a persisted or seeded test account.
+3. Add stronger replay/gap repair UX that clearly backfills through `GET /runs/{runId}/events` after reconnect.
 4. Add workspace membership authorization; current smoke uses user-scoped event delivery but not full workspace ACLs.
 
 ## Completed and Deployed: Amplify Auth Sandbox

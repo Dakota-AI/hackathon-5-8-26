@@ -1,7 +1,7 @@
 "use client";
 
 import { Authenticator } from "@aws-amplify/ui-react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { artifacts, metrics, runs, teams } from "../lib/fixtures";
 import { readAmplifyEnv } from "../lib/amplify-config";
 import { resetAmplifyAuthSession } from "../lib/auth-session-reset";
@@ -10,9 +10,18 @@ import {
   getControlApiHealth,
   getControlApiRun,
   listControlApiRunEvents,
+  requireIdToken,
   type CreatedRun,
   type RunEvent
 } from "../lib/control-api";
+import {
+  buildRealtimeWebSocketUrl,
+  getRealtimeApiHealth,
+  parseRealtimeRunEvent,
+  requireRealtimeApiUrl,
+  serializeSubscribeRunMessage,
+  serializeUnsubscribeRunMessage
+} from "../lib/realtime-client";
 import { deriveRunLedgerView, mergeRunEvents } from "../lib/run-ledger";
 
 const statusLabels: Record<string, string> = {
@@ -48,6 +57,7 @@ export function CommandCenter() {
 
 function CommandCenterApp({ userLabel, onSignOut }: { userLabel: string; onSignOut?: () => void }) {
   const api = getControlApiHealth();
+  const realtime = getRealtimeApiHealth({ mockMode: api.mockMode });
 
   return (
     <main className="shell">
@@ -82,6 +92,9 @@ function CommandCenterApp({ userLabel, onSignOut }: { userLabel: string; onSignO
             <div className="status-pill">
               {api.mockMode ? "Control API self-test mode" : api.configured ? "Control API configured" : "Control API missing env"}
             </div>
+            <div className="status-pill">
+              {realtime.configured ? "Realtime WebSocket configured" : api.mockMode ? "Realtime disabled in self-test" : "Realtime missing env"}
+            </div>
           </div>
         </header>
 
@@ -90,8 +103,8 @@ function CommandCenterApp({ userLabel, onSignOut }: { userLabel: string; onSignO
             <p className="eyebrow">Agent-team orchestration</p>
             <h2>Give the system an objective; watch the durable run ledger update.</h2>
             <p>
-              The web client signs in with Amplify Auth, creates Control API runs with the Cognito JWT, then polls the
-              canonical event ledger until the ECS worker reaches a terminal state and publishes artifacts.
+              The web client signs in with Amplify Auth, creates Control API runs with the Cognito JWT, subscribes over
+              the realtime WebSocket for live events, and uses Control API event queries as the replay/backfill path after reconnects.
             </p>
           </div>
           <CreateRunPanel apiConfigured={api.configured} mockMode={api.mockMode} />
@@ -190,12 +203,16 @@ function CommandCenterApp({ userLabel, onSignOut }: { userLabel: string; onSignO
 }
 
 function CreateRunPanel({ apiConfigured, mockMode }: { apiConfigured: boolean; mockMode: boolean }) {
+  const realtime = getRealtimeApiHealth({ mockMode });
   const [objective, setObjective] = useState(defaultObjective);
   const [createdRun, setCreatedRun] = useState<CreatedRun | null>(null);
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [pollError, setPollError] = useState<string | null>(null);
+  const [realtimeState, setRealtimeState] = useState<"idle" | "connecting" | "live" | "reconnecting" | "closed">("idle");
+  const [realtimeError, setRealtimeError] = useState<string | null>(null);
+  const lastSeqRef = useRef(0);
 
   const ledgerView = useMemo(
     () => deriveRunLedgerView({ initialStatus: createdRun?.status || "queued", events }),
@@ -203,48 +220,128 @@ function CreateRunPanel({ apiConfigured, mockMode }: { apiConfigured: boolean; m
   );
 
   useEffect(() => {
-    if (!createdRun || ledgerView.isTerminal) {
-      return undefined;
-    }
+    lastSeqRef.current = ledgerView.lastSeq;
+  }, [ledgerView.lastSeq]);
 
-    let cancelled = false;
-
-    async function refreshLedger() {
-      if (!createdRun || cancelled) {
+  const refreshLedger = useCallback(
+    async (options: { afterSeq?: number; reason?: "poll" | "backfill" } = {}) => {
+      if (!createdRun) {
         return;
       }
 
       try {
         const run = await getControlApiRun(createdRun.runId);
         const nextEvents = await listControlApiRunEvents(createdRun.runId, {
-          afterSeq: ledgerView.lastSeq,
+          afterSeq: options.afterSeq ?? lastSeqRef.current,
           limit: 50
         });
-        if (cancelled) {
-          return;
-        }
         setPollError(null);
         setCreatedRun((current) => (current ? { ...current, status: run.status, executionArn: run.executionArn } : current));
         setEvents((current) => mergeRunEvents(current, nextEvents));
       } catch (err) {
-        if (!cancelled) {
-          setPollError(err instanceof Error ? err.message : "Unable to refresh run ledger.");
-        }
+        setPollError(err instanceof Error ? err.message : "Unable to refresh run ledger.");
       }
+    },
+    [createdRun?.runId]
+  );
+
+  useEffect(() => {
+    if (!createdRun || ledgerView.isTerminal) {
+      return undefined;
     }
 
-    void refreshLedger();
-    const intervalId = window.setInterval(refreshLedger, mockMode ? 550 : 1800);
+    const intervalMs = realtime.configured ? 7500 : mockMode ? 550 : 1800;
+    void refreshLedger({ reason: realtime.configured ? "backfill" : "poll" });
+    const intervalId = window.setInterval(() => void refreshLedger({ reason: realtime.configured ? "backfill" : "poll" }), intervalMs);
+    return () => window.clearInterval(intervalId);
+  }, [createdRun?.runId, ledgerView.isTerminal, mockMode, realtime.configured, refreshLedger]);
+
+  useEffect(() => {
+    if (!createdRun || ledgerView.isTerminal || !realtime.configured) {
+      if (!createdRun) {
+        setRealtimeState("idle");
+      } else if (ledgerView.isTerminal && realtime.configured) {
+        setRealtimeState("closed");
+      }
+      return undefined;
+    }
+
+    let cancelled = false;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | undefined;
+    const subscription = { workspaceId: createdRun.workspaceId, runId: createdRun.runId };
+
+    async function connect() {
+      setRealtimeState((current) => (current === "live" ? "reconnecting" : "connecting"));
+      try {
+        const token = await requireIdToken();
+        if (cancelled) {
+          return;
+        }
+        socket = new WebSocket(buildRealtimeWebSocketUrl(requireRealtimeApiUrl(), token));
+      } catch (err) {
+        if (!cancelled) {
+          setRealtimeError(err instanceof Error ? err.message : "Unable to start realtime connection.");
+          setRealtimeState("reconnecting");
+          reconnectTimer = window.setTimeout(connect, 3000);
+        }
+        return;
+      }
+
+      socket.addEventListener("open", () => {
+        if (cancelled || !socket) {
+          return;
+        }
+        setRealtimeError(null);
+        setRealtimeState("live");
+        socket.send(serializeSubscribeRunMessage(subscription));
+        void refreshLedger({ reason: "backfill" });
+      });
+
+      socket.addEventListener("message", (message) => {
+        const realtimeEvent = parseRealtimeRunEvent(String(message.data));
+        if (!realtimeEvent || realtimeEvent.runId !== subscription.runId) {
+          return;
+        }
+        setEvents((current) => mergeRunEvents(current, [realtimeEvent]));
+      });
+
+      socket.addEventListener("close", () => {
+        if (cancelled || ledgerView.isTerminal) {
+          return;
+        }
+        setRealtimeState("reconnecting");
+        void refreshLedger({ reason: "backfill" });
+        reconnectTimer = window.setTimeout(connect, 1600);
+      });
+
+      socket.addEventListener("error", () => {
+        if (!cancelled) {
+          setRealtimeError("Realtime connection interrupted; backfilling from the durable ledger.");
+        }
+      });
+    }
+
+    void connect();
+
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+      }
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(serializeUnsubscribeRunMessage(subscription));
+      }
+      socket?.close();
     };
-  }, [createdRun, ledgerView.isTerminal, ledgerView.lastSeq, mockMode]);
+  }, [createdRun?.runId, createdRun?.workspaceId, ledgerView.isTerminal, realtime.configured, refreshLedger]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setPollError(null);
+    setRealtimeError(null);
+    setRealtimeState("idle");
     setCreatedRun(null);
     setEvents([]);
     setSubmitting(true);
@@ -290,9 +387,11 @@ function CreateRunPanel({ apiConfigured, mockMode }: { apiConfigured: boolean; m
           <div className="ledger-summary">
             <span className={`run-status status-${ledgerView.status}`}>{statusLabels[ledgerView.status] || ledgerView.status}</span>
             <span>{ledgerView.pollingLabel}</span>
+            <span>{realtimeStatusLabel(realtimeState, realtime.configured)}</span>
             <span>Last event #{ledgerView.lastSeq || "—"}</span>
           </div>
-          {pollError ? <p className="form-note form-error">Polling issue: {pollError}</p> : null}
+          {realtimeError ? <p className="form-note form-error">Realtime issue: {realtimeError}</p> : null}
+          {pollError ? <p className="form-note form-error">Ledger backfill issue: {pollError}</p> : null}
           {events.length ? (
             <ol className="event-timeline" aria-label="Run event timeline">
               {events.map((runEvent) => (
@@ -321,6 +420,25 @@ function CreateRunPanel({ apiConfigured, mockMode }: { apiConfigured: boolean; m
       ) : null}
     </form>
   );
+}
+
+function realtimeStatusLabel(state: "idle" | "connecting" | "live" | "reconnecting" | "closed", configured: boolean): string {
+  if (!configured) {
+    return "HTTP polling mode";
+  }
+  if (state === "live") {
+    return "Realtime live";
+  }
+  if (state === "connecting") {
+    return "Realtime connecting...";
+  }
+  if (state === "reconnecting") {
+    return "Realtime reconnecting; backfilling";
+  }
+  if (state === "closed") {
+    return "Realtime closed";
+  }
+  return "Realtime standby";
 }
 
 function formatEventType(event: RunEvent): string {

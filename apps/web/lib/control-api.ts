@@ -129,7 +129,7 @@ export async function listControlApiRunEvents(
   return body.events;
 }
 
-async function requireIdToken(): Promise<string> {
+export async function requireIdToken(): Promise<string> {
   const session = await fetchAuthSession();
   const token = session.tokens?.idToken?.toString();
   if (!token) {

@@ -63,9 +63,8 @@ contract-correct.
   idempotency, sequencing, authorization, and schema validation.
 - Runtime writes a smoke/Hermes report artifact, but it is not yet a
   production worker policy boundary.
-- Web command panel can create a durable run, poll ordered Control API events,
-  stop on terminal status, and render artifact cards; broader list-runs,
-  workspace selection, artifact download, and realtime client integration remain
+- Web command panel can create a durable run, subscribe to the deployed AWS-native WebSocket for live run events, backfill/replay through ordered Control API event queries, stop on terminal status, and render artifact cards; broader list-runs,
+  workspace selection, artifact download, and production-grade reconnect cursor UX remain
   incomplete.
 - Cloudflare realtime can accept WebSocket sessions and relay events to a
   Durable Object, but it does not yet do replay, gap repair, or signed relay.
@@ -81,6 +80,9 @@ contract-correct.
   durable Work Item layer above Runs. Board/Kanban, inbox, approvals, run
   ledgers, transcripts, artifacts, and GenUI surfaces should hang off Work
   Items rather than free-floating chat/run fixtures.
+- Flutter Kanban/package alternatives and the highest-ROI next slice are
+  captured in `docs/roadmap/WORK_BOARD_FLUTTER_KANBAN_ROI_AUDIT.md`; the
+  recommendation is WorkItem v0 before a full drag/drop Kanban package.
 
 ### Not Complete
 
@@ -129,9 +131,9 @@ Smoke evidence:
 
 Remaining resume point:
 
-1. Wire the web/native product clients to the deployed WebSocket URL, with Control API event polling as replay/backfill after reconnect.
-2. Replace the local browser self-test mock with a real persisted test account or seeded dev user for full browser-to-HTTP smoke in CI.
-3. Add replay/gap repair and workspace membership authorization before calling realtime production-grade.
+1. Browser-dogfood the web command panel against the real deployed Control API and AWS-native WebSocket using a persisted or temporary Cognito test account, then promote that smoke into CI-friendly coverage.
+2. Replace the local browser self-test mock with a real persisted test account or seeded dev user for full browser-to-HTTP/WebSocket smoke in CI.
+3. Add stronger replay/gap repair UX and workspace membership authorization before calling realtime production-grade.
 
 ## Locked Architecture Decisions
 

@@ -11,7 +11,16 @@ import { getRun, listAdminRunEvents, listAdminRuns, listRunEvents, listRuns } fr
 import { createDataSourceRef, getDataSourceRef, listDataSourceRefsForRun, listDataSourceRefsForWorkItem } from "./data-source-refs.js";
 import { StepFunctionsExecutionStarter } from "./step-functions.js";
 import { createWorkItem, createWorkItemRun, getWorkItem, listWorkItemEvents, listWorkItemRuns, listWorkItems, updateWorkItemStatus } from "./work-items.js";
-import { createUserRunner, getUserRunner, heartbeatHostNode, heartbeatUserRunner, listAdminRunnerState, registerHostNode, updateUserRunnerDesiredState } from "./user-runners.js";
+import {
+  createUserRunner,
+  getUserRunner,
+  heartbeatHostNode,
+  heartbeatUserRunner,
+  listAdminRunnerState,
+  listUserRunners,
+  registerHostNode,
+  updateUserRunnerDesiredState,
+} from "./user-runners.js";
 import { createApproval, decideApproval, getApproval, listApprovalsForRun } from "./approvals.js";
 import { createSurface, getSurface, listSurfacesForRun, listSurfacesForWorkItem, publishSurface, updateSurface } from "./surfaces.js";
 import { LambdaAsyncExecutionStarter } from "./lambda-async-execution.js";
@@ -214,6 +223,15 @@ export async function runnerStateHandler(event: APIGatewayProxyEventV2WithJWTAut
         resourceLimits: optionalRecordField(body, "resourceLimits"),
         health: optionalRecordField(body, "health")
       }
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /user-runners") {
+    const result = await listUserRunners({
+      store,
+      user,
+      limit: parseOptionalInteger(event.queryStringParameters?.limit)
     });
     return json(result.statusCode, result.body);
   }

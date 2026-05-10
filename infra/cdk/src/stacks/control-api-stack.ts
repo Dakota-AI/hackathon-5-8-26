@@ -400,7 +400,7 @@ export class ControlApiStack extends AgentsCloudStack {
     for (const route of [
       { path: "/runner-hosts", methods: [HttpMethod.POST] },
       { path: "/runner-hosts/{hostId}/heartbeat", methods: [HttpMethod.POST] },
-      { path: "/user-runners", methods: [HttpMethod.POST] },
+      { path: "/user-runners", methods: [HttpMethod.POST, HttpMethod.GET] },
       { path: "/user-runners/{runnerId}", methods: [HttpMethod.GET, HttpMethod.PATCH] },
       { path: "/user-runners/{runnerId}/heartbeat", methods: [HttpMethod.POST] },
       { path: "/admin/runners", methods: [HttpMethod.GET] }

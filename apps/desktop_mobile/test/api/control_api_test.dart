@@ -67,6 +67,33 @@ void main() {
       },
     );
 
+    test(
+      'startRunner sends POST /runs with workspaceId and objective',
+      () async {
+        final client = MockClient((http.Request request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/runs');
+          expect(request.headers['authorization'], 'Bearer test-token');
+
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['workspaceId'], 'workspace-live');
+          expect(body['objective'], 'Keep Hermes runner warm');
+          expect(body['idempotencyKey'], isNotEmpty);
+
+          return http.Response(
+            jsonEncode({'runId': 'run-1', 'workspaceId': 'workspace-live'}),
+            202,
+          );
+        });
+
+        final api = ControlApi(client, () async => 'test-token');
+        await api.startRunner(
+          workspaceId: 'workspace-live',
+          objective: 'Keep Hermes runner warm',
+        );
+      },
+    );
+
     test('listEvents forwards workspaceId as query parameter', () async {
       final client = MockClient((http.Request request) async {
         expect(request.method, 'GET');

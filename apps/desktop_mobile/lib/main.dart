@@ -649,21 +649,32 @@ class _MobileNavItem extends StatelessWidget {
   }
 }
 
-class _PageBody extends StatelessWidget {
+class _PageBody extends ConsumerWidget {
   const _PageBody({required this.page});
 
   final ConsolePage page;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activeWorkspaceId = _resolveWorkspaceIdForPage(ref);
     return switch (page) {
-      ConsolePage.chat => const AgentChatSurface(),
+      ConsolePage.chat => AgentChatSurface(workspaceId: activeWorkspaceId),
       ConsolePage.work => const _WorkDashboard(),
       ConsolePage.kanban => const _KanbanPage(),
       ConsolePage.browser => const _BrowserPage(),
       ConsolePage.agents => const _AgentsWorkspacePage(),
       ConsolePage.inbox => const _ApprovalsPage(),
     };
+  }
+
+  String? _resolveWorkspaceIdForPage(WidgetRef ref) {
+    final workspaceIds = ref.watch(workspaceIdsProvider);
+    final selectedWorkspaceId = ref.watch(selectedWorkspaceIdProvider);
+    return workspaceIds.when(
+      data: (ids) => _resolveWorkspaceId(ids, selectedWorkspaceId),
+      loading: () => null,
+      error: (_, _) => null,
+    );
   }
 }
 

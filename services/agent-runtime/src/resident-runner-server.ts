@@ -63,8 +63,21 @@ const server = http.createServer(async (request, response) => {
     }
     if (request.method === "POST" && url.pathname === "/wake") {
       const wake = await readJson<ResidentWakeRequest>(request);
-      const result = await runner.wake(wake);
-      return json(response, 200, result);
+      const acceptedAt = new Date().toISOString();
+      void runner.wake(wake).catch((error) => {
+        console.error(JSON.stringify({
+          status: "resident-runner-wake-failed",
+          runId: wake.runId,
+          taskId: wake.taskId,
+          error: error instanceof Error ? error.message : String(error)
+        }));
+      });
+      return json(response, 202, {
+        status: "wake_accepted",
+        runId: wake.runId,
+        taskId: wake.taskId,
+        acceptedAt
+      });
     }
     if (request.method === "POST" && (url.pathname === "/engagement/notify" || url.pathname === "/engagement/call")) {
       const payload = await readJson<Omit<ResidentUserEngagementRequest, "kind"> & { readonly kind?: ResidentUserEngagementRequest["kind"] }>(request);

@@ -31,10 +31,12 @@ class ChatScreen extends StatelessWidget {
 class AgentChatSurface extends ConsumerStatefulWidget {
   const AgentChatSurface({
     super.key,
+    this.workspaceId,
     this.showVoiceAction = true,
     this.compact = false,
   });
 
+  final String? workspaceId;
   final bool showVoiceAction;
   final bool compact;
 
@@ -98,6 +100,7 @@ class _AgentChatSurfaceState extends ConsumerState<AgentChatSurface>
       final controlApi = ref.read(controlApiProvider);
       final client = await resolveRunnerLlmClient(
         controlApi: controlApi,
+        workspaceId: widget.workspaceId,
         allowConfiguredFallback: false,
       );
       if (!mounted) return;

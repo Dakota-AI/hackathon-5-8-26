@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'hermes_client.dart';
 import 'llm_client.dart';
 import '../api/control_api.dart';
@@ -23,12 +24,22 @@ const _runnerWaitMs = int.fromEnvironment(
   'MOBILE_RUNNER_WAIT_MS',
   defaultValue: 180000,
 );
+const _runnerWarmupCooldownMs = int.fromEnvironment(
+  'MOBILE_RUNNER_WARMUP_COOLDOWN_MS',
+  defaultValue: 30000,
+);
 const _runnerPollMs = int.fromEnvironment(
   'MOBILE_RUNNER_POLL_MS',
   defaultValue: 1500,
 );
+const _runnerWarmupObjective = String.fromEnvironment(
+  'MOBILE_RUNNER_WARMUP_OBJECTIVE',
+  defaultValue: 'Prepare mobile chat Hermes runner.',
+);
 
 const _runnerHealthyStatuses = <String>{"online", "running", "ready"};
+
+final _lastRunnerWarmupAttemptByWorkspace = <String, DateTime>{};
 
 /// System prompt for the *text* surface — markdown OK, GenUI blocks OK.
 const _textSystemPrompt = '''
@@ -119,16 +130,24 @@ String get llmProviderName => _provider;
 /// current ECS runner instead of a static demo endpoint.
 Future<LlmClient> resolveRunnerLlmClient({
   required ControlApi controlApi,
+  String? workspaceId,
   bool allowConfiguredFallback = false,
 }) async {
   final deadline = DateTime.now().add(Duration(milliseconds: _runnerWaitMs));
   String? lastMessage;
+  final normalizedWorkspaceId = workspaceId?.trim();
   while (DateTime.now().isBefore(deadline)) {
     final runners = await controlApi.listUserRunners();
     final runner = _pickReadyRunner(runners);
     if (runner != null) {
       return _buildHermesClientFromRunner(runner);
     }
+
+    await _attemptRunnerWarmup(
+      controlApi: controlApi,
+      workspaceId: normalizedWorkspaceId,
+    );
+
     lastMessage = _runnerNotReadyMessage(runners);
     await Future.delayed(Duration(milliseconds: _runnerPollMs));
   }
@@ -146,6 +165,34 @@ Future<LlmClient> resolveRunnerLlmClient({
     );
   }
   return fallback;
+}
+
+Future<void> _attemptRunnerWarmup({
+  required ControlApi controlApi,
+  String? workspaceId,
+}) async {
+  final normalized = workspaceId;
+  if (normalized == null || normalized.isEmpty) {
+    return;
+  }
+  final now = DateTime.now();
+  final lastAttempt = _lastRunnerWarmupAttemptByWorkspace[normalized];
+  if (lastAttempt != null &&
+      now.difference(lastAttempt).inMilliseconds < _runnerWarmupCooldownMs) {
+    return;
+  }
+  _lastRunnerWarmupAttemptByWorkspace[normalized] = now;
+  final objective =
+      '$_runnerWarmupObjective | workspace=$normalized | mobile chat';
+  try {
+    await controlApi.startRunner(
+      workspaceId: normalized,
+      objective: objective,
+      idempotencyKey: 'mobile-chat-warmup-$normalized',
+    );
+  } catch (error) {
+    debugPrint('runner warmup failed: $error');
+  }
 }
 
 LlmClient _buildHermesClientFromRunner(Map<String, dynamic> runner) {

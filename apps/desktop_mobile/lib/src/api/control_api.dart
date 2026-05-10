@@ -74,7 +74,10 @@ class ControlApi {
     return _asList(_decode(response), keys: const ['items', 'workItems']);
   }
 
-  Future<Map<String, dynamic>> getWorkItem(String id, {String? workspaceId}) async {
+  Future<Map<String, dynamic>> getWorkItem(
+    String id, {
+    String? workspaceId,
+  }) async {
     final query = <String, String>{};
     if (workspaceId != null && workspaceId.trim().isNotEmpty) {
       query['workspaceId'] = workspaceId.trim();
@@ -148,6 +151,28 @@ class ControlApi {
     return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
   }
 
+  Future<Map<String, dynamic>> startRunner({
+    required String workspaceId,
+    required String objective,
+    String? idempotencyKey,
+  }) async {
+    final body = <String, dynamic>{
+      'workspaceId': workspaceId,
+      'objective': objective,
+      'idempotencyKey':
+          idempotencyKey ??
+          'desktop-run-${DateTime.now().millisecondsSinceEpoch}',
+    };
+
+    final response = await _http.post(
+      _uri('/runs'),
+      headers: await _headers(),
+      body: jsonEncode(body),
+    );
+    final decoded = _decode(response);
+    return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+  }
+
   Future<List<Map<String, dynamic>>> listUserRunners({
     String? workspaceId,
     int? limit,
@@ -159,7 +184,10 @@ class ControlApi {
       _uri('/user-runners', query),
       headers: await _headers(),
     );
-    return _asList(_decode(response), keys: const ['items', 'runs', 'userRunners']);
+    return _asList(
+      _decode(response),
+      keys: const ['items', 'runs', 'userRunners'],
+    );
   }
 
   Future<List<Map<String, dynamic>>> listRuns(

@@ -1,7 +1,7 @@
 # Realtime Client Control, Voice, Notifications, and Preview Tools Plan
 
 Date: 2026-05-10
-Status: implementation-audit and next-slice plan
+Status: first WebSocket-backed client-control slice implemented locally
 Owner: Clients + Agent Runtime + Realtime workstreams
 
 ## Goal
@@ -168,7 +168,29 @@ public preview URL
 
 This is for agent-created website previews, not browser DOM control.
 
-## Event model we should standardize next
+### 7. WebSocket-backed orb control adapter
+
+This slice now wires the foreground Flutter shell to the existing realtime
+client. When signed in, `_RealtimeOrbControlBridge` connects to the deployed
+WebSocket endpoint and routes incoming durable events into
+`OrbControlController.applyRealtimeEvent(...)`.
+
+Currently handled event types:
+
+- `client.control.requested`: shows the top-bar/orb state and moves the client to
+  an allowlisted surface such as Browser, Kanban, Inbox, or Agents.
+- `browser.control.requested`: moves the client to the Browser surface and shows
+  concise control status.
+- `user.call.requested`: shows a top-bar approval prompt that can lead into voice
+  mode.
+- `user.notification.requested`: shows a concise top-bar update.
+- `artifact.created`: surfaces the artifact as an orb/top-bar update.
+
+The runtime allowlist also accepts `client.control.requested` and
+`browser.control.requested` from fenced `agents-cloud-event` blocks, so a Hermes
+resident run can write those events into the same durable ledger that WebSocket
+fanout already streams.
+
 
 Use the existing durable ledger/realtime path as the transport. Add typed events
 instead of inventing a second messaging system.
@@ -313,25 +335,22 @@ cd apps/desktop_mobile
 dart run tool/agent_browser_bridge_probe.dart --verbose
 ```
 
-## Next smallest implementation slice
+## Remaining next slice
 
-Do this next, in order:
+The first WS-backed local client-control slice is implemented. Next, tighten the
+loop into a full E2E harness:
 
-1. Commit the current green client/runtime/preview-tunnel checkpoint.
-2. Add typed protocol event builders for the high-signal events above.
-3. Add a client-control repository adapter in Flutter that can ingest those event
-   types from WebSocket/backfill and route them through the existing orb control
-   controller.
-4. Add a small resident tool/CLI command for emitting `client.control.requested`
-   and `browser.control.requested` events rather than asking Hermes to invent raw
-   JSON.
-5. Add an end-to-end smoke:
+1. Add result events for `client.control.completed/failed` and
+   `browser.control.completed/failed` after the client executes a command.
+2. Add a small resident CLI command for emitting `client.control.requested` and
+   `browser.control.requested` without hand-writing fenced JSON.
+3. Add a deployed smoke:
    - create run;
    - agent emits a control request;
-   - client receives it;
-   - user/client accepts;
-   - browser bridge executes deterministic smoke command;
-   - command result is written back to the ledger.
+   - signed-in client receives it over WebSocket;
+   - client/orb applies the surface transition;
+   - browser bridge executes a deterministic smoke command;
+   - result is written back to the ledger.
 
 ## Hackathon truth
 

@@ -289,6 +289,149 @@ class OrbControlController extends Notifier<OrbControlState> {
     );
   }
 
+  void applyRealtimeEvent(Map<String, dynamic> event) {
+    final type = event['type']?.toString() ?? '';
+    final payload = event['payload'];
+    final body = payload is Map
+        ? Map<String, dynamic>.from(payload)
+        : <String, dynamic>{};
+    switch (type) {
+      case 'client.control.requested':
+        _applyClientControlRequested(body);
+      case 'browser.control.requested':
+        _applyBrowserControlRequested(body);
+      case 'user.call.requested':
+        final summary = _string(body['summary']) ?? _string(body['body']);
+        _appendEvent(
+          kind: OrbControlEventKind.message,
+          title: _string(body['title']) ?? 'Agent wants to talk',
+          detail: summary ?? 'The agent requested a voice conversation.',
+        );
+        state = state.copyWith(
+          presence: OrbControlPresence.topBar,
+          mode: OrbControlMode.awaitingApproval,
+          panelState: OrbControlPanelState.minimized,
+          statusLine: summary == null
+              ? 'Agent requested a call'
+              : 'Agent requested a call: $summary',
+          pendingApproval: summary ?? 'Start voice mode with the agent?',
+        );
+      case 'user.notification.requested':
+        final message = _string(body['body']) ?? _string(body['summary']);
+        _appendEvent(
+          kind: OrbControlEventKind.message,
+          title: _string(body['title']) ?? 'Agent update',
+          detail: message ?? 'The agent sent an update.',
+        );
+        state = state.copyWith(
+          presence: OrbControlPresence.topBar,
+          mode: OrbControlMode.speaking,
+          panelState: OrbControlPanelState.minimized,
+          statusLine: message ?? 'Agent sent an update',
+        );
+      case 'artifact.created':
+        final artifact = OrbControlArtifact(
+          id:
+              _string(body['artifactId']) ??
+              'artifact-${DateTime.now().microsecondsSinceEpoch}',
+          name: _string(body['name']) ?? 'Generated artifact',
+          kind: _string(body['kind']) ?? 'artifact',
+          uri: _string(body['previewUrl']) ?? _string(body['uri']) ?? '',
+        );
+        _appendEvent(
+          kind: OrbControlEventKind.artifact,
+          title: 'Artifact ready',
+          detail: artifact.name,
+        );
+        state = state.copyWith(
+          presence: OrbControlPresence.topBar,
+          mode: OrbControlMode.speaking,
+          panelState: OrbControlPanelState.minimized,
+          statusLine: 'Artifact ready: ${artifact.name}',
+          artifacts: [artifact, ...state.artifacts].take(6).toList(),
+        );
+    }
+  }
+
+  void _applyClientControlRequested(Map<String, dynamic> payload) {
+    final kind =
+        _string(payload['kind']) ?? _string(payload['command']) ?? 'show_page';
+    final message = _string(payload['message']) ?? _string(payload['reason']);
+    final surface = _surfaceFromPayload(payload);
+    final enterVoice = kind == 'enter_voice_mode';
+    final exitVoice = kind == 'exit_voice_mode';
+
+    _appendEvent(
+      kind: OrbControlEventKind.control,
+      title: 'Client control requested',
+      detail:
+          message ??
+          'Requested $kind${surface == null ? '' : ' on ${surface.name}'}',
+    );
+
+    if (enterVoice) {
+      enterVoiceMode();
+      return;
+    }
+    if (exitVoice) {
+      returnToTextMode();
+      return;
+    }
+
+    state = state.copyWith(
+      presence: OrbControlPresence.topBar,
+      mode: OrbControlMode.controlling,
+      panelState: OrbControlPanelState.minimized,
+      statusLine: message ?? 'Agent is guiding the UI',
+      targetSurface: surface,
+      targetRevision: surface == null
+          ? state.targetRevision
+          : state.targetRevision + 1,
+    );
+  }
+
+  void _applyBrowserControlRequested(Map<String, dynamic> payload) {
+    final command =
+        _string(payload['kind']) ??
+        _string(payload['command']) ??
+        'browser_action';
+    final message = _string(payload['message']) ?? _string(payload['reason']);
+    _appendEvent(
+      kind: OrbControlEventKind.control,
+      title: 'Browser control requested',
+      detail: message ?? 'Requested $command in the embedded browser.',
+    );
+    state = state.copyWith(
+      presence: OrbControlPresence.topBar,
+      mode: OrbControlMode.controlling,
+      panelState: OrbControlPanelState.minimized,
+      statusLine: message ?? 'Agent is controlling the browser',
+      targetSurface: OrbControlSurface.browser,
+      targetRevision: state.targetRevision + 1,
+    );
+  }
+
+  OrbControlSurface? _surfaceFromPayload(Map<String, dynamic> payload) {
+    final raw =
+        (_string(payload['surface']) ??
+                _string(payload['page']) ??
+                _string(payload['target']))
+            ?.toLowerCase();
+    return switch (raw) {
+      'agents' || 'agent' || 'work' || 'workspace' => OrbControlSurface.agents,
+      'kanban' || 'board' => OrbControlSurface.kanban,
+      'browser' || 'preview' || 'web' => OrbControlSurface.browser,
+      'approvals' || 'approval' || 'inbox' => OrbControlSurface.approvals,
+      _ => null,
+    };
+  }
+
+  String? _string(Object? value) {
+    if (value is! String) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
   void _advanceMockSequence() {
     if (state.controlPaused) {
       _cancelMockTimer();

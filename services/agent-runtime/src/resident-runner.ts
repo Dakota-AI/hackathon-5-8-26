@@ -863,6 +863,7 @@ function renderPrompt(
     "Keep durable progress visible through status, artifact, approval, question, or message events. Do not emit noisy internal tool calls.",
     "Only emit high-signal platform events when something actionable happens: delegated agent/work item created, agent profile requested/promoted, review feedback recorded, or webpage/artifact published.",
     "When you need to contact the user, use the local CLI tool instead of inventing a channel: `agents-cloud-user notify --body \"...\"` for a notification-style message, or `agents-cloud-user call --summary \"...\"` to request a phone call. These commands record durable platform events for the current run.",
+    "When you need the foreground client to move, emit a single `client.control.requested` event with payload `{ kind: \"show_page\", surface: \"browser|kanban|approvals|agents\", message: \"short user-facing reason\" }`. For embedded browser work, emit `browser.control.requested` with a bounded command and a short message. Do not emit arbitrary JavaScript or unbounded UI commands.",
     "To emit one, include a fenced block exactly like ```agents-cloud-event followed by JSON with type and payload, then closing ```.",
     "",
     "Tenant:",
@@ -1045,7 +1046,9 @@ const ACTIONABLE_AGENT_EVENT_TYPES = new Set([
   "work_item.assigned",
   "review.session.created",
   "review.feedback.recorded",
-  "webpage.published"
+  "webpage.published",
+  "client.control.requested",
+  "browser.control.requested"
 ]);
 
 interface ActionableAgentEvent {
@@ -1068,7 +1071,10 @@ function extractActionableAgentEvents(rawOutput: string): ActionableAgentEvent[]
       const payload = record.payload && typeof record.payload === "object" && !Array.isArray(record.payload)
         ? record.payload as Record<string, unknown>
         : {};
-      events.push({ type, payload: sanitizeActionEventPayload(payload) });
+      const sanitizedPayload = sanitizeActionEventPayload(payload);
+      const normalizedPayload = normalizeActionEventPayload(type, sanitizedPayload);
+      if (!normalizedPayload) continue;
+      events.push({ type, payload: normalizedPayload });
     } catch {
       continue;
     }
@@ -1078,6 +1084,49 @@ function extractActionableAgentEvents(rawOutput: string): ActionableAgentEvent[]
 
 function sanitizeActionEventPayload(payload: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(payload).filter(([, value]) => isJsonSafeActionEventValue(value)));
+}
+
+const CLIENT_CONTROL_KINDS = new Set([
+  "show_page",
+  "open_artifact",
+  "open_report",
+  "open_browser",
+  "highlight",
+  "enter_voice_mode",
+  "exit_voice_mode"
+]);
+
+const CLIENT_CONTROL_SURFACES = new Set(["agents", "kanban", "browser", "approvals"]);
+
+const BROWSER_CONTROL_KINDS = new Set(["snapshot", "find", "click", "fill", "scroll_by", "navigate", "reload", "back", "forward", "run_smoke"]);
+
+function normalizeActionEventPayload(type: string, payload: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (type === "client.control.requested") {
+    const kind = stringValue(payload.kind);
+    const surface = stringValue(payload.surface);
+    if (!kind || !CLIENT_CONTROL_KINDS.has(kind)) return undefined;
+    if (surface && !CLIENT_CONTROL_SURFACES.has(surface)) return undefined;
+    return limitActionEventText(payload);
+  }
+  if (type === "browser.control.requested") {
+    const kind = stringValue(payload.kind);
+    if (!kind || !BROWSER_CONTROL_KINDS.has(kind)) return undefined;
+    return limitActionEventText(payload);
+  }
+  return payload;
+}
+
+function limitActionEventText(payload: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, boundActionEventValue(value)]));
+}
+
+function boundActionEventValue(value: unknown): unknown {
+  if (typeof value === "string") return value.slice(0, 512);
+  if (Array.isArray(value)) return value.slice(0, 50).map(boundActionEventValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).slice(0, 50).map(([key, nested]) => [key, boundActionEventValue(nested)]));
+  }
+  return value;
 }
 
 function isJsonSafeActionEventValue(value: unknown): boolean {

@@ -106,6 +106,25 @@ export interface ArtifactCreatedPayload extends Record<string, unknown> {
   readonly metadata?: Record<string, unknown>;
 }
 
+export type ClientControlKind = "show_page" | "open_artifact" | "open_report" | "open_browser" | "highlight" | "enter_voice_mode" | "exit_voice_mode";
+export type BrowserControlKind = "snapshot" | "find" | "click" | "fill" | "scroll_by" | "navigate" | "reload" | "back" | "forward" | "run_smoke";
+
+export interface ClientControlRequestedPayload extends Record<string, unknown> {
+  readonly commandId: string;
+  readonly kind: ClientControlKind;
+  readonly surface?: "agents" | "kanban" | "browser" | "approvals";
+  readonly artifactId?: string;
+  readonly message?: string;
+  readonly args?: Record<string, unknown>;
+}
+
+export interface BrowserControlRequestedPayload extends Record<string, unknown> {
+  readonly commandId: string;
+  readonly kind: BrowserControlKind;
+  readonly message?: string;
+  readonly args?: Record<string, unknown>;
+}
+
 export function buildCanonicalEvent<TPayload extends Record<string, unknown>>(input: CanonicalEventBaseInput & {
   readonly type: string;
   readonly payload: TPayload;
@@ -179,6 +198,34 @@ export function buildArtifactCreatedEvent(input: CanonicalEventBaseInput & Artif
       sha256: input.sha256,
       bytes: input.bytes,
       metadata: input.metadata
+    })
+  });
+}
+
+export function buildClientControlRequestedEvent(input: CanonicalEventBaseInput & ClientControlRequestedPayload): CanonicalEventEnvelope<ClientControlRequestedPayload> {
+  return buildCanonicalEvent({
+    ...input,
+    type: "client.control.requested",
+    payload: withoutUndefined({
+      commandId: input.commandId,
+      kind: input.kind,
+      surface: input.surface,
+      artifactId: input.artifactId,
+      message: input.message,
+      args: input.args
+    })
+  });
+}
+
+export function buildBrowserControlRequestedEvent(input: CanonicalEventBaseInput & BrowserControlRequestedPayload): CanonicalEventEnvelope<BrowserControlRequestedPayload> {
+  return buildCanonicalEvent({
+    ...input,
+    type: "browser.control.requested",
+    payload: withoutUndefined({
+      commandId: input.commandId,
+      kind: input.kind,
+      message: input.message,
+      args: input.args
     })
   });
 }

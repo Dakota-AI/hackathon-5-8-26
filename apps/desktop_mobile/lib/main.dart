@@ -199,12 +199,61 @@ class ConsoleShell extends ConsumerWidget {
         child: Stack(
           children: [
             Positioned.fill(child: body),
+            const _RealtimeOrbControlBridge(),
             const OrbControlLayer(),
           ],
         ),
       ),
     );
   }
+}
+
+class _RealtimeOrbControlBridge extends ConsumerStatefulWidget {
+  const _RealtimeOrbControlBridge();
+
+  @override
+  ConsumerState<_RealtimeOrbControlBridge> createState() =>
+      _RealtimeOrbControlBridgeState();
+}
+
+class _RealtimeOrbControlBridgeState
+    extends ConsumerState<_RealtimeOrbControlBridge> {
+  StreamSubscription<Map<String, dynamic>>? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _connect());
+  }
+
+  Future<void> _connect() async {
+    final bypass = ref.read(authBypassProvider);
+    final auth = ref.read(authControllerProvider);
+    if (bypass || auth.status != AuthStatus.signedIn) return;
+    try {
+      final realtime = ref.read(realtimeClientProvider);
+      await realtime.connect();
+      if (!mounted) return;
+      _subscription ??= realtime.events.listen((event) {
+        ref
+            .read(orbControlControllerProvider.notifier)
+            .applyRealtimeEvent(event);
+      });
+    } catch (_) {
+      // The visible GenUI realtime card surfaces connection errors. The shell
+      // bridge stays quiet so the orb is not noisy when the user is signed out
+      // or offline.
+    }
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class _Sidebar extends ConsumerWidget {

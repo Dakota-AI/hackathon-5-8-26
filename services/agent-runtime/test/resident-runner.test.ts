@@ -126,6 +126,38 @@ describe("ResidentRunner", () => {
       }),
       "```",
       "```agents-cloud-event",
+      JSON.stringify({
+        type: "client.control.requested",
+        payload: {
+          commandId: "cmd-open-browser",
+          kind: "show_page",
+          surface: "browser",
+          message: "Opening the report preview."
+        }
+      }),
+      "```",
+      "```agents-cloud-event",
+      JSON.stringify({
+        type: "browser.control.requested",
+        payload: {
+          commandId: "cmd-browser-snapshot",
+          kind: "snapshot",
+          message: "Checking the report page."
+        }
+      }),
+      "```",
+      "```agents-cloud-event",
+      JSON.stringify({
+        type: "client.control.requested",
+        payload: {
+          commandId: "cmd-unsafe-client",
+          kind: "eval_js",
+          surface: "browser",
+          message: "This should be ignored."
+        }
+      }),
+      "```",
+      "```agents-cloud-event",
       JSON.stringify({ type: "tool.call", payload: { toolName: "terminal", command: "pwd" } }),
       "```",
       "session_id: session-action-events"
@@ -157,6 +189,13 @@ describe("ResidentRunner", () => {
     assert.equal(delegated.payload.agentId, "agent-delegator");
     assert.equal(delegated.payload.delegatedAgentId, "agent-ui-polish");
     assert.equal(delegated.payload.workItemId, "workitem-ui-polish");
+    const clientControl = result.events.find((event) => event.type === "client.control.requested");
+    const browserControl = result.events.find((event) => event.type === "browser.control.requested");
+    assert.ok(clientControl);
+    assert.ok(browserControl);
+    assert.equal(clientControl.payload.surface, "browser");
+    assert.equal(browserControl.payload.kind, "snapshot");
+    assert.equal(result.events.some((event) => event.payload.commandId === "cmd-unsafe-client"), false);
   });
 
   it("records agent-requested user notification and call events durably", async () => {

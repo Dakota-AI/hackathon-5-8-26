@@ -43,7 +43,7 @@
     "cloudflare:dev": "pnpm --filter @agents-cloud/cloudflare-realtime run dev",
     "cloudflare:deploy": "pnpm --filter @agents-cloud/cloudflare-realtime run deploy",
     "cloudflare:tail": "pnpm --filter @agents-cloud/cloudflare-realtime run tail",
-    "amplify:hosting:build": "pnpm web:build"
+    "amplify:hosting:build": "pnpm agent-profile:build && pnpm web:build"
   },
   "engines": {
     "node": ">=22.0.0"

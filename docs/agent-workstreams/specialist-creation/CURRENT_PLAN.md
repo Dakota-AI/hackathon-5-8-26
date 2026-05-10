@@ -3,7 +3,7 @@
 Workstream: Specialist Creation
 Owner: Specialist Creation Workstream
 Updated: 2026-05-10
-Status: planned; local prototype exists
+Status: local Agent Creator Hermes profile and Apify CLI workflow verified
 
 ## Current Scope
 
@@ -14,19 +14,30 @@ reviewable, testable specialist profile draft.
 
 - `services/agent-creator` local prototype can produce deterministic workshop
   plans, profile drafts, scorecards, and demo transcripts.
-- `packages/agent-profile` local scaffold defines versioned profile contracts
-  and validators.
-- Promotion is blocked in the prototype until eval and user approval evidence
-  exists.
+- `packages/agent-profile` defines versioned profile contracts and validators.
+- A local Hermes profile named `agentcreator` is reproducibly documented under
+  `docs/agent-workstreams/specialist-creation/AGENT_CREATOR_HERMES_PROFILE.md`.
+- Apify discovery/prototyping uses `tools/apifycli/apifycli`, a zero-dependency
+  CLI around the Apify OpenAPI surface, not MCP.
+- A real `saas-pricing-watcher` workshop run prototyped Apify actors, measured
+  cost, denied failing actors, generated a valid `AgentProfileVersion`, and
+  kept Control API posting behind explicit user approval.
+- Promotion remains blocked until quarantine eval evidence and approval exist.
 
 ## Gaps
 
-- No durable profile registry.
-- No profile bundle S3 layout.
-- No Control API routes.
-- No client review UI.
-- No runtime materialization.
-- No live domain research workflow yet.
+- Scenario-mode bundle writing is incomplete: `services/agent-creator` can emit
+  scenario simulation output, but full bundle directory writing is currently
+  only available in interactive mode.
+- No quarantine eval runner that executes scenarios against a throwaway
+  specialist Hermes profile and writes `eval-results.json`.
+- Runtime materialization still needs to load only approved immutable bundles.
+- Production Apify execution still needs a curated platform connector with
+  actor allowlists, workspace/run IDs, and budget enforcement. The local CLI is
+  for Agent Creator discovery/prototyping, not direct production specialist
+  credentials.
+- Client review UI still needs to present prototype traces, costs, scorecards,
+  and explicit approval/revision actions.
 
 ## Risks
 

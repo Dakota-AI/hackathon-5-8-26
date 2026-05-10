@@ -1,6 +1,6 @@
 # Specialist Creation Workstream
 
-Status: planned
+Status: local Agent Creator Hermes profile and Apify CLI workshop verified
 Updated: 2026-05-10
 
 ## Mission
@@ -40,19 +40,33 @@ Do not own:
 ## Current State
 
 - `services/agent-creator` exists as an early deterministic workshop prototype.
-- `packages/agent-profile` exists locally as shared profile contract/validator
+- `packages/agent-profile` exists as shared profile contract/validator
   scaffolding.
-- No profile registry table/API, bundle S3 layout, review UI, or runtime
-  materialization exists yet.
+- `~/.hermes/profiles/agentcreator` is the local Hermes Agent Creator profile;
+  a reproducible non-secret bundle is committed under
+  `docs/agent-workstreams/specialist-creation/agentcreator-profile-bundle/`.
+- `tools/apifycli/apifycli` is the local Apify OpenAPI CLI used for Actor
+  discovery/prototyping; Apify MCP is intentionally not used.
+- A `saas-pricing-watcher` workshop has been verified end-to-end locally: real
+  Apify actor discovery, prototype runs, cost/risk trace, valid draft profile,
+  and no Control API POST without explicit approval.
+- No profile registry table/API, full scenario bundle writer, review UI, or
+  runtime materialization exists yet.
 
 ## Near-Term Plan
 
-1. Commit `services/agent-creator` and `packages/agent-profile` only after tests
-   pass and generated `dist`/`node_modules` stay ignored.
-2. Add profile registry/state model.
-3. Add Control API draft/list/review/promote routes.
-4. Add client review surface handoff.
-5. Add runtime handoff for loading approved versions only.
+1. Add scenario-mode bundle writing to `services/agent-creator` so non-interactive
+   workshop runs can emit a complete profile bundle directory.
+2. Add quarantine eval execution against throwaway specialist Hermes profiles and
+   persist `eval-results.json` as a review artifact.
+3. Productize prototype traces (`TRACE.md`, cost/risk decisions, sample outputs)
+   into S3-backed review artifacts.
+4. Add client review surface for profile JSON, tool-policy buckets, prototype
+   traces, eval scorecards, and explicit approve/revise/reject actions.
+5. Add runtime handoff for loading approved immutable versions only.
+6. Replace local Apify token usage in production with a curated platform
+   connector/broker that enforces actor allowlists, workspace/run IDs, budgets,
+   and approval gates.
 
 ## Validation
 

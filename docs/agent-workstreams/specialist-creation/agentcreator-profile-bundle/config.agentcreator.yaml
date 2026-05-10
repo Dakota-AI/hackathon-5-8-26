@@ -1,0 +1,44 @@
+# Config fragment for ~/.hermes/profiles/agentcreator/config.yaml
+#
+# This file intentionally contains no secrets. The only required secret for
+# Apify discovery is APIFY_TOKEN in ~/.hermes/profiles/agentcreator/.env.
+#
+# Apply manually or run ./install-agentcreator-profile.sh from this directory.
+
+model:
+  default: gpt-5.5
+  provider: openai-codex
+  base_url: https://chatgpt.com/backend-api/codex
+
+terminal:
+  backend: local
+  cwd: /Users/sebastian/Developer/agents-cloud
+  timeout: 180
+
+agent:
+  max_turns: 600
+  gateway_timeout: 1800
+  tool_use_enforcement: auto
+  reasoning_effort: medium
+
+platform_toolsets:
+  cli:
+    - browser
+    - clarify
+    - code_execution
+    - cronjob
+    - delegation
+    - file
+    - memory
+    - session_search
+    - skills
+    - terminal
+    - todo
+    - vision
+    - web
+
+# No MCP server is required for Apify. Agent Creator uses tools/apifycli/apifycli.
+mcp_servers: {}
+
+display:
+  personality: technical

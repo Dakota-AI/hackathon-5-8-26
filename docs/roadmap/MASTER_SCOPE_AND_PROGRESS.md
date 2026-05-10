@@ -231,7 +231,7 @@ validated for the exact deployment mode.
   not enabled in ECS until scoped provider secrets are brokered.
 - [ ] Miro OAuth/MCP/REST bridge is not implemented.
 - [ ] GitHub App/OAuth integration for commits and PRs is not implemented.
-- [ ] Specialist-agent creation workflow is not implemented.
+- [ ] Specialist-agent creation workflow is not productized end-to-end yet. Local building blocks now exist: profile registry/admin playground, `agentcreator` Hermes profile bundle, and `apifycli`-backed tool prototyping; automated quarantine evals/runtime promotion remain incomplete.
 - [ ] Self-testing/self-improvement quarantine is not implemented.
 - [ ] CI/CD validation workflow is not implemented.
 - [ ] Observability dashboards and alarms are not implemented.
@@ -615,14 +615,15 @@ Current status:
 - [x] Shared `@agents-cloud/agent-profile` format exists for versioned governed profile drafts with behavior policy, tool policy, MCP policy, eval pack, scorecard, approval, and changelog fields.
 - [ ] Automated quarantine eval runner is not wired yet.
 - [ ] Runtime promotion into resident Hermes/ECS runner context is not wired yet.
-- [ ] Conversational Agent Creator interview/research loop is not productized yet.
+- [ ] Conversational Agent Creator interview/research loop is not productized yet. A local Hermes `agentcreator` profile now runs iterative workshops with Apify CLI prototyping and validated draft output.
 
 Required next work:
 
 - [x] Define first `AgentProfileVersion` schema.
 - [x] Define first `ToolPolicy` schema.
 - [x] Define specialist registry DynamoDB table/entity for profile versions.
-- [ ] Add research brief artifact format.
+- [x] Add first local research/prototype trace artifact convention (`/tmp/agent-creator/...`, `TRACE.md`) for Agent Creator workshops.
+- [ ] Productize research brief/prototype trace artifact storage in S3 and review UI.
 - [ ] Add automated eval result artifact format.
 - [ ] Add agent capability manifest.
 - [x] Add agent versioning and approval states for draft/review/approved/promoted/retired.

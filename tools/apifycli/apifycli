@@ -1,0 +1,415 @@
+#!/usr/bin/env python3
+"""apifycli — minimal Apify API client for the Agents Cloud Agent Creator workflow.
+
+Zero deps (stdlib urllib only). Auth: APIFY_TOKEN env var.
+
+Subcommand cheat-sheet (--help on each for details):
+
+  Discovery
+    apifycli search [--q QUERY] [--category CAT] [--pricing FREE|PAID|...]
+                    [--limit N] [--sort relevance|latest|popularity]
+    apifycli get ACTOR_ID                 # actor metadata: input schema, pricing, stats
+    apifycli openapi ACTOR_ID             # actor's input/output OpenAPI for default build
+    apifycli readme ACTOR_ID              # actor README (helpful for understanding output)
+
+  Validation / runs
+    apifycli validate ACTOR_ID INPUT.json # free input-schema check
+    apifycli run-sync ACTOR_ID INPUT.json [--timeout 120] [--max-items N]
+                                          # synchronous run, returns dataset items
+    apifycli run ACTOR_ID INPUT.json [--timeout 120]
+                                          # async run, returns runId
+    apifycli status RUN_ID                # poll run status
+    apifycli log RUN_ID                   # fetch last 200 lines of run log
+    apifycli items RUN_ID [--limit 100]   # fetch dataset items for a run
+    apifycli abort RUN_ID                 # abort a running actor run
+
+  Account
+    apifycli me                           # whoami + plan + usage summary
+    apifycli runs [--limit 20]            # recent runs (across all actors)
+
+ACTOR_ID may be the canonical id (`apify/website-content-crawler`) or the legacy
+`username~name` form. Both work — the CLI normalizes.
+
+All output is JSON on stdout. Errors go to stderr with non-zero exit.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from typing import Any, Optional
+
+API_BASE = os.environ.get("APIFY_API_BASE", "https://api.apify.com")
+TIMEOUT_DEFAULT = int(os.environ.get("APIFY_HTTP_TIMEOUT", "60"))
+
+
+def _token() -> str:
+    tok = os.environ.get("APIFY_TOKEN", "").strip()
+    if not tok:
+        sys.stderr.write("error: APIFY_TOKEN not set in environment\n")
+        sys.exit(2)
+    return tok
+
+
+def _normalize_actor(actor_id: str) -> str:
+    # Canonical "username/name" -> "username~name" for path-safety
+    return actor_id.replace("/", "~", 1) if "/" in actor_id else actor_id
+
+
+def _request(
+    method: str,
+    path: str,
+    *,
+    query: Optional[dict[str, Any]] = None,
+    body: Any = None,
+    timeout: int = TIMEOUT_DEFAULT,
+    raw: bool = False,
+) -> Any:
+    url = f"{API_BASE}{path}"
+    q = {"token": _token()}
+    if query:
+        for k, v in query.items():
+            if v is None:
+                continue
+            if isinstance(v, bool):
+                q[k] = "true" if v else "false"
+            else:
+                q[k] = str(v)
+    url = f"{url}?{urllib.parse.urlencode(q)}"
+    data = None
+    headers = {"Accept": "application/json", "User-Agent": "apifycli/1.0"}
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = resp.read()
+    except urllib.error.HTTPError as e:
+        body_txt = e.read().decode("utf-8", errors="replace")
+        sys.stderr.write(f"HTTP {e.code} {method} {path}\n{body_txt}\n")
+        sys.exit(1)
+    except urllib.error.URLError as e:
+        sys.stderr.write(f"network error: {e}\n")
+        sys.exit(1)
+    if raw:
+        return payload
+    if not payload:
+        return None
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError:
+        return payload.decode("utf-8", errors="replace")
+
+
+def _print(obj: Any) -> None:
+    if isinstance(obj, (dict, list)):
+        json.dump(obj, sys.stdout, indent=2, sort_keys=False)
+        sys.stdout.write("\n")
+    elif isinstance(obj, (bytes, bytearray)):
+        sys.stdout.buffer.write(obj)
+    else:
+        sys.stdout.write(str(obj) + "\n")
+
+
+# ---------- subcommand handlers ----------
+
+def cmd_search(args: argparse.Namespace) -> None:
+    q = {
+        "search": args.q,
+        "category": args.category,
+        "pricingModel": args.pricing,
+        "username": args.username,
+        "limit": args.limit,
+        "offset": args.offset,
+        "sortBy": args.sort,
+    }
+    res = _request("GET", "/v2/store", query=q)
+    # Trim payload to the fields the agent actually needs.
+    if args.full:
+        _print(res)
+        return
+    items = (res or {}).get("data", {}).get("items", [])
+    trimmed = [
+        {
+            "id": f"{a.get('username')}/{a.get('name')}",
+            "title": a.get("title"),
+            "description": (a.get("description") or "")[:240],
+            "stats": {
+                "totalRuns": a.get("stats", {}).get("totalRuns"),
+                "totalUsers30Days": a.get("stats", {}).get("totalUsers30Days"),
+                "lastRunStartedAt": a.get("stats", {}).get("lastRunStartedAt"),
+            },
+            "pricing": (a.get("currentPricingInfo") or {}).get("pricingModel"),
+            "categories": a.get("categories"),
+            "objectives": a.get("objectives"),
+        }
+        for a in items
+    ]
+    _print({"count": len(trimmed), "total": (res or {}).get("data", {}).get("total"), "items": trimmed})
+
+
+def cmd_get(args: argparse.Namespace) -> None:
+    actor = _normalize_actor(args.actor_id)
+    res = _request("GET", f"/v2/acts/{actor}")
+    if args.full:
+        _print(res)
+        return
+    a = (res or {}).get("data", {})
+    summary = {
+        "id": f"{a.get('username')}/{a.get('name')}",
+        "title": a.get("title"),
+        "description": a.get("description"),
+        "stats": a.get("stats"),
+        "currentPricingInfo": a.get("currentPricingInfo"),
+        "defaultRunOptions": a.get("defaultRunOptions"),
+        "exampleRunInput": a.get("exampleRunInput"),
+        "isPublic": a.get("isPublic"),
+        "isDeprecated": a.get("isDeprecated"),
+        "categories": a.get("categories"),
+        "versions": [
+            {"versionNumber": v.get("versionNumber"), "buildTag": v.get("buildTag")}
+            for v in a.get("versions", [])
+        ],
+    }
+    _print(summary)
+
+
+def cmd_openapi(args: argparse.Namespace) -> None:
+    actor = _normalize_actor(args.actor_id)
+    # Resolve default build first
+    default_build = _request("GET", f"/v2/acts/{actor}/builds/default")
+    build_id = (default_build or {}).get("data", {}).get("id")
+    if not build_id:
+        sys.stderr.write("could not resolve default build for actor\n")
+        sys.exit(1)
+    res = _request("GET", f"/v2/acts/{actor}/builds/{build_id}/openapi.json")
+    _print(res)
+
+
+def cmd_readme(args: argparse.Namespace) -> None:
+    actor = _normalize_actor(args.actor_id)
+    default_build = _request("GET", f"/v2/acts/{actor}/builds/default")
+    build = (default_build or {}).get("data", {}) or {}
+    readme = build.get("actorDefinition", {}).get("readme") or "(no README in default build)"
+    sys.stdout.write(readme + "\n")
+
+
+def cmd_validate(args: argparse.Namespace) -> None:
+    actor = _normalize_actor(args.actor_id)
+    with open(args.input_file, "r", encoding="utf-8") as f:
+        body = json.load(f)
+    res = _request("POST", f"/v2/acts/{actor}/runs", query={"validateOnly": True}, body=body)
+    _print(res)
+
+
+def cmd_run_sync(args: argparse.Namespace) -> None:
+    actor = _normalize_actor(args.actor_id)
+    with open(args.input_file, "r", encoding="utf-8") as f:
+        body = json.load(f)
+    q = {"timeout": args.timeout, "memory": args.memory, "format": "json"}
+    if args.max_items is not None:
+        q["maxItems"] = args.max_items
+    res = _request(
+        "POST",
+        f"/v2/acts/{actor}/run-sync-get-dataset-items",
+        query=q,
+        body=body,
+        timeout=max(args.timeout + 30, TIMEOUT_DEFAULT),
+    )
+    _print(res)
+
+
+def cmd_run(args: argparse.Namespace) -> None:
+    actor = _normalize_actor(args.actor_id)
+    with open(args.input_file, "r", encoding="utf-8") as f:
+        body = json.load(f)
+    q = {"timeout": args.timeout, "memory": args.memory}
+    res = _request("POST", f"/v2/acts/{actor}/runs", query=q, body=body)
+    data = (res or {}).get("data", {})
+    _print({
+        "runId": data.get("id"),
+        "actorId": data.get("actId"),
+        "status": data.get("status"),
+        "startedAt": data.get("startedAt"),
+        "defaultDatasetId": data.get("defaultDatasetId"),
+        "containerUrl": data.get("containerUrl"),
+        "consoleUrl": f"https://console.apify.com/actors/runs/{data.get('id')}" if data.get("id") else None,
+    })
+
+
+def cmd_status(args: argparse.Namespace) -> None:
+    res = _request("GET", f"/v2/actor-runs/{args.run_id}")
+    if args.full:
+        _print(res)
+        return
+    d = (res or {}).get("data", {})
+    _print({
+        "runId": d.get("id"),
+        "status": d.get("status"),
+        "statusMessage": d.get("statusMessage"),
+        "startedAt": d.get("startedAt"),
+        "finishedAt": d.get("finishedAt"),
+        "stats": d.get("stats"),
+        "usageTotalUsd": d.get("usageTotalUsd"),
+        "defaultDatasetId": d.get("defaultDatasetId"),
+        "exitCode": d.get("exitCode"),
+    })
+
+
+def cmd_log(args: argparse.Namespace) -> None:
+    res = _request("GET", f"/v2/actor-runs/{args.run_id}/log", raw=True)
+    text = res.decode("utf-8", errors="replace") if isinstance(res, (bytes, bytearray)) else str(res)
+    lines = text.splitlines()
+    sys.stdout.write("\n".join(lines[-args.tail:]) + "\n")
+
+
+def cmd_items(args: argparse.Namespace) -> None:
+    q = {"limit": args.limit, "offset": args.offset, "format": "json", "clean": args.clean}
+    res = _request("GET", f"/v2/actor-runs/{args.run_id}/dataset/items", query=q)
+    _print(res)
+
+
+def cmd_abort(args: argparse.Namespace) -> None:
+    res = _request("POST", f"/v2/actor-runs/{args.run_id}/abort")
+    _print(res)
+
+
+def cmd_me(args: argparse.Namespace) -> None:
+    res = _request("GET", "/v2/users/me")
+    if args.full:
+        _print(res)
+        return
+    d = (res or {}).get("data", {})
+    _print({
+        "id": d.get("id"),
+        "username": d.get("username"),
+        "email": d.get("email"),
+        "plan": d.get("plan"),
+        "monthlyUsageCycle": d.get("monthlyUsageCycle"),
+        "currentMonthlyUsage": d.get("currentMonthlyUsage"),
+        "limits": d.get("limits"),
+    })
+
+
+def cmd_runs(args: argparse.Namespace) -> None:
+    q = {"limit": args.limit, "offset": args.offset, "desc": True}
+    if args.status:
+        q["status"] = args.status
+    res = _request("GET", "/v2/actor-runs", query=q)
+    items = (res or {}).get("data", {}).get("items", [])
+    if args.full:
+        _print(items)
+        return
+    trimmed = [
+        {
+            "runId": r.get("id"),
+            "actorId": r.get("actId"),
+            "status": r.get("status"),
+            "startedAt": r.get("startedAt"),
+            "finishedAt": r.get("finishedAt"),
+            "usageTotalUsd": r.get("usageTotalUsd"),
+        }
+        for r in items
+    ]
+    _print(trimmed)
+
+
+# ---------- argparse wiring ----------
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="apifycli", description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("search", help="Search Apify Store")
+    s.add_argument("--q", help="search query (substring match)")
+    s.add_argument("--category", help="category filter (e.g. ECOMMERCE, SOCIAL_MEDIA)")
+    s.add_argument("--pricing", help="FREE | FREEMIUM | PAID | PAY_PER_RESULT | RENTAL | PRICE_PER_DATASET_ITEM")
+    s.add_argument("--username", help="actor author username filter")
+    s.add_argument("--limit", type=int, default=20)
+    s.add_argument("--offset", type=int, default=0)
+    s.add_argument("--sort", choices=["relevance", "latest", "popularity"], default="popularity")
+    s.add_argument("--full", action="store_true", help="emit raw API payload instead of trimmed view")
+    s.set_defaults(func=cmd_search)
+
+    g = sub.add_parser("get", help="Get actor metadata (input schema, pricing, stats)")
+    g.add_argument("actor_id")
+    g.add_argument("--full", action="store_true")
+    g.set_defaults(func=cmd_get)
+
+    o = sub.add_parser("openapi", help="Get actor's default-build OpenAPI input/output spec")
+    o.add_argument("actor_id")
+    o.set_defaults(func=cmd_openapi)
+
+    r = sub.add_parser("readme", help="Get actor README from default build")
+    r.add_argument("actor_id")
+    r.set_defaults(func=cmd_readme)
+
+    v = sub.add_parser("validate", help="Validate input.json against actor input schema (free, no run)")
+    v.add_argument("actor_id")
+    v.add_argument("input_file")
+    v.set_defaults(func=cmd_validate)
+
+    rs = sub.add_parser("run-sync", help="Run actor synchronously and return dataset items")
+    rs.add_argument("actor_id")
+    rs.add_argument("input_file")
+    rs.add_argument("--timeout", type=int, default=120, help="run timeout seconds (default 120)")
+    rs.add_argument("--memory", type=int, default=None, help="memory MB override")
+    rs.add_argument("--max-items", type=int, default=None, help="cap dataset items returned")
+    rs.set_defaults(func=cmd_run_sync)
+
+    rn = sub.add_parser("run", help="Start an async actor run, returns runId")
+    rn.add_argument("actor_id")
+    rn.add_argument("input_file")
+    rn.add_argument("--timeout", type=int, default=300)
+    rn.add_argument("--memory", type=int, default=None)
+    rn.set_defaults(func=cmd_run)
+
+    st = sub.add_parser("status", help="Poll actor-run status")
+    st.add_argument("run_id")
+    st.add_argument("--full", action="store_true")
+    st.set_defaults(func=cmd_status)
+
+    lg = sub.add_parser("log", help="Fetch run log")
+    lg.add_argument("run_id")
+    lg.add_argument("--tail", type=int, default=200)
+    lg.set_defaults(func=cmd_log)
+
+    it = sub.add_parser("items", help="Fetch dataset items for a run")
+    it.add_argument("run_id")
+    it.add_argument("--limit", type=int, default=100)
+    it.add_argument("--offset", type=int, default=0)
+    it.add_argument("--clean", action="store_true", help="omit hidden fields")
+    it.set_defaults(func=cmd_items)
+
+    ab = sub.add_parser("abort", help="Abort a running actor run")
+    ab.add_argument("run_id")
+    ab.set_defaults(func=cmd_abort)
+
+    me = sub.add_parser("me", help="Account info, plan, usage")
+    me.add_argument("--full", action="store_true")
+    me.set_defaults(func=cmd_me)
+
+    rl = sub.add_parser("runs", help="Recent runs across all actors")
+    rl.add_argument("--limit", type=int, default=20)
+    rl.add_argument("--offset", type=int, default=0)
+    rl.add_argument("--status", help="READY | RUNNING | SUCCEEDED | FAILED | TIMED-OUT | ABORTED")
+    rl.add_argument("--full", action="store_true")
+    rl.set_defaults(func=cmd_runs)
+
+    return p
+
+
+def main(argv: Optional[list[str]] = None) -> None:
+    args = build_parser().parse_args(argv)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

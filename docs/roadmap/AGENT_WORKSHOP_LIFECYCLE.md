@@ -141,9 +141,16 @@ Tool posture is represented as:
 
 Apify posture today:
 
-- read-only catalog search can be represented as allowed,
-- actor runs are high-risk and approval-gated,
+- Agent Creator uses the local zero-dependency `tools/apifycli/apifycli` CLI for
+  discovery/prototyping instead of Apify MCP.
+- read-only store search, actor metadata, OpenAPI, README, and input validation
+  are discovery activities.
+- actor runs are high-risk and approval-gated because they spend credits and use
+  external compute/proxies.
 - paid/external-side-effect operations remain approval-gated.
+- the verified `saas-pricing-watcher` workshop ran real Apify prototypes and
+  kept the passing actor (`apify/website-content-crawler`) in
+  `approvalRequiredTools`; failing actors were denied.
 
 MCP posture today:
 
@@ -153,9 +160,12 @@ MCP posture today:
 
 Not yet complete:
 
-- live Apify actor metadata audit before choosing actors,
+- production Apify connector/broker that runs approved actors without exposing a
+  raw APIFY_TOKEN to specialists,
 - live tool-catalog signing and catalog-hash refresh,
-- live MCP definition fetch/diff in the profile creation loop.
+- live MCP definition fetch/diff in the profile creation loop,
+- scenario-mode full profile-bundle writing from `services/agent-creator`,
+- quarantine eval execution against throwaway specialist profiles.
 
 ### 4. Artifact registry
 

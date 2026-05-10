@@ -162,6 +162,10 @@ class _AgentChatSurfaceState extends State<AgentChatSurface>
     await _store.sendUser(text: text);
   }
 
+  void _dismissKeyboard() {
+    if (_focus.hasFocus) _focus.unfocus();
+  }
+
   Future<void> _startConversation() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -180,22 +184,28 @@ class _AgentChatSurfaceState extends State<AgentChatSurface>
         child: Column(
           children: [
             Expanded(
-              child: _store.turns.isEmpty
-                  ? const _EmptyState()
-                  : ListView.builder(
-                      controller: _scroll,
-                      padding: EdgeInsets.fromLTRB(
-                        widget.compact ? 10 : 16,
-                        widget.compact ? 10 : 16,
-                        widget.compact ? 10 : 16,
-                        8,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _dismissKeyboard,
+                child: _store.turns.isEmpty
+                    ? const _EmptyState()
+                    : ListView.builder(
+                        controller: _scroll,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        padding: EdgeInsets.fromLTRB(
+                          widget.compact ? 10 : 16,
+                          widget.compact ? 10 : 16,
+                          widget.compact ? 10 : 16,
+                          8,
+                        ),
+                        itemCount: _store.turns.length,
+                        itemBuilder: (context, index) {
+                          final turn = _store.turns[index];
+                          return _TurnView(key: ValueKey(turn.id), turn: turn);
+                        },
                       ),
-                      itemCount: _store.turns.length,
-                      itemBuilder: (context, index) {
-                        final turn = _store.turns[index];
-                        return _TurnView(key: ValueKey(turn.id), turn: turn);
-                      },
-                    ),
+              ),
             ),
             _Composer(
               controller: _composer,

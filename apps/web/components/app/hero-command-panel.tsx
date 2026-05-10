@@ -13,6 +13,8 @@ import {
 } from "../../lib/control-api";
 import { useWorkspace } from "../workspace-context";
 import { deriveRunLedgerView, isSmokeWorkerArtifact, mergeRunEvents } from "../../lib/run-ledger";
+import { readRealtimeStatus } from "../../lib/realtime-client";
+import { useRunRealtimeEvents } from "../../lib/use-run-realtime-events";
 import { useAuth } from "../auth-context";
 import { Panel } from "./panel";
 import { StatusPill } from "./status-pill";
@@ -75,6 +77,21 @@ export function HeroCommandPanel() {
     const id = window.setInterval(() => void tick(), intervalMs);
     return () => window.clearInterval(id);
   }, [createdRun?.runId, ledger.isTerminal]);
+
+  const handleRealtimeEvent = React.useCallback((event: RunEvent) => {
+    setEvents((c) => mergeRunEvents(c, [event]));
+    const status = readRealtimeStatus(event);
+    if (status) {
+      setCreatedRun((c) => (c && c.runId === event.runId ? { ...c, status } : c));
+    }
+  }, []);
+
+  useRunRealtimeEvents({
+    workspaceId,
+    runId: createdRun?.runId,
+    enabled: Boolean(createdRun && !ledger.isTerminal),
+    onEvent: handleRealtimeEvent
+  });
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

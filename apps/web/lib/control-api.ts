@@ -520,6 +520,7 @@ export type WorkItemArtifactRecord = {
   name?: string;
   kind?: string;
   state?: string;
+  uri?: string;
   s3Uri?: string;
   contentType?: string;
   sizeBytes?: number;
@@ -688,7 +689,8 @@ export async function listControlApiWorkItemArtifacts(input: {
     `${baseUrl}/work-items/${encodeURIComponent(input.workItemId)}/artifacts?${params.toString()}`,
     { headers: { authorization: `Bearer ${token}` } }
   );
-  return parseJsonResponse(response);
+  const data = await parseJsonResponse<{ artifacts: WorkItemArtifactRecord[] }>(response);
+  return { artifacts: data.artifacts.map(normalizeWorkItemArtifactRecord) };
 }
 
 export async function listControlApiWorkItemSurfaces(input: {
@@ -713,7 +715,15 @@ export async function listControlApiRunArtifacts(runId: string): Promise<{
   const response = await fetch(`${baseUrl}/runs/${encodeURIComponent(runId)}/artifacts`, {
     headers: { authorization: `Bearer ${token}` }
   });
-  return parseJsonResponse(response);
+  const data = await parseJsonResponse<{ artifacts: WorkItemArtifactRecord[] }>(response);
+  return { artifacts: data.artifacts.map(normalizeWorkItemArtifactRecord) };
+}
+
+function normalizeWorkItemArtifactRecord(artifact: WorkItemArtifactRecord): WorkItemArtifactRecord {
+  return {
+    ...artifact,
+    s3Uri: artifact.s3Uri ?? artifact.uri
+  };
 }
 
 export async function getControlApiArtifactDownloadUrl(input: {

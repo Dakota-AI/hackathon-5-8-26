@@ -53,6 +53,27 @@ export function serializeUnsubscribeRunMessage(input: RunSubscriptionInput): str
   return JSON.stringify({ action: "unsubscribeRun", workspaceId: input.workspaceId, runId: input.runId });
 }
 
+export function shouldAcceptRealtimeRunEvent(
+  event: RealtimeRunEvent,
+  input: RunSubscriptionInput
+): boolean {
+  if (event.runId !== input.runId) {
+    return false;
+  }
+  if (event.workspaceId && event.workspaceId !== input.workspaceId) {
+    return false;
+  }
+  return true;
+}
+
+export function readRealtimeStatus(event: RealtimeRunEvent): string | null {
+  if (event.type !== "run.status" || !isRecord(event.payload)) {
+    return null;
+  }
+  const status = event.payload.status;
+  return typeof status === "string" && status.trim().length > 0 ? status : null;
+}
+
 export function parseRealtimeRunEvent(message: string): RealtimeRunEvent | null {
   let value: unknown;
   try {

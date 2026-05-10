@@ -151,3 +151,55 @@ test("listControlApiWorkItems hits /work-items with bearer token (real-data path
     mock.restoreAll();
   }
 });
+
+test("listControlApiWorkItemArtifacts maps Control API uri fields for artifact board display", async (t) => {
+  if (typeof (t.mock as { module?: unknown }).module !== "function") {
+    t.skip("node:test module mocks unavailable; rerun with --experimental-test-module-mocks");
+    return;
+  }
+
+  process.env.NEXT_PUBLIC_AGENTS_CLOUD_API_URL = "https://example.invalid/api";
+  delete process.env.NEXT_PUBLIC_AGENTS_CLOUD_API_MOCK;
+
+  t.mock.module("aws-amplify/auth", {
+    namedExports: {
+      fetchAuthSession: async () => ({
+        tokens: { idToken: { toString: () => "test-id-token" } }
+      })
+    }
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        artifacts: [
+          {
+            artifactId: "artifact-1",
+            runId: "run-1",
+            workItemId: "wi-1",
+            workspaceId: "ws-test",
+            userId: "user-1",
+            kind: "report",
+            name: "Hermes Report",
+            uri: "s3://bucket/workspaces/ws-test/runs/run-1/artifacts/artifact-1/report.md",
+            contentType: "text/markdown",
+            createdAt: "2026-05-10T00:00:00.000Z"
+          }
+        ]
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    )) as typeof fetch;
+
+  try {
+    const mod = await import("../lib/control-api.ts");
+    const response = await mod.listControlApiWorkItemArtifacts({ workspaceId: "ws-test", workItemId: "wi-1" });
+    assert.equal(
+      response.artifacts[0]?.s3Uri,
+      "s3://bucket/workspaces/ws-test/runs/run-1/artifacts/artifact-1/report.md"
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    mock.restoreAll();
+  }
+});

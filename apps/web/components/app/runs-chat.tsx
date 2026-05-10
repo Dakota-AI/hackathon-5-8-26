@@ -20,6 +20,8 @@ import {
   type WorkItemRecord,
   type WorkItemRunRecord
 } from "../../lib/control-api";
+import { readRealtimeStatus } from "../../lib/realtime-client";
+import { useRunRealtimeEvents } from "../../lib/use-run-realtime-events";
 import { useAuth } from "../auth-context";
 import { useWorkspace } from "../workspace-context";
 import { cn } from "../../lib/utils";
@@ -265,6 +267,22 @@ function Conversation({
   const [draft, setDraft] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const activeRun = React.useMemo(() => runs.find((r) => !isTerminal(r.status)) ?? null, [runs]);
+
+  const handleRealtimeEvent = React.useCallback((event: RunEvent) => {
+    setEvents((cur) => mergeEvents(cur, [event]));
+    const status = readRealtimeStatus(event);
+    if (status) {
+      setRuns((cur) => cur.map((run) => (run.runId === event.runId ? { ...run, status } : run)));
+    }
+  }, []);
+
+  useRunRealtimeEvents({
+    workspaceId,
+    runId: activeRun?.runId,
+    enabled: Boolean(workItem && activeRun),
+    onEvent: handleRealtimeEvent
+  });
 
   const refresh = React.useCallback(async () => {
     if (!workItem) return;
@@ -292,14 +310,12 @@ function Conversation({
     void refresh();
   }, [refresh]);
 
-  // Poll the active run's events (if any non-terminal)
+  // Poll the active run's events as a fallback for reconnect gaps or missing WebSocket config.
   React.useEffect(() => {
-    if (!workItem) return;
-    const active = runs.find((r) => !isTerminal(r.status));
-    if (!active) return;
+    if (!workItem || !activeRun) return;
     const id = window.setInterval(async () => {
       try {
-        const r = await listControlApiRunEvents(active.runId, { limit: 50 });
+        const r = await listControlApiRunEvents(activeRun.runId, { limit: 50 });
         if (r.length > 0) {
           setEvents((cur) => mergeEvents(cur, r));
         }
@@ -308,7 +324,7 @@ function Conversation({
       }
     }, 2500);
     return () => window.clearInterval(id);
-  }, [runs, workItem]);
+  }, [activeRun?.runId, workItem]);
 
   React.useEffect(() => {
     if (scrollRef.current) {

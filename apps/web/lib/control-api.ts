@@ -31,7 +31,7 @@ export type RunEvent = {
   seq: number;
   type: string;
   createdAt: string;
-  source?: string;
+  source?: string | { kind?: string; name?: string; version?: string };
   payload?: Record<string, unknown>;
 };
 

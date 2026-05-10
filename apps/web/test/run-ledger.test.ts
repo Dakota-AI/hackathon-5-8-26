@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   deriveRunLedgerView,
   extractArtifactCards,
+  formatRunEventSource,
   isTerminalRunStatus,
   mergeRunEvents,
   type RunEventLike
@@ -93,4 +94,12 @@ test("isTerminalRunStatus only stops polling for final statuses", () => {
   assert.equal(isTerminalRunStatus("succeeded"), true);
   assert.equal(isTerminalRunStatus("failed"), true);
   assert.equal(isTerminalRunStatus("cancelled"), true);
+});
+
+test("formatRunEventSource renders canonical source objects as text", () => {
+  assert.equal(formatRunEventSource({ source: "worker.mock" }), "worker.mock");
+  assert.equal(formatRunEventSource({ source: { name: "agents-cloud-worker", kind: "worker" } }), "agents-cloud-worker (worker)");
+  assert.equal(formatRunEventSource({ source: { name: "agents-cloud-worker" } }), "agents-cloud-worker");
+  assert.equal(formatRunEventSource({ source: { kind: "worker" } }), "worker");
+  assert.equal(formatRunEventSource({}), "durable ledger");
 });

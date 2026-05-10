@@ -22,7 +22,7 @@ import {
   serializeSubscribeRunMessage,
   serializeUnsubscribeRunMessage
 } from "../lib/realtime-client";
-import { deriveRunLedgerView, mergeRunEvents } from "../lib/run-ledger";
+import { deriveRunLedgerView, formatRunEventSource, mergeRunEvents } from "../lib/run-ledger";
 
 const statusLabels: Record<string, string> = {
   queued: "Queued",
@@ -452,5 +452,5 @@ function formatEventType(event: RunEvent): string {
 }
 
 function formatEventSource(event: RunEvent): string {
-  return event.source || "durable ledger";
+  return formatRunEventSource(event);
 }

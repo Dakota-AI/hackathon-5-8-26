@@ -4,6 +4,7 @@ export type RunEventLike = {
   seq: number;
   type: string;
   createdAt: string;
+  source?: string | { kind?: string; name?: string; version?: string };
   payload?: Record<string, unknown>;
 };
 
@@ -83,6 +84,26 @@ export function extractArtifactCards(events: RunEventLike[]): ArtifactCard[] {
 
 export function isTerminalRunStatus(status: string): boolean {
   return terminalStatuses.has(status.toLowerCase());
+}
+
+export function formatRunEventSource(event: Pick<RunEventLike, "source">): string {
+  if (typeof event.source === "string" && event.source.trim().length > 0) {
+    return event.source;
+  }
+  if (event.source && typeof event.source === "object") {
+    const name = typeof event.source.name === "string" ? event.source.name.trim() : "";
+    const kind = typeof event.source.kind === "string" ? event.source.kind.trim() : "";
+    if (name && kind) {
+      return `${name} (${kind})`;
+    }
+    if (name) {
+      return name;
+    }
+    if (kind) {
+      return kind;
+    }
+  }
+  return "durable ledger";
 }
 
 function terminalPollingLabel(status: string): string {

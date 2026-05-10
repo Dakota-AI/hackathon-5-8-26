@@ -121,7 +121,9 @@ export class DynamoControlApiStore implements ControlApiStore {
         Limit: Math.min(Math.max(limit, 1), 100)
       })
     );
-    return ((result.Items ?? []) as RunRecord[]).sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    return (result.Items ?? [])
+      .filter(isCompleteRunRecord)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 
   async listEvents(runId: string, options: { readonly afterSeq?: number; readonly limit?: number } = {}): Promise<EventRecord[]> {
@@ -147,6 +149,21 @@ export class DynamoControlApiStore implements ControlApiStore {
     );
     return (result.Items ?? []) as EventRecord[];
   }
+}
+
+function isCompleteRunRecord(value: unknown): value is RunRecord {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const item = value as Partial<RunRecord>;
+  return (
+    typeof item.workspaceId === "string" &&
+    typeof item.runId === "string" &&
+    typeof item.userId === "string" &&
+    typeof item.status === "string" &&
+    typeof item.createdAt === "string" &&
+    typeof item.updatedAt === "string"
+  );
 }
 
 function mustEnv(name: string): string {

@@ -24,6 +24,7 @@
     "amplify:deploy": "AWS_PROFILE=${AWS_PROFILE:-agents-cloud-source} AWS_REGION=${AWS_REGION:-us-east-1} AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1} pnpm --filter @agents-cloud/infra-amplify run deploy",
     "web:dev": "pnpm --filter @agents-cloud/web dev",
     "web:typecheck": "pnpm --filter @agents-cloud/web typecheck",
+    "web:test": "pnpm --filter @agents-cloud/web test",
     "web:build": "pnpm --filter @agents-cloud/web build",
     "cloudflare:build": "pnpm --filter @agents-cloud/cloudflare-realtime run build",
     "cloudflare:test": "pnpm --filter @agents-cloud/cloudflare-realtime run test",

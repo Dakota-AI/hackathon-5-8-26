@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
     "lint": "next lint || true"
   },
   "dependencies": {

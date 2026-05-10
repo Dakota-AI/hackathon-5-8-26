@@ -29,6 +29,7 @@ class MemoryStore implements ControlApiStore {
   async listRunsForWorkItem(input: { readonly workItemId: string; readonly limit?: number }): Promise<RunRecord[]> {
     return this.runs.filter((run) => run.workItemId === input.workItemId).slice(0, input.limit ?? 50);
   }
+  async listRunsForUser(): Promise<[]> { return []; }
   async listEvents(runId: string): Promise<EventRecord[]> { return this.events.filter((event) => event.runId === runId).sort((left, right) => left.seq - right.seq); }
 
   async putWorkItem(item: WorkItemRecord): Promise<void> {

@@ -15,6 +15,7 @@ class IdempotentMemoryStore implements ControlApiStore {
   async updateWorkItem(): Promise<undefined> { return undefined; }
   async listWorkItemsForUser(): Promise<[]> { return []; }
   async listRunsForWorkItem(): Promise<[]> { return []; }
+  async listRunsForUser(): Promise<[]> { return []; }
   async createRunLedger(input: { run: RunRecord; task: TaskRecord; event: EventRecord }): Promise<void> {
     await this.putRun(input.run);
     await this.putTask(input.task);

@@ -105,6 +105,24 @@ into the run ledger, event schema, auth boundary, and worker lifecycle.
   source files.
 - Preserve user changes in the working tree.
 
+## Flutter Client UI Standards
+
+- The Flutter desktop/mobile client at `apps/desktop_mobile` should use
+  `shadcn_flutter` as the primary and preferred UI system.
+- Do not introduce new Material or Cupertino visual dependencies for app UI unless
+  there is a documented platform integration reason. Prefer `ShadcnApp`,
+  `ThemeData`, `ColorSchemes`, `Scaffold`, `Card`, `Button`, `NavigationItem`,
+  `OutlineBadge`, `Divider`, shadcn form controls, and shadcn/Radix/Lucide icons.
+- Keep the visual language minimal, professional, monochrome, and black/white by
+  default. Use neutral grays for status and hierarchy; avoid colorful dashboard
+  accents unless a product requirement explicitly calls for semantic color.
+- Raw Flutter layout primitives (`Row`, `Column`, `SizedBox`, `Container`,
+  `Padding`, etc.) are acceptable for layout/composition, but reusable surfaces,
+  buttons, navigation, badges, inputs, cards, dialogs, tables, and controls should
+  come from `shadcn_flutter`.
+- The local source clone for deep reference is `tools/shadcn_flutter`; do not
+  vendor or edit it as product source.
+
 ## Required Validation Commands
 
 Run the relevant subset before finishing a change, and all of these after broad

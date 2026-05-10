@@ -22,3 +22,4 @@ Core planning and audit docs:
 - [Desktop and Mobile Implementation Plan](roadmap/DESKTOP_MOBILE_IMPLEMENTATION_PLAN.md)
 - [TestFlight Setup](roadmap/TESTFLIGHT_SETUP.md)
 - [Web App Status](roadmap/WEB_APP_STATUS.md)
+- [shadcn_flutter UI System](roadmap/SHADCN_FLUTTER_UI_SYSTEM.md)

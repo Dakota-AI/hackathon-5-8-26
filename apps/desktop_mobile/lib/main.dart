@@ -1,8 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:genui/genui.dart' as genui;
-import 'package:shadcn_flutter/shadcn_flutter.dart' as shad;
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 void main() {
   runApp(const AgentsCloudConsoleApp());
@@ -20,13 +19,13 @@ class AgentsCloudConsoleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ProviderScope(
-      child: shad.ShadcnApp(
+      child: ShadcnApp(
         title: 'Agents Cloud',
         debugShowCheckedModeBanner: false,
-        themeMode: shad.ThemeMode.dark,
-        theme: const shad.ThemeData.dark(
-          colorScheme: shad.ColorSchemes.darkSlate,
-          radius: 0.65,
+        themeMode: ThemeMode.dark,
+        theme: const ThemeData.dark(
+          colorScheme: ColorSchemes.darkNeutral,
+          radius: 0.45,
         ),
         home: const ConsoleShell(),
       ),
@@ -43,11 +42,11 @@ class ConsoleShell extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: _Palette.background,
-      body: SafeArea(
+      child: SafeArea(
         child: Row(
           children: [
             _Sidebar(selectedPage: selectedPage),
-            const VerticalDivider(width: 1, color: _Palette.border),
+            const SizedBox(width: 1, child: ColoredBox(color: _Palette.border)),
             Expanded(
               child: Column(
                 children: [
@@ -82,37 +81,37 @@ class _Sidebar extends ConsumerWidget {
           const SizedBox(height: 16),
           _NavButton(
             label: 'Command Center',
-            icon: Icons.auto_awesome,
+            icon: RadixIcons.dashboard,
             page: ConsolePage.commandCenter,
             selected: selectedPage == ConsolePage.commandCenter,
           ),
           _NavButton(
             label: 'Runs',
-            icon: Icons.account_tree_outlined,
+            icon: RadixIcons.activityLog,
             page: ConsolePage.runs,
             selected: selectedPage == ConsolePage.runs,
           ),
           _NavButton(
             label: 'Agents & Teams',
-            icon: Icons.groups_2_outlined,
+            icon: RadixIcons.group,
             page: ConsolePage.agents,
             selected: selectedPage == ConsolePage.agents,
           ),
           _NavButton(
             label: 'Artifacts',
-            icon: Icons.inventory_2_outlined,
+            icon: RadixIcons.archive,
             page: ConsolePage.artifacts,
             selected: selectedPage == ConsolePage.artifacts,
           ),
           _NavButton(
             label: 'Miro Boards',
-            icon: Icons.hub_outlined,
+            icon: RadixIcons.component1,
             page: ConsolePage.miro,
             selected: selectedPage == ConsolePage.miro,
           ),
           _NavButton(
             label: 'Approvals',
-            icon: Icons.verified_user_outlined,
+            icon: RadixIcons.checkCircled,
             page: ConsolePage.approvals,
             selected: selectedPage == ConsolePage.approvals,
           ),
@@ -169,7 +168,7 @@ class _LogoMark extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: _Palette.accent.withValues(alpha: 0.35)),
       ),
-      child: const Icon(Icons.blur_on, color: _Palette.accent, size: 19),
+      child: const Icon(RadixIcons.cube, color: _Palette.accent, size: 19),
     );
   }
 }
@@ -191,41 +190,13 @@ class _NavButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 5),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(9),
-        onTap: () => ref.read(selectedPageProvider.notifier).state = page,
-        child: Container(
-          height: 34,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            color: selected ? _Palette.selected : Colors.transparent,
-            borderRadius: BorderRadius.circular(9),
-            border: Border.all(
-              color: selected ? _Palette.borderStrong : Colors.transparent,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                size: 17,
-                color: selected ? Colors.white : _Palette.muted,
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: selected ? Colors.white : _Palette.text,
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+      child: NavigationItem(
+        selected: selected,
+        onChanged: (value) {
+          if (value) ref.read(selectedPageProvider.notifier).state = page;
+        },
+        label: Text(label, overflow: TextOverflow.ellipsis),
+        child: Icon(icon, size: 17),
       ),
     );
   }
@@ -365,11 +336,7 @@ class _HeroCommandPanel extends StatelessWidget {
             ),
             child: const Row(
               children: [
-                Icon(
-                  Icons.keyboard_command_key,
-                  color: _Palette.accent,
-                  size: 18,
-                ),
+                Icon(RadixIcons.magicWand, color: _Palette.accent, size: 18),
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -612,7 +579,7 @@ class _GenUiPreviewPanelState extends State<_GenUiPreviewPanel> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.18),
+              color: const Color(0x33000000),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: _Palette.border),
             ),
@@ -873,20 +840,13 @@ class _Panel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Card(
       padding: padding,
-      decoration: BoxDecoration(
-        color: _Palette.panel,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _Palette.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            offset: const Offset(0, 14),
-            blurRadius: 36,
-          ),
-        ],
-      ),
+      filled: true,
+      fillColor: _Palette.panel,
+      borderColor: _Palette.border,
+      borderRadius: BorderRadius.circular(10),
+      boxShadow: const [],
       child: child,
     );
   }
@@ -900,37 +860,25 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-      ),
+    return OutlineBadge(
       child: Text(
         label,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
       ),
     );
   }
 }
 
 abstract final class _Palette {
-  static const background = Color(0xFF06080D);
-  static const sidebar = Color(0xFF080B12);
-  static const panel = Color(0xFF0E131D);
-  static const input = Color(0xFF111827);
-  static const selected = Color(0xFF172033);
-  static const border = Color(0xFF222A38);
-  static const borderStrong = Color(0xFF334155);
-  static const text = Color(0xFFE5E7EB);
-  static const muted = Color(0xFF8B95A7);
-  static const accent = Color(0xFF7C9CFF);
-  static const success = Color(0xFF43D675);
-  static const warning = Color(0xFFF5B74D);
-  static const info = Color(0xFF67D4FF);
+  static const background = Color(0xFF050505);
+  static const sidebar = Color(0xFF070707);
+  static const panel = Color(0xFF0D0D0D);
+  static const input = Color(0xFF111111);
+  static const border = Color(0xFF262626);
+  static const text = Color(0xFFF5F5F5);
+  static const muted = Color(0xFFA3A3A3);
+  static const accent = Color(0xFFFFFFFF);
+  static const success = Color(0xFFD4D4D4);
+  static const warning = Color(0xFFBDBDBD);
+  static const info = Color(0xFFE5E5E5);
 }

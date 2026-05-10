@@ -1,7 +1,7 @@
 import 'package:desktop_mobile/main.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 void main() {
   testWidgets('boots Paperclip-style Agents Cloud command center', (
@@ -36,7 +36,7 @@ void main() {
     await tester.pumpWidget(
       const ProviderScope(child: AgentsCloudConsoleApp()),
     );
-    await tester.tap(find.text('Agents & Teams'));
+    await tester.tap(find.byType(NavigationItem).at(2));
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(
@@ -47,7 +47,7 @@ void main() {
     );
     expect(find.text('Executive agent'), findsOneWidget);
 
-    await tester.tap(find.text('Miro Boards'));
+    await tester.tap(find.byType(NavigationItem).at(4));
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(

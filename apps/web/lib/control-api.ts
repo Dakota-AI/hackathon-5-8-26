@@ -487,6 +487,301 @@ export async function approveControlApiAgentProfile(input: {
   return parseJsonResponse<AgentProfileResponse>(response);
 }
 
+// ---- Work items ---------------------------------------------------------
+
+export type WorkItemRecord = {
+  workspaceId: string;
+  workItemId: string;
+  userId?: string;
+  ownerEmail?: string;
+  title?: string;
+  objective: string;
+  status: string;
+  priority?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type WorkItemRunRecord = {
+  runId: string;
+  workItemId?: string;
+  workspaceId: string;
+  status: string;
+  objective?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  executionArn?: string;
+};
+
+export type WorkItemArtifactRecord = {
+  artifactId: string;
+  runId?: string;
+  workItemId?: string;
+  name?: string;
+  kind?: string;
+  state?: string;
+  s3Uri?: string;
+  contentType?: string;
+  sizeBytes?: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type WorkItemSurfaceRecord = {
+  surfaceId: string;
+  workItemId?: string;
+  runId?: string;
+  title?: string;
+  kind?: string;
+  validation: "server-validated" | "unvalidated" | string;
+  componentCount?: number;
+  componentTree?: GenUiComponent;
+  components?: GenUiComponent[];
+  dataSources?: string[];
+  updatedAt?: string;
+};
+
+export type GenUiComponent = {
+  type: string;
+  props?: Record<string, unknown>;
+  children?: GenUiComponent[];
+  // common props (shorthand)
+  text?: string;
+  label?: string;
+  value?: string | number;
+  hint?: string;
+  items?: Array<string | GenUiComponent>;
+  rows?: Array<Record<string, string | number>>;
+  columns?: string[];
+  data?: Array<{ label: string; value: number }>;
+};
+
+export async function listControlApiWorkItems(options: {
+  workspaceId?: string;
+  limit?: number;
+} = {}): Promise<{ workItems: WorkItemRecord[] }> {
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const params = new URLSearchParams();
+  if (options.workspaceId) params.set("workspaceId", options.workspaceId);
+  if (options.limit) params.set("limit", String(options.limit));
+  const url = `${baseUrl}/work-items${params.toString() ? `?${params.toString()}` : ""}`;
+  const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+  return parseJsonResponse<{ workItems: WorkItemRecord[] }>(response);
+}
+
+export async function createControlApiWorkItem(input: {
+  workspaceId: string;
+  objective: string;
+  title?: string;
+  priority?: string;
+}): Promise<{ workItem: WorkItemRecord; workItemId: string; status: string }> {
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const response = await fetch(`${baseUrl}/work-items`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      workspaceId: input.workspaceId,
+      objective: input.objective,
+      title: input.title,
+      priority: input.priority,
+      idempotencyKey: stableBrowserIdempotencyKey(input.workspaceId, input.objective)
+    })
+  });
+  return parseJsonResponse(response);
+}
+
+export async function getControlApiWorkItem(input: {
+  workspaceId: string;
+  workItemId: string;
+}): Promise<{ workItem: WorkItemRecord }> {
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const params = new URLSearchParams({ workspaceId: input.workspaceId });
+  const response = await fetch(
+    `${baseUrl}/work-items/${encodeURIComponent(input.workItemId)}?${params.toString()}`,
+    { headers: { authorization: `Bearer ${token}` } }
+  );
+  return parseJsonResponse(response);
+}
+
+export async function updateControlApiWorkItemStatus(input: {
+  workspaceId: string;
+  workItemId: string;
+  status: string;
+}): Promise<{ workItem: WorkItemRecord }> {
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const params = new URLSearchParams({ workspaceId: input.workspaceId });
+  const response = await fetch(
+    `${baseUrl}/work-items/${encodeURIComponent(input.workItemId)}/status?${params.toString()}`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ status: input.status })
+    }
+  );
+  return parseJsonResponse(response);
+}
+
+export async function startControlApiWorkItemRun(input: {
+  workspaceId: string;
+  workItemId: string;
+  objective?: string;
+}): Promise<{ run: WorkItemRunRecord }> {
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const response = await fetch(
+    `${baseUrl}/work-items/${encodeURIComponent(input.workItemId)}/runs`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        workspaceId: input.workspaceId,
+        objective: input.objective,
+        idempotencyKey: stableBrowserIdempotencyKey(input.workspaceId, input.objective ?? input.workItemId)
+      })
+    }
+  );
+  return parseJsonResponse(response);
+}
+
+export async function listControlApiWorkItemRuns(input: {
+  workspaceId: string;
+  workItemId: string;
+}): Promise<{ runs: WorkItemRunRecord[] }> {
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const params = new URLSearchParams({ workspaceId: input.workspaceId });
+  const response = await fetch(
+    `${baseUrl}/work-items/${encodeURIComponent(input.workItemId)}/runs?${params.toString()}`,
+    { headers: { authorization: `Bearer ${token}` } }
+  );
+  return parseJsonResponse(response);
+}
+
+export async function listControlApiWorkItemEvents(input: {
+  workspaceId: string;
+  workItemId: string;
+  limit?: number;
+}): Promise<{ events: RunEvent[] }> {
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const params = new URLSearchParams({ workspaceId: input.workspaceId });
+  if (input.limit) params.set("limit", String(input.limit));
+  const response = await fetch(
+    `${baseUrl}/work-items/${encodeURIComponent(input.workItemId)}/events?${params.toString()}`,
+    { headers: { authorization: `Bearer ${token}` } }
+  );
+  return parseJsonResponse(response);
+}
+
+export async function listControlApiWorkItemArtifacts(input: {
+  workspaceId: string;
+  workItemId: string;
+}): Promise<{ artifacts: WorkItemArtifactRecord[] }> {
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const params = new URLSearchParams({ workspaceId: input.workspaceId });
+  const response = await fetch(
+    `${baseUrl}/work-items/${encodeURIComponent(input.workItemId)}/artifacts?${params.toString()}`,
+    { headers: { authorization: `Bearer ${token}` } }
+  );
+  return parseJsonResponse(response);
+}
+
+export async function listControlApiWorkItemSurfaces(input: {
+  workspaceId: string;
+  workItemId: string;
+}): Promise<{ surfaces: WorkItemSurfaceRecord[] }> {
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const params = new URLSearchParams({ workspaceId: input.workspaceId });
+  const response = await fetch(
+    `${baseUrl}/work-items/${encodeURIComponent(input.workItemId)}/surfaces?${params.toString()}`,
+    { headers: { authorization: `Bearer ${token}` } }
+  );
+  return parseJsonResponse(response);
+}
+
+export async function listControlApiRunArtifacts(runId: string): Promise<{
+  artifacts: WorkItemArtifactRecord[];
+}> {
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const response = await fetch(`${baseUrl}/runs/${encodeURIComponent(runId)}/artifacts`, {
+    headers: { authorization: `Bearer ${token}` }
+  });
+  return parseJsonResponse(response);
+}
+
+export async function getControlApiArtifactDownloadUrl(input: {
+  runId: string;
+  artifactId: string;
+}): Promise<{ url: string; expiresAt?: string }> {
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const response = await fetch(
+    `${baseUrl}/runs/${encodeURIComponent(input.runId)}/artifacts/${encodeURIComponent(input.artifactId)}/download`,
+    { headers: { authorization: `Bearer ${token}` } }
+  );
+  return parseJsonResponse(response);
+}
+
+// ---- Approvals ----------------------------------------------------------
+
+export type ApprovalRecord = {
+  workspaceId: string;
+  approvalId: string;
+  runId: string;
+  workItemId?: string;
+  taskId?: string;
+  userId?: string;
+  ownerEmail?: string;
+  toolName: string;
+  risk: "low" | "medium" | "high" | "critical" | string;
+  requestedAction: string;
+  status: "requested" | "approved" | "rejected" | string;
+  decision?: "approved" | "rejected" | string;
+  reason?: string;
+  argumentsPreview?: Record<string, unknown>;
+  decidedBy?: string;
+  decidedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  expiresAt?: string;
+};
+
+export async function listControlApiRunApprovals(runId: string): Promise<{ approvals: ApprovalRecord[] }> {
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const response = await fetch(`${baseUrl}/runs/${encodeURIComponent(runId)}/approvals`, {
+    headers: { authorization: `Bearer ${token}` }
+  });
+  return parseJsonResponse(response);
+}
+
+export async function decideControlApiApproval(input: {
+  workspaceId: string;
+  approvalId: string;
+  decision: "approved" | "rejected";
+  reason?: string;
+}): Promise<{ approval: ApprovalRecord }> {
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const params = new URLSearchParams({ workspaceId: input.workspaceId });
+  const response = await fetch(
+    `${baseUrl}/approvals/${encodeURIComponent(input.approvalId)}/decision?${params.toString()}`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ decision: input.decision, reason: input.reason })
+    }
+  );
+  return parseJsonResponse(response);
+}
+
 export async function requireIdToken(): Promise<string> {
   const session = await fetchAuthSession();
   const token = session.tokens?.idToken?.toString();

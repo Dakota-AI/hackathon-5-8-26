@@ -1,8 +1,12 @@
 "use client";
 
-import { Authenticator } from "@aws-amplify/ui-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { readAmplifyEnv } from "../lib/amplify-config";
+import * as React from "react";
+import {
+  ActivityLogIcon,
+  CrossCircledIcon,
+  ReloadIcon,
+  ChevronDownIcon
+} from "@radix-ui/react-icons";
 import {
   agentWorkshopLifecycle,
   buildAgentWorkshopDraftProfile,
@@ -10,7 +14,6 @@ import {
   summarizeLifecycleReadiness,
   type AgentProfileDisplaySummary
 } from "../lib/agent-workshop";
-import { resetAmplifyAuthSession } from "../lib/auth-session-reset";
 import { describeAdminLineageEvent, summarizePipelinePosition } from "../lib/admin-lineage";
 import { describeRunnerHealth, sortRunnerRows } from "../lib/admin-runners";
 import {
@@ -29,69 +32,60 @@ import {
   type AgentProfileRegistryRecord,
   type RunEvent
 } from "../lib/control-api";
+import { useAuth } from "./auth-context";
+import { cn } from "../lib/utils";
+import { BrandHeader } from "./app/brand-header";
+import { Button } from "./app/button";
+import { Panel } from "./app/panel";
+import { SectionHeader } from "./app/section-header";
+import { StatusPill } from "./app/status-pill";
+import { MetricCard } from "./app/metric-card";
+import { TimelineItem } from "./app/timeline-item";
+import { Textarea } from "./app/textarea";
 
 const defaultAdminState: AdminRunsResponse = {
   runs: [],
-  totals: {
-    totalRuns: 0,
-    failedRuns: 0,
-    runningRuns: 0,
-    succeededRuns: 0
-  }
+  totals: { totalRuns: 0, failedRuns: 0, runningRuns: 0, succeededRuns: 0 }
 };
 
 const defaultRunnerState: AdminRunnersResponse = {
   hosts: [],
   runners: [],
-  totals: {
-    hosts: 0,
-    runners: 0,
-    failedHosts: 0,
-    failedRunners: 0,
-    staleRunners: 0
-  }
+  totals: { hosts: 0, runners: 0, failedHosts: 0, failedRunners: 0, staleRunners: 0 }
 };
 
 export function AdminConsole() {
-  if (process.env.NEXT_PUBLIC_AGENTS_CLOUD_DEV_AUTH_BYPASS === "1") {
-    return <AdminConsoleApp userLabel="Local admin" />;
-  }
-
-  return (
-    <Authenticator variation="modal" hideSignUp={false}>
-      {({ user }) => (
-        <AdminConsoleApp
-          userLabel={user?.signInDetails?.loginId || user?.username || "Signed in"}
-          onSignOut={() => void resetAmplifyAuthSession({ clientId: readAmplifyEnv().userPoolClientId })}
-        />
-      )}
-    </Authenticator>
-  );
-}
-
-function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOut?: () => void }) {
+  const { isAuthed, userLabel, openSignIn, signOut } = useAuth();
   const api = getControlApiHealth();
-  const [data, setData] = useState<AdminRunsResponse>(defaultAdminState);
-  const [runnerData, setRunnerData] = useState<AdminRunnersResponse>(defaultRunnerState);
-  const [selectedRunId, setSelectedRunId] = useState<string | undefined>();
-  const [lineageEvents, setLineageEvents] = useState<RunEvent[]>([]);
-  const [lineageLoading, setLineageLoading] = useState(false);
-  const [lineageError, setLineageError] = useState<string | undefined>();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-  const [runnerError, setRunnerError] = useState<string | undefined>();
-  const [lastLoadedAt, setLastLoadedAt] = useState<string | undefined>();
-  const [workshopProfiles, setWorkshopProfiles] = useState<AgentProfileRegistryRecord[]>([]);
-  const [selectedProfileKey, setSelectedProfileKey] = useState<string | undefined>();
-  const [workshopStatus, setWorkshopStatus] = useState<string | undefined>();
-  const [workshopError, setWorkshopError] = useState<string | undefined>();
-  const [workshopBusy, setWorkshopBusy] = useState(false);
-  const [draftRole, setDraftRole] = useState("Market Research Strategist");
-  const [draftContext, setDraftContext] = useState("Solo CEO launch planning and operator leverage for a small founder-led company.");
-  const [draftGoals, setDraftGoals] = useState("Find timely market/channel signals\nProduce an executive-ready brief\nAsk before paid APIs or external side effects");
-  const [draftConstraints, setDraftConstraints] = useState("No paid Apify actor runs without approval\nNo public posts or email sends without approval\nCite source quality and uncertainty");
 
-  const refresh = useCallback(async () => {
+  const [data, setData] = React.useState<AdminRunsResponse>(defaultAdminState);
+  const [runnerData, setRunnerData] = React.useState<AdminRunnersResponse>(defaultRunnerState);
+  const [selectedRunId, setSelectedRunId] = React.useState<string | undefined>();
+  const [lineageEvents, setLineageEvents] = React.useState<RunEvent[]>([]);
+  const [lineageLoading, setLineageLoading] = React.useState(false);
+  const [lineageError, setLineageError] = React.useState<string | undefined>();
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | undefined>();
+  const [runnerError, setRunnerError] = React.useState<string | undefined>();
+  const [lastLoadedAt, setLastLoadedAt] = React.useState<string | undefined>();
+
+  const [workshopProfiles, setWorkshopProfiles] = React.useState<AgentProfileRegistryRecord[]>([]);
+  const [selectedProfileKey, setSelectedProfileKey] = React.useState<string | undefined>();
+  const [workshopStatus, setWorkshopStatus] = React.useState<string | undefined>();
+  const [workshopError, setWorkshopError] = React.useState<string | undefined>();
+  const [workshopBusy, setWorkshopBusy] = React.useState(false);
+  const [draftRole, setDraftRole] = React.useState("Market Research Strategist");
+  const [draftContext, setDraftContext] = React.useState(
+    "Solo CEO launch planning and operator leverage for a small founder-led company."
+  );
+  const [draftGoals, setDraftGoals] = React.useState(
+    "Find timely market/channel signals\nProduce an executive-ready brief\nAsk before paid APIs or external side effects"
+  );
+  const [draftConstraints, setDraftConstraints] = React.useState(
+    "No paid Apify actor runs without approval\nNo public posts or email sends without approval\nCite source quality and uncertainty"
+  );
+
+  const refresh = React.useCallback(async () => {
     setLoading(true);
     setError(undefined);
     setRunnerError(undefined);
@@ -115,12 +109,12 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
     }
   }, []);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  React.useEffect(() => {
+    if (isAuthed) void refresh();
+  }, [refresh, isAuthed]);
 
-  useEffect(() => {
-    if (!selectedRunId || !api.configured) {
+  React.useEffect(() => {
+    if (!selectedRunId || !api.configured || !isAuthed) {
       setLineageEvents([]);
       return;
     }
@@ -130,9 +124,7 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
     setLineageError(undefined);
     void listControlApiAdminRunEvents(selectedRunId, { limit: 100 })
       .then((response) => {
-        if (!cancelled) {
-          setLineageEvents(response.events);
-        }
+        if (!cancelled) setLineageEvents(response.events);
       })
       .catch((caught) => {
         if (!cancelled) {
@@ -141,18 +133,16 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
         }
       })
       .finally(() => {
-        if (!cancelled) {
-          setLineageLoading(false);
-        }
+        if (!cancelled) setLineageLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [api.configured, selectedRunId]);
+  }, [api.configured, selectedRunId, isAuthed]);
 
-  const refreshWorkshopProfiles = useCallback(async () => {
-    if (!api.configured) {
+  const refreshWorkshopProfiles = React.useCallback(async () => {
+    if (!api.configured || !isAuthed) {
       setWorkshopProfiles([]);
       return;
     }
@@ -162,15 +152,17 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
       setWorkshopProfiles(response.profiles);
       setSelectedProfileKey((current) => current ?? profileSelectionKey(response.profiles[0]));
     } catch (caught) {
-      setWorkshopError(caught instanceof Error ? caught.message : "Unable to load Agent Workshop profiles.");
+      setWorkshopError(
+        caught instanceof Error ? caught.message : "Unable to load Agent Workshop profiles."
+      );
     }
-  }, [api.configured]);
+  }, [api.configured, isAuthed]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     void refreshWorkshopProfiles();
   }, [refreshWorkshopProfiles]);
 
-  const createWorkshopDraft = useCallback(async () => {
+  const createWorkshopDraft = React.useCallback(async () => {
     setWorkshopBusy(true);
     setWorkshopError(undefined);
     setWorkshopStatus("Creating governed draft profile...");
@@ -183,22 +175,34 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
         goals: linesFromTextarea(draftGoals),
         constraints: linesFromTextarea(draftConstraints)
       });
-      const response = await createControlApiAgentProfileDraft({ workspaceId: profile.workspaceId, profile });
-      setWorkshopProfiles((profiles) => [response.profile, ...profiles.filter((candidate) => profileSelectionKey(candidate) !== profileSelectionKey(response.profile))]);
+      const response = await createControlApiAgentProfileDraft({
+        workspaceId: profile.workspaceId,
+        profile
+      });
+      setWorkshopProfiles((profiles) => [
+        response.profile,
+        ...profiles.filter(
+          (candidate) => profileSelectionKey(candidate) !== profileSelectionKey(response.profile)
+        )
+      ]);
       setSelectedProfileKey(profileSelectionKey(response.profile));
-      setWorkshopStatus(`Draft ${response.profile.profileId}@${response.profile.version} stored in DynamoDB and S3.`);
+      setWorkshopStatus(
+        `Draft ${response.profile.profileId}@${response.profile.version} stored in DynamoDB and S3.`
+      );
     } catch (caught) {
-      setWorkshopError(caught instanceof Error ? caught.message : "Unable to create Agent Workshop draft.");
+      setWorkshopError(
+        caught instanceof Error ? caught.message : "Unable to create Agent Workshop draft."
+      );
     } finally {
       setWorkshopBusy(false);
     }
   }, [draftConstraints, draftContext, draftGoals, draftRole]);
 
-  const approveSelectedWorkshopProfile = useCallback(async () => {
-    const selected = workshopProfiles.find((profile) => profileSelectionKey(profile) === selectedProfileKey);
-    if (!selected) {
-      return;
-    }
+  const approveSelectedWorkshopProfile = React.useCallback(async () => {
+    const selected = workshopProfiles.find(
+      (profile) => profileSelectionKey(profile) === selectedProfileKey
+    );
+    if (!selected) return;
     setWorkshopBusy(true);
     setWorkshopError(undefined);
     setWorkshopStatus("Recording approval evidence...");
@@ -209,199 +213,333 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
         version: selected.version,
         notes: "Approved from admin Agent Workshop playground."
       });
-      setWorkshopProfiles((profiles) => profiles.map((profile) => profileSelectionKey(profile) === profileSelectionKey(response.profile) ? response.profile : profile));
+      setWorkshopProfiles((profiles) =>
+        profiles.map((profile) =>
+          profileSelectionKey(profile) === profileSelectionKey(response.profile)
+            ? response.profile
+            : profile
+        )
+      );
       setSelectedProfileKey(profileSelectionKey(response.profile));
-      setWorkshopStatus(`Approved ${response.profile.profileId}@${response.profile.version}; lifecycleState is now ${response.profile.lifecycleState}.`);
+      setWorkshopStatus(
+        `Approved ${response.profile.profileId}@${response.profile.version}; lifecycleState is now ${response.profile.lifecycleState}.`
+      );
     } catch (caught) {
-      setWorkshopError(caught instanceof Error ? caught.message : "Unable to approve Agent Workshop profile.");
+      setWorkshopError(
+        caught instanceof Error ? caught.message : "Unable to approve Agent Workshop profile."
+      );
     } finally {
       setWorkshopBusy(false);
     }
   }, [selectedProfileKey, workshopProfiles]);
 
-  const inspectSelectedWorkshopProfile = useCallback(async () => {
-    const selected = workshopProfiles.find((profile) => profileSelectionKey(profile) === selectedProfileKey);
-    if (!selected) {
-      return;
-    }
+  const inspectSelectedWorkshopProfile = React.useCallback(async () => {
+    const selected = workshopProfiles.find(
+      (profile) => profileSelectionKey(profile) === selectedProfileKey
+    );
+    if (!selected) return;
     setWorkshopBusy(true);
     setWorkshopError(undefined);
     setWorkshopStatus("Loading full profile version...");
     try {
-      const response = await getControlApiAgentProfile({ workspaceId: selected.workspaceId, profileId: selected.profileId, version: selected.version });
-      setWorkshopProfiles((profiles) => profiles.map((profile) => profileSelectionKey(profile) === profileSelectionKey(response.profile) ? response.profile : profile));
+      const response = await getControlApiAgentProfile({
+        workspaceId: selected.workspaceId,
+        profileId: selected.profileId,
+        version: selected.version
+      });
+      setWorkshopProfiles((profiles) =>
+        profiles.map((profile) =>
+          profileSelectionKey(profile) === profileSelectionKey(response.profile)
+            ? response.profile
+            : profile
+        )
+      );
       setWorkshopStatus(`Loaded ${response.profile.profileId}@${response.profile.version} from Control API.`);
     } catch (caught) {
-      setWorkshopError(caught instanceof Error ? caught.message : "Unable to inspect Agent Workshop profile.");
+      setWorkshopError(
+        caught instanceof Error ? caught.message : "Unable to inspect Agent Workshop profile."
+      );
     } finally {
       setWorkshopBusy(false);
     }
   }, [selectedProfileKey, workshopProfiles]);
 
-  const selectedRun = useMemo(() => data.runs.find((run) => run.runId === selectedRunId), [data.runs, selectedRunId]);
-  const recentFailures = useMemo(() => data.runs.filter((run) => run.failureCount > 0 || run.status === "failed").slice(0, 5), [data.runs]);
-  const selectedWorkshopProfile = useMemo(() => workshopProfiles.find((profile) => profileSelectionKey(profile) === selectedProfileKey), [selectedProfileKey, workshopProfiles]);
-  const selectedWorkshopSummary = useMemo(() => selectedWorkshopProfile ? summarizeAgentProfileRecord(selectedWorkshopProfile) : undefined, [selectedWorkshopProfile]);
+  const selectedRun = React.useMemo(
+    () => data.runs.find((run) => run.runId === selectedRunId),
+    [data.runs, selectedRunId]
+  );
+  const recentFailures = React.useMemo(
+    () => data.runs.filter((run) => run.failureCount > 0 || run.status === "failed").slice(0, 5),
+    [data.runs]
+  );
+  const selectedWorkshopProfile = React.useMemo(
+    () => workshopProfiles.find((profile) => profileSelectionKey(profile) === selectedProfileKey),
+    [selectedProfileKey, workshopProfiles]
+  );
+  const selectedWorkshopSummary = React.useMemo(
+    () =>
+      selectedWorkshopProfile ? summarizeAgentProfileRecord(selectedWorkshopProfile) : undefined,
+    [selectedWorkshopProfile]
+  );
 
   return (
-    <main className="admin-shell">
-      <header className="admin-header">
-        <div>
-          <span className="eyebrow">Admin</span>
-          <h1>Agents Cloud operations</h1>
-          <p>Requests, processes, artifacts, failures, and per-user run state from the durable ledger.</p>
-        </div>
-        <div className="admin-actions">
-          <span>{userLabel}</span>
-          <button type="button" onClick={() => void refresh()} disabled={loading || !api.configured}>
-            {loading ? "Refreshing" : "Refresh"}
-          </button>
-          {onSignOut ? (
-            <button type="button" onClick={onSignOut}>
-              Sign out
-            </button>
-          ) : null}
-        </div>
-      </header>
-
-      {!api.configured ? (
-        <section className="admin-alert">Control API is not configured for this deployment.</section>
-      ) : null}
-      {error ? <section className="admin-alert danger">{error}</section> : null}
-
-      <section className="admin-grid stats-grid">
-        <MetricCard label="Total runs" value={data.totals.totalRuns} />
-        <MetricCard label="Running" value={data.totals.runningRuns} />
-        <MetricCard label="Succeeded" value={data.totals.succeededRuns} />
-        <MetricCard label="Failed" value={data.totals.failedRuns} danger={data.totals.failedRuns > 0} />
-        <MetricCard label="Runners" value={runnerData.totals.runners} danger={runnerData.totals.failedRunners + runnerData.totals.staleRunners > 0} />
-      </section>
-
-      <section className="admin-panel runner-panel">
-        <div className="panel-heading">
-          <div>
-            <h2>Runner fleet</h2>
-            <p>{runnerError ? "Runner fleet could not be loaded; request ledger remains available." : describeRunnerHealth(runnerData.totals)}</p>
+    <div className="min-h-screen bg-app-bg text-app-text">
+      <div className="mx-auto max-w-[1440px] p-3 md:p-5">
+        <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <BrandHeader title="Agents Cloud" subtitle="Admin operations" />
           </div>
-        </div>
-        {runnerError ? <div className="admin-alert danger inline-alert">{runnerError}</div> : null}
-        <div className="runner-grid">
-          <div>
-            <h3>Hosts</h3>
-            <div className="runner-list">
-              {runnerData.hosts.length ? (
-                runnerData.hosts.slice(0, 8).map((host) => (
-                  <div className="runner-row" key={host.hostId}>
-                    <span className={`status-dot ${statusClassName(host.status)}`} />
-                    <span>
-                      <strong>{host.hostId}</strong>
-                      <small>{host.placementTarget} · {host.status} · heartbeat {formatDate(host.lastHeartbeatAt)}</small>
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="empty-state">No runner hosts have checked in yet.</div>
-              )}
-            </div>
-          </div>
-          <div>
-            <h3>User runners</h3>
-            <div className="runner-list">
-              {runnerData.runners.length ? (
-                sortRunnerRows(runnerData.runners).slice(0, 8).map((runner) => <RunnerRow key={`${runner.userId}-${runner.runnerId}`} runner={runner} />)
-              ) : (
-                <div className="empty-state">No user runners have checked in yet.</div>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <AgentWorkshopPanel
-        busy={workshopBusy}
-        constraints={draftConstraints}
-        context={draftContext}
-        error={workshopError}
-        goals={draftGoals}
-        onApproveSelected={() => void approveSelectedWorkshopProfile()}
-        onCreateDraft={() => void createWorkshopDraft()}
-        onInspectSelected={() => void inspectSelectedWorkshopProfile()}
-        onRefresh={() => void refreshWorkshopProfiles()}
-        onSelectProfile={setSelectedProfileKey}
-        profiles={workshopProfiles}
-        role={draftRole}
-        selectedProfile={selectedWorkshopProfile}
-        selectedProfileKey={selectedProfileKey}
-        selectedSummary={selectedWorkshopSummary}
-        setConstraints={setDraftConstraints}
-        setContext={setDraftContext}
-        setGoals={setDraftGoals}
-        setRole={setDraftRole}
-        status={workshopStatus}
-      />
-
-      <section className="admin-grid admin-main-grid">
-        <div className="admin-panel runs-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Recent requests</h2>
-              <p>{lastLoadedAt ? `Updated ${formatDate(lastLoadedAt)}` : "Loading latest ledger state"}</p>
-            </div>
-          </div>
-          <div className="run-list" role="list">
-            {data.runs.length ? (
-              data.runs.map((run) => (
-                <button
-                  className={run.runId === selectedRunId ? "run-row selected" : "run-row"}
-                  key={run.runId}
-                  onClick={() => setSelectedRunId(run.runId)}
-                  type="button"
+          <div className="flex items-center gap-2">
+            {isAuthed ? (
+              <>
+                <span className="hidden sm:inline-block max-w-[200px] truncate text-[12px] text-app-muted">
+                  {userLabel}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void refresh()}
+                  disabled={loading || !api.configured}
                 >
-                  <span className={`status-dot ${statusClassName(run.status)}`} />
-                  <span className="run-row-main">
-                    <strong>{run.objective || "Untitled request"}</strong>
-                    <small>{run.ownerEmail || run.userId} · {run.status} · {formatDate(run.updatedAt || run.createdAt)}</small>
-                  </span>
-                  <span className="run-row-counts">{run.eventCount} events</span>
-                </button>
-              ))
+                  <ReloadIcon className={cn(loading && "animate-spin")} />
+                  {loading ? "Refreshing" : "Refresh"}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => void signOut()}>
+                  Sign out
+                </Button>
+              </>
             ) : (
-              <div className="empty-state">No runs found yet.</div>
+              <Button variant="primary" size="sm" onClick={openSignIn}>
+                Sign in
+              </Button>
             )}
           </div>
+        </header>
+
+        <div className="mb-4">
+          <SectionHeader
+            title="Operations console"
+            subtitle="Requests, processes, artifacts, failures, and per-user run state from the durable ledger."
+          />
         </div>
 
-        <div className="admin-panel detail-panel">
-          {selectedRun ? (
-            <RunDetail run={selectedRun} events={lineageEvents} lineageLoading={lineageLoading} lineageError={lineageError} />
-          ) : (
-            <div className="empty-state">Select a run to inspect it.</div>
-          )}
-        </div>
-      </section>
+        {!isAuthed ? (
+          <Panel padding={16} className="mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-extrabold text-app-text">Sign in to load live data</div>
+                <div className="mt-1 text-[12px] text-app-muted">
+                  Admin endpoints require Cognito authentication. Local fixtures are visible without
+                  signing in.
+                </div>
+              </div>
+              <Button variant="primary" size="md" onClick={openSignIn}>
+                Sign in
+              </Button>
+            </div>
+          </Panel>
+        ) : null}
 
-      <section className="admin-panel failure-panel">
-        <div className="panel-heading">
-          <div>
-            <h2>Failure watch</h2>
-            <p>Runs with failed status or failure events.</p>
-          </div>
-        </div>
-        {recentFailures.length ? (
-          <div className="failure-list">
-            {recentFailures.map((run) => (
-              <button className="failure-row" key={run.runId} onClick={() => setSelectedRunId(run.runId)} type="button">
-                <strong>{run.ownerEmail || run.userId}</strong>
-                <span>{run.objective || run.runId}</span>
-                <code>{formatFailure(run)}</code>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state">No failures in the current window.</div>
-        )}
-      </section>
-    </main>
+        {!api.configured ? (
+          <AlertBar tone="warning">Control API is not configured for this deployment.</AlertBar>
+        ) : null}
+        {error ? <AlertBar tone="danger">{error}</AlertBar> : null}
+
+        <section className="grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-2.5 mb-3">
+          <MetricCard label="Total runs" value={String(data.totals.totalRuns)} hint="Durable ledger" />
+          <MetricCard label="Running" value={String(data.totals.runningRuns)} hint="In progress" />
+          <MetricCard label="Succeeded" value={String(data.totals.succeededRuns)} hint="Terminal ✓" />
+          <MetricCard
+            label="Failed"
+            value={String(data.totals.failedRuns)}
+            hint={data.totals.failedRuns > 0 ? "Investigate" : "All clear"}
+          />
+          <MetricCard
+            label="Runners"
+            value={String(runnerData.totals.runners)}
+            hint={
+              runnerData.totals.failedRunners + runnerData.totals.staleRunners > 0
+                ? `${runnerData.totals.failedRunners} failed · ${runnerData.totals.staleRunners} stale`
+                : "Healthy"
+            }
+          />
+        </section>
+
+        <section className="mb-3">
+          <Panel padding={14}>
+            <SectionHeader
+              title="Runner fleet"
+              subtitle={
+                runnerError
+                  ? "Runner fleet could not be loaded; request ledger remains available."
+                  : describeRunnerHealth(runnerData.totals)
+              }
+            />
+            {runnerError ? <AlertBar tone="danger" inline>{runnerError}</AlertBar> : null}
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <div>
+                <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wider text-app-muted">
+                  Hosts
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {runnerData.hosts.length ? (
+                    runnerData.hosts.slice(0, 8).map((host) => (
+                      <div
+                        key={host.hostId}
+                        className="flex items-start gap-2 rounded-[8px] border border-app-border bg-app-panel-deep p-2.5"
+                      >
+                        <StatusDot status={host.status} />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[12px] font-extrabold text-app-text truncate">
+                            {host.hostId}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-app-muted truncate">
+                            {host.placementTarget} · {host.status} · heartbeat{" "}
+                            {formatDate(host.lastHeartbeatAt)}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <EmptyLine>No runner hosts have checked in yet.</EmptyLine>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wider text-app-muted">
+                  User runners
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {runnerData.runners.length ? (
+                    sortRunnerRows(runnerData.runners)
+                      .slice(0, 8)
+                      .map((runner) => (
+                        <RunnerRow key={`${runner.userId}-${runner.runnerId}`} runner={runner} />
+                      ))
+                  ) : (
+                    <EmptyLine>No user runners have checked in yet.</EmptyLine>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Panel>
+        </section>
+
+        <section className="mb-3">
+          <AgentWorkshopPanel
+            busy={workshopBusy}
+            constraints={draftConstraints}
+            context={draftContext}
+            error={workshopError}
+            goals={draftGoals}
+            onApproveSelected={() => void approveSelectedWorkshopProfile()}
+            onCreateDraft={() => void createWorkshopDraft()}
+            onInspectSelected={() => void inspectSelectedWorkshopProfile()}
+            onRefresh={() => void refreshWorkshopProfiles()}
+            onSelectProfile={setSelectedProfileKey}
+            profiles={workshopProfiles}
+            role={draftRole}
+            selectedProfile={selectedWorkshopProfile}
+            selectedProfileKey={selectedProfileKey}
+            selectedSummary={selectedWorkshopSummary}
+            setConstraints={setDraftConstraints}
+            setContext={setDraftContext}
+            setGoals={setDraftGoals}
+            setRole={setDraftRole}
+            status={workshopStatus}
+          />
+        </section>
+
+        <section className="mb-3 grid grid-cols-1 gap-3 lg:grid-cols-[0.85fr_1.15fr]">
+          <Panel padding={14}>
+            <SectionHeader
+              title="Recent requests"
+              subtitle={lastLoadedAt ? `Updated ${formatDate(lastLoadedAt)}` : "Loading latest ledger state"}
+            />
+            <div className="mt-3 max-h-[620px] overflow-y-auto pr-1 flex flex-col gap-1.5">
+              {data.runs.length ? (
+                data.runs.map((run) => (
+                  <button
+                    key={run.runId}
+                    onClick={() => setSelectedRunId(run.runId)}
+                    type="button"
+                    className={cn(
+                      "flex items-start gap-2.5 rounded-[8px] border p-2.5 text-left transition-colors",
+                      run.runId === selectedRunId
+                        ? "bg-app-input border-app-text"
+                        : "bg-app-panel-deep border-app-border hover:border-app-border-strong"
+                    )}
+                  >
+                    <StatusDot status={run.status} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12px] font-extrabold text-app-text truncate">
+                        {run.objective || "Untitled request"}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-app-muted truncate">
+                        {run.ownerEmail || run.userId} · {run.status} ·{" "}
+                        {formatDate(run.updatedAt || run.createdAt)}
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-app-muted shrink-0">{run.eventCount} events</div>
+                  </button>
+                ))
+              ) : (
+                <EmptyLine>No runs found yet.</EmptyLine>
+              )}
+            </div>
+          </Panel>
+
+          <Panel padding={14}>
+            {selectedRun ? (
+              <RunDetail
+                run={selectedRun}
+                events={lineageEvents}
+                lineageLoading={lineageLoading}
+                lineageError={lineageError}
+              />
+            ) : (
+              <EmptyLine>Select a run to inspect it.</EmptyLine>
+            )}
+          </Panel>
+        </section>
+
+        <section>
+          <Panel padding={14}>
+            <SectionHeader
+              title="Failure watch"
+              subtitle="Runs with failed status or failure events. Click to load lineage."
+            />
+            <div className="mt-3 flex flex-col gap-1.5">
+              {recentFailures.length ? (
+                recentFailures.map((run) => (
+                  <button
+                    key={run.runId}
+                    onClick={() => setSelectedRunId(run.runId)}
+                    type="button"
+                    className="grid grid-cols-1 sm:grid-cols-[180px_1fr] lg:grid-cols-[180px_1fr_240px] items-center gap-2 rounded-[8px] border border-app-border bg-app-panel-deep p-2.5 text-left hover:border-app-border-strong"
+                  >
+                    <div className="flex items-center gap-2">
+                      <CrossCircledIcon className="h-3.5 w-3.5 text-[#ff8f8f]" />
+                      <span className="text-[12px] font-extrabold text-app-text truncate">
+                        {run.ownerEmail || run.userId}
+                      </span>
+                    </div>
+                    <span className="text-[12px] text-app-muted truncate">
+                      {run.objective || run.runId}
+                    </span>
+                    <code className="hidden lg:block text-[10px] font-mono text-[#ff8f8f] truncate">
+                      {formatFailure(run)}
+                    </code>
+                  </button>
+                ))
+              ) : (
+                <EmptyLine>No failures in the current window.</EmptyLine>
+              )}
+            </div>
+          </Panel>
+        </section>
+      </div>
+    </div>
   );
 }
 
@@ -450,139 +588,226 @@ function AgentWorkshopPanel({
 }) {
   const stages = agentWorkshopLifecycle();
   return (
-    <section className="admin-panel workshop-panel">
-      <div className="panel-heading workshop-heading">
-        <div>
-          <span className="eyebrow">Agent Workshop</span>
-          <h2>Create, validate, audit, approve</h2>
-          <p>{summarizeLifecycleReadiness(stages)}</p>
-        </div>
-        <div className="workshop-actions">
-          <button type="button" onClick={onRefresh} disabled={busy}>Refresh profiles</button>
-          <button type="button" onClick={onCreateDraft} disabled={busy}>{busy ? "Working" : "Create live draft"}</button>
-        </div>
-      </div>
+    <Panel padding={14}>
+      <SectionHeader
+        title="Agent Workshop"
+        subtitle={summarizeLifecycleReadiness(stages)}
+        trailing={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={onRefresh} disabled={busy}>
+              Refresh profiles
+            </Button>
+            <Button variant="primary" size="sm" onClick={onCreateDraft} disabled={busy}>
+              {busy ? "Working" : "Create live draft"}
+            </Button>
+          </div>
+        }
+      />
+      {error ? <AlertBar tone="danger" inline>{error}</AlertBar> : null}
+      {status ? <AlertBar tone="info" inline>{status}</AlertBar> : null}
 
-      {error ? <div className="admin-alert danger inline-alert">{error}</div> : null}
-      {status ? <div className="admin-alert inline-alert">{status}</div> : null}
-
-      <div className="workshop-grid">
-        <div className="workshop-card workshop-form">
-          <h3>Playground input</h3>
-          <label>
-            <span>Specialist role</span>
-            <input value={role} onChange={(event) => setRole(event.target.value)} />
-          </label>
-          <label>
-            <span>Project context</span>
-            <textarea rows={3} value={context} onChange={(event) => setContext(event.target.value)} />
-          </label>
-          <label>
-            <span>Goals, one per line</span>
-            <textarea rows={4} value={goals} onChange={(event) => setGoals(event.target.value)} />
-          </label>
-          <label>
-            <span>Constraints / approval rules</span>
-            <textarea rows={4} value={constraints} onChange={(event) => setConstraints(event.target.value)} />
-          </label>
-          <p className="workshop-copy">Creating a draft calls Control API, validates the shared profile contract, writes DynamoDB registry metadata, and persists the profile JSON bundle in S3.</p>
+      <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <div className="rounded-[10px] border border-app-border bg-app-panel-deep p-3">
+          <div className="text-[12px] font-extrabold text-app-text mb-2">Playground input</div>
+          <div className="flex flex-col gap-2">
+            <FormField label="Specialist role">
+              <input
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="w-full rounded-[6px] border border-app-border bg-app-input px-2.5 py-2 text-[13px] text-app-text focus:outline-none focus:border-app-text/40"
+              />
+            </FormField>
+            <FormField label="Project context">
+              <Textarea rows={3} value={context} onChange={(e) => setContext(e.target.value)} />
+            </FormField>
+            <FormField label="Goals, one per line">
+              <Textarea rows={4} value={goals} onChange={(e) => setGoals(e.target.value)} />
+            </FormField>
+            <FormField label="Constraints / approval rules">
+              <Textarea
+                rows={4}
+                value={constraints}
+                onChange={(e) => setConstraints(e.target.value)}
+              />
+            </FormField>
+            <p className="mt-1 text-[11px] leading-[1.4] text-app-muted">
+              Creating a draft calls Control API, validates the shared profile contract, writes
+              DynamoDB registry metadata, and persists the profile JSON bundle in S3.
+            </p>
+          </div>
         </div>
 
-        <div className="workshop-card">
-          <h3>Lifecycle map</h3>
-          <ol className="workshop-stage-list">
+        <div className="rounded-[10px] border border-app-border bg-app-panel-deep p-3">
+          <div className="text-[12px] font-extrabold text-app-text mb-2">Lifecycle map</div>
+          <ol className="flex flex-col gap-2.5">
             {stages.map((stage) => (
-              <li key={stage.id} className={`workshop-stage ${stage.status}`}>
-                <span>{stage.status}</span>
-                <strong>{stage.title}</strong>
-                <p>{stage.operatorSummary}</p>
-                <small>{stage.durableEvidence.join(" · ")}</small>
+              <li
+                key={stage.id}
+                className="rounded-[8px] border border-app-border bg-app-panel p-2.5"
+              >
+                <div className="flex items-center gap-2">
+                  <StatusPill label={stage.status} />
+                  <strong className="text-[13px] text-app-text">{stage.title}</strong>
+                </div>
+                <p className="mt-1.5 text-[12px] leading-[1.4] text-app-muted">
+                  {stage.operatorSummary}
+                </p>
+                <div className="mt-1.5 text-[10px] text-app-muted">
+                  {stage.durableEvidence.join(" · ")}
+                </div>
               </li>
             ))}
           </ol>
         </div>
 
-        <div className="workshop-card">
-          <h3>Profile registry</h3>
-          <div className="workshop-profile-list">
-            {profiles.length ? profiles.map((profile) => {
-              const summary = summarizeAgentProfileRecord(profile);
-              const key = profileSelectionKey(profile);
-              return (
-                <button className={key === selectedProfileKey ? "workshop-profile-row selected" : "workshop-profile-row"} key={key} onClick={() => onSelectProfile(key)} type="button">
-                  <span className={`status-dot ${statusClassName(summary.lifecycleState)}`} />
-                  <span>
-                    <strong>{summary.title}</strong>
-                    <small>{summary.subtitle} · {formatDate(summary.updatedAt)}</small>
-                  </span>
-                </button>
-              );
-            }) : <div className="empty-state">No profiles yet. Create a draft to hit the live registry.</div>}
+        <div className="rounded-[10px] border border-app-border bg-app-panel-deep p-3">
+          <div className="text-[12px] font-extrabold text-app-text mb-2">Profile registry</div>
+          <div className="flex flex-col gap-1.5 max-h-[260px] overflow-y-auto pr-1">
+            {profiles.length ? (
+              profiles.map((profile) => {
+                const summary = summarizeAgentProfileRecord(profile);
+                const key = profileSelectionKey(profile);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => onSelectProfile(key)}
+                    type="button"
+                    className={cn(
+                      "flex items-start gap-2 rounded-[8px] border p-2.5 text-left transition-colors",
+                      key === selectedProfileKey
+                        ? "bg-app-input border-app-text"
+                        : "bg-app-panel border-app-border hover:border-app-border-strong"
+                    )}
+                  >
+                    <StatusDot status={summary.lifecycleState} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12px] font-extrabold text-app-text truncate">
+                        {summary.title}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-app-muted truncate">
+                        {summary.subtitle} · {formatDate(summary.updatedAt)}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            ) : (
+              <EmptyLine>No profiles yet. Create a draft to hit the live registry.</EmptyLine>
+            )}
           </div>
         </div>
 
-        <div className="workshop-card">
-          <h3>Selected version</h3>
+        <div className="rounded-[10px] border border-app-border bg-app-panel-deep p-3">
+          <div className="text-[12px] font-extrabold text-app-text mb-2">Selected version</div>
           {selectedProfile && selectedSummary ? (
-            <div className="workshop-selected">
-              <div className="workshop-selected-head">
-                <div>
-                  <strong>{selectedSummary.title}</strong>
-                  <small>{selectedSummary.id}</small>
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[13px] font-extrabold text-app-text truncate">
+                    {selectedSummary.title}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-app-muted truncate">
+                    {selectedSummary.id}
+                  </div>
                 </div>
-                <span className={`status-badge ${selectedSummary.lifecycleState}`}>{selectedSummary.lifecycleState}</span>
+                <StatusPill label={selectedSummary.lifecycleState} />
               </div>
-              <ul>
-                {selectedSummary.toolPosture.map((item) => <li key={item}>{item}</li>)}
+              <ul className="text-[12px] text-app-muted leading-[1.5] pl-4 list-disc">
+                {selectedSummary.toolPosture.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
               </ul>
-              <dl className="detail-grid compact">
-                <Detail label="Workspace" value={selectedProfile.workspaceId} code />
-                <Detail label="Artifact" value={selectedProfile.artifactS3Uri || "not written"} code />
-                <Detail label="Review ready" value={selectedSummary.reviewReady ? "yes" : "no"} />
-                <Detail label="Promotion ready" value={selectedSummary.promotionReady ? "yes" : "no"} />
-              </dl>
-              <div className="workshop-actions left">
-                <button type="button" onClick={onInspectSelected} disabled={busy}>Inspect from API</button>
-                <button type="button" onClick={onApproveSelected} disabled={busy || selectedProfile.lifecycleState === "approved" || selectedProfile.lifecycleState === "promoted"}>Approve version</button>
+              <KeyValueGrid>
+                <KeyValue label="Workspace" value={selectedProfile.workspaceId} mono />
+                <KeyValue
+                  label="Artifact"
+                  value={selectedProfile.artifactS3Uri || "not written"}
+                  mono
+                />
+                <KeyValue label="Review ready" value={selectedSummary.reviewReady ? "yes" : "no"} />
+                <KeyValue label="Promotion ready" value={selectedSummary.promotionReady ? "yes" : "no"} />
+              </KeyValueGrid>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={onInspectSelected} disabled={busy}>
+                  Inspect from API
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={onApproveSelected}
+                  disabled={
+                    busy ||
+                    selectedProfile.lifecycleState === "approved" ||
+                    selectedProfile.lifecycleState === "promoted"
+                  }
+                >
+                  Approve version
+                </Button>
               </div>
-              <details className="json-details compact-json">
-                <summary>Profile policy snapshot</summary>
-                <pre>{JSON.stringify({
+              <CollapsibleJson
+                summary="Profile policy snapshot"
+                payload={{
                   mission: selectedProfile.profile.mission,
                   toolPolicy: selectedProfile.profile.toolPolicy,
                   mcpPolicy: selectedProfile.profile.mcpPolicy,
                   evalPack: selectedProfile.profile.evalPack,
                   approval: selectedProfile.profile.approval
-                }, null, 2)}</pre>
-              </details>
+                }}
+              />
             </div>
           ) : (
-            <div className="empty-state">Select or create a profile version to inspect approval and policy posture.</div>
+            <EmptyLine>Select or create a profile version to inspect approval and policy posture.</EmptyLine>
           )}
         </div>
       </div>
-    </section>
+    </Panel>
   );
 }
 
-function MetricCard({ label, value, danger = false }: { label: string; value: number; danger?: boolean }) {
+function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className={danger ? "metric-card danger" : "metric-card"}>
-      <span>{label}</span>
-      <strong>{value}</strong>
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[11px] font-extrabold uppercase tracking-wider text-app-muted">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function KeyValueGrid({ children }: { children: React.ReactNode }) {
+  return <dl className="grid grid-cols-2 gap-2">{children}</dl>;
+}
+
+function KeyValue({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="rounded-[6px] border border-app-border bg-app-panel p-2 min-w-0">
+      <dt className="text-[10px] font-extrabold uppercase tracking-wider text-app-muted">{label}</dt>
+      <dd
+        className={cn(
+          "mt-1 text-[12px] text-app-text truncate",
+          mono && "font-mono break-all"
+        )}
+      >
+        {value}
+      </dd>
     </div>
   );
 }
 
 function RunnerRow({ runner }: { runner: AdminRunnerRecord }) {
   return (
-    <div className="runner-row">
-      <span className={`status-dot ${statusClassName(runner.status)}`} />
-      <span>
-        <strong>{runner.runnerId}</strong>
-        <small>{runner.userId} · {runner.workspaceId} · {runner.status} / {runner.desiredState}</small>
-        <small>{runner.hostId || "unassigned"} · heartbeat {formatDate(runner.lastHeartbeatAt)}</small>
-      </span>
+    <div className="flex items-start gap-2 rounded-[8px] border border-app-border bg-app-panel-deep p-2.5">
+      <StatusDot status={runner.status} />
+      <div className="min-w-0 flex-1">
+        <div className="text-[12px] font-extrabold text-app-text truncate">{runner.runnerId}</div>
+        <div className="mt-0.5 text-[11px] text-app-muted truncate">
+          {runner.userId} · {runner.workspaceId} · {runner.status} / {runner.desiredState}
+        </div>
+        <div className="text-[11px] text-app-muted truncate">
+          {runner.hostId || "unassigned"} · heartbeat {formatDate(runner.lastHeartbeatAt)}
+        </div>
+      </div>
     </div>
   );
 }
@@ -599,88 +824,174 @@ function RunDetail({
   lineageError?: string;
 }) {
   return (
-    <div className="run-detail">
-      <div className="panel-heading">
-        <div>
-          <h2>{run.objective || "Untitled request"}</h2>
-          <p>{run.ownerEmail || run.userId}</p>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[16px] font-black text-app-text truncate">
+            {run.objective || "Untitled request"}
+          </div>
+          <div className="mt-1 text-[12px] text-app-muted">{run.ownerEmail || run.userId}</div>
         </div>
-        <span className={`status-badge ${run.status}`}>{run.status}</span>
+        <StatusPill label={run.status} />
       </div>
 
-      <dl className="detail-grid">
-        <Detail label="Run ID" value={run.runId} code />
-        <Detail label="Workspace" value={run.workspaceId} code />
-        <Detail label="User" value={run.userId} code />
-        <Detail label="Created" value={formatDate(run.createdAt)} />
-        <Detail label="Updated" value={formatDate(run.updatedAt)} />
-        <Detail label="Latest event" value={run.latestEventType || "none"} />
-        <Detail label="Latest event at" value={formatDate(run.latestEventAt)} />
-        <Detail label="Events" value={String(run.eventCount)} />
-        <Detail label="Artifacts" value={String(run.artifactCount)} />
-        <Detail label="Failures" value={String(run.failureCount)} />
-        <Detail label="Execution ARN" value={run.executionArn || "not started"} code wide />
-      </dl>
+      <KeyValueGrid>
+        <KeyValue label="Run ID" value={run.runId} mono />
+        <KeyValue label="Workspace" value={run.workspaceId} mono />
+        <KeyValue label="User" value={run.userId} mono />
+        <KeyValue label="Created" value={formatDate(run.createdAt)} />
+        <KeyValue label="Updated" value={formatDate(run.updatedAt)} />
+        <KeyValue label="Latest event" value={run.latestEventType || "none"} />
+        <KeyValue label="Latest event at" value={formatDate(run.latestEventAt)} />
+        <KeyValue label="Events" value={String(run.eventCount)} />
+        <KeyValue label="Artifacts" value={String(run.artifactCount)} />
+        <KeyValue label="Failures" value={String(run.failureCount)} />
+      </KeyValueGrid>
+      {run.executionArn ? (
+        <KeyValue label="Execution ARN" value={run.executionArn} mono />
+      ) : null}
 
-      <section className="lineage-section">
-        <div className="lineage-summary">
-          <span className="eyebrow">Lineage</span>
-          <strong>{lineageLoading ? "Loading request pipeline..." : summarizePipelinePosition(events)}</strong>
-          <p>User asked: {run.objective || "unknown request"}</p>
+      <div className="rounded-[10px] border border-app-border bg-app-panel-deep p-3">
+        <div className="flex items-start gap-2">
+          <ActivityLogIcon className="mt-1 h-4 w-4 text-app-text" />
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-extrabold uppercase tracking-wider text-app-muted">
+              Lineage
+            </div>
+            <div className="mt-1 text-sm font-extrabold text-app-text">
+              {lineageLoading ? "Loading request pipeline..." : summarizePipelinePosition(events)}
+            </div>
+            <p className="mt-1 text-[12px] text-app-muted">
+              User asked: {run.objective || "unknown request"}
+            </p>
+          </div>
         </div>
-        {lineageError ? <div className="admin-alert danger">{lineageError}</div> : null}
+        {lineageError ? <AlertBar tone="danger" inline>{lineageError}</AlertBar> : null}
         {events.length ? (
-          <ol className="lineage-list">
-            {events.map((event) => {
+          <div className="mt-3">
+            {events.map((event, i) => {
               const step = describeAdminLineageEvent(event);
               return (
-                <li className={step.hasError ? "lineage-step error" : "lineage-step"} key={event.id || `${event.runId}-${event.seq}`}>
-                  <div className="lineage-marker">{step.seq}</div>
-                  <div className="lineage-body">
-                    <div className="lineage-step-head">
-                      <strong>{step.summary}</strong>
-                      <time>{formatDate(step.createdAt)}</time>
-                    </div>
-                    <p>{step.type} · {step.source}</p>
-                    <details className="payload-details">
-                      <summary>Payload</summary>
-                      <pre>{JSON.stringify(event.payload ?? {}, null, 2)}</pre>
-                    </details>
-                  </div>
-                </li>
+                <TimelineItem
+                  key={event.id || `${event.runId}-${event.seq}`}
+                  status={`#${step.seq}`}
+                  title={step.summary}
+                  body={`${step.type} · ${step.source} · ${formatDate(step.createdAt)}`}
+                  isLast={i === events.length - 1}
+                />
               );
             })}
-          </ol>
+            <details className="mt-2 group">
+              <summary className="cursor-pointer text-[11px] text-app-muted flex items-center gap-1 hover:text-app-text">
+                <ChevronDownIcon className="h-3 w-3 transition-transform group-open:rotate-180" />
+                Raw event payloads
+              </summary>
+              <div className="mt-2 flex flex-col gap-2">
+                {events.map((event) => (
+                  <CollapsibleJson
+                    key={event.id || `${event.runId}-${event.seq}-payload`}
+                    summary={`#${event.seq} ${event.type}`}
+                    payload={event.payload ?? {}}
+                  />
+                ))}
+              </div>
+            </details>
+          </div>
         ) : (
-          <div className="empty-state">{lineageLoading ? "Loading lineage events..." : "No lineage events found for this run."}</div>
+          <EmptyLine>
+            {lineageLoading ? "Loading lineage events..." : "No lineage events found for this run."}
+          </EmptyLine>
         )}
-      </section>
+      </div>
 
-      <details className="json-details">
-        <summary>Raw admin summary</summary>
-        <pre>{JSON.stringify(run, null, 2)}</pre>
-      </details>
+      <CollapsibleJson summary="Raw admin summary" payload={run as unknown as Record<string, unknown>} />
     </div>
   );
 }
 
-function Detail({ label, value, code = false, wide = false }: { label: string; value: string; code?: boolean; wide?: boolean }) {
+function CollapsibleJson({
+  summary,
+  payload
+}: {
+  summary: string;
+  payload: unknown;
+}) {
   return (
-    <div className={wide ? "detail-item wide" : "detail-item"}>
-      <dt>{label}</dt>
-      <dd>{code ? <code>{value}</code> : value}</dd>
+    <details className="rounded-[8px] border border-app-border bg-app-panel group">
+      <summary className="cursor-pointer text-[11px] font-extrabold uppercase tracking-wider text-app-muted px-2.5 py-2 flex items-center gap-1.5 hover:text-app-text">
+        <ChevronDownIcon className="h-3 w-3 transition-transform group-open:rotate-180" />
+        {summary}
+      </summary>
+      <pre className="text-[11px] font-mono leading-[1.45] text-app-muted overflow-x-auto p-2.5 border-t border-app-border bg-app-panel-deep">
+        {JSON.stringify(payload, null, 2)}
+      </pre>
+    </details>
+  );
+}
+
+function StatusDot({ status }: { status: string }) {
+  const cls = statusClassName(status);
+  const colorMap: Record<string, string> = {
+    running: "bg-white",
+    queued: "bg-app-muted",
+    succeeded: "bg-emerald-400/80",
+    failed: "bg-[#ff8f8f]",
+    cancelled: "bg-app-muted",
+    healthy: "bg-emerald-400/80",
+    online: "bg-emerald-400/80",
+    stale: "bg-amber-400/80",
+    offline: "bg-[#ff8f8f]",
+    approved: "bg-emerald-400/80",
+    pending: "bg-amber-400/80",
+    draft: "bg-app-muted",
+    promoted: "bg-emerald-400/80",
+    rejected: "bg-[#ff8f8f]"
+  };
+  const color = colorMap[cls] ?? "bg-app-muted";
+  return (
+    <span
+      className={cn("mt-1 h-2 w-2 shrink-0 rounded-full", color)}
+      title={status}
+      aria-label={status}
+    />
+  );
+}
+
+function AlertBar({
+  tone,
+  inline,
+  children
+}: {
+  tone: "warning" | "danger" | "info";
+  inline?: boolean;
+  children: React.ReactNode;
+}) {
+  const toneStyles = {
+    warning: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+    danger: "border-[#7F1D1D]/60 bg-[#7F1D1D]/15 text-[#ff8f8f]",
+    info: "border-app-border bg-app-input text-app-text"
+  } as const;
+  return (
+    <div
+      className={cn(
+        "rounded-[8px] border p-2.5 text-[12px] leading-[1.45]",
+        toneStyles[tone],
+        inline ? "mt-2" : "mb-3"
+      )}
+    >
+      {children}
     </div>
   );
+}
+
+function EmptyLine({ children }: { children: React.ReactNode }) {
+  return <div className="text-[12px] text-app-muted py-1">{children}</div>;
 }
 
 function formatDate(value?: string): string {
-  if (!value) {
-    return "unknown";
-  }
+  if (!value) return "unknown";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
+  if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
 }
 
@@ -688,16 +999,21 @@ function statusClassName(status: string): string {
   return /^[a-z0-9_-]+$/i.test(status) ? status.toLowerCase() : "unknown";
 }
 
-function profileSelectionKey(profile: Pick<AgentProfileRegistryRecord, "workspaceId" | "profileId" | "version">): string;
-function profileSelectionKey(profile?: Pick<AgentProfileRegistryRecord, "workspaceId" | "profileId" | "version">): string | undefined {
-  if (!profile) {
-    return undefined;
-  }
+function profileSelectionKey(
+  profile: Pick<AgentProfileRegistryRecord, "workspaceId" | "profileId" | "version">
+): string;
+function profileSelectionKey(
+  profile?: Pick<AgentProfileRegistryRecord, "workspaceId" | "profileId" | "version">
+): string | undefined {
+  if (!profile) return undefined;
   return `${profile.workspaceId}#${profile.profileId}#${profile.version}`;
 }
 
 function linesFromTextarea(value: string): string[] {
-  return value.split("\n").map((line) => line.trim()).filter(Boolean);
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function formatFailure(run: AdminRunSummary): string {

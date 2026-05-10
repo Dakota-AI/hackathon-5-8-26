@@ -1,19 +1,4 @@
-FROM node:22-bookworm-slim AS runtime
-
-ENV NODE_ENV=production \
-    AGENTS_RUNTIME_MODE=ecs-resident \
-    AGENTS_RESIDENT_ADAPTER=smoke \
-    AGENTS_RUNNER_ROOT=/runner \
-    HERMES_HOME=/runner/hermes \
-    HERMES_RUNNER_MODE=smoke \
-    PORT=8787
-
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl git openssh-client python3 tini \
-  && rm -rf /var/lib/apt/lists/* \
-  && useradd -u 10000 -m -d /runner runner \
-  && mkdir -p /app /runner/workspace /runner/state /runner/artifacts /runner/profiles /runner/logs /runner/hermes \
-  && chown -R runner:runner /runner /app
+FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
 
@@ -27,11 +12,34 @@ RUN corepack enable \
 COPY packages/protocol packages/protocol
 COPY services/agent-runtime services/agent-runtime
 RUN pnpm --filter @agents-cloud/protocol run build \
-  && pnpm --filter @agents-cloud/agent-runtime run build \
-  && chown -R runner:runner /app
+  && pnpm --filter @agents-cloud/agent-runtime run build
 
-USER runner
+FROM nousresearch/hermes-agent:latest AS runtime
+
+ENV NODE_ENV=production \
+    AGENTS_RUNTIME_MODE=ecs-resident \
+    AGENTS_RESIDENT_ADAPTER=hermes-cli \
+    AGENTS_RUNNER_ROOT=/runner \
+    AGENTS_MODEL_PROVIDER=openai-codex \
+    AGENTS_HERMES_MAX_TURNS=8 \
+    HERMES_COMMAND=/opt/hermes/.venv/bin/hermes \
+    HERMES_HOME=/runner/hermes \
+    PATH=/opt/hermes/.venv/bin:/opt/hermes:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    PORT=8787
+
+USER root
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl git openssh-client tini \
+  && rm -rf /var/lib/apt/lists/* \
+  && mkdir -p /app /runner/workspace /runner/state /runner/artifacts /runner/profiles /runner/logs /runner/hermes \
+  && chown -R hermes:hermes /runner /app
+
+COPY --from=build --chown=hermes:hermes /app /app
+COPY services/agent-runtime/docker/resident-entrypoint.sh /usr/local/bin/agents-cloud-resident-entrypoint
+RUN chmod 0755 /usr/local/bin/agents-cloud-resident-entrypoint
+
+USER hermes
 WORKDIR /app/services/agent-runtime
 EXPOSE 8787
-ENTRYPOINT ["/usr/bin/tini", "-g", "--"]
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/local/bin/agents-cloud-resident-entrypoint"]
 CMD ["node", "dist/src/resident-runner-server.js"]

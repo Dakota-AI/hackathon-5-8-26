@@ -13,6 +13,7 @@ const fixedNow = (): string => "2026-05-10T12:00:00.000Z";
 describe("ResidentRunner", () => {
   it("runs multiple logical agents in one tenant-scoped resident runner", async () => {
     const rootDir = await tempRoot();
+    const hermesCommand = await writeFakeHermesCommand(rootDir);
     const runner = new ResidentRunner(residentRunnerConfigFromPartial({
       rootDir,
       orgId: "org-test",
@@ -20,7 +21,8 @@ describe("ResidentRunner", () => {
       workspaceId: "workspace-test",
       runnerId: "runner-test",
       runnerSessionId: "runner-session-test",
-      adapterKind: "smoke",
+      adapterKind: "hermes-cli",
+      hermesCommand,
       now: fixedNow
     }));
 
@@ -74,7 +76,7 @@ describe("ResidentRunner", () => {
       workspaceId: "workspace-test",
       runnerId: "runner-test",
       runnerSessionId: "runner-session-test",
-      adapterKind: "smoke",
+      adapterKind: "hermes-cli",
       now: fixedNow
     }));
 
@@ -95,7 +97,7 @@ describe("ResidentRunner", () => {
       workspaceId: "workspace-test",
       runnerId: "runner-test",
       runnerSessionId: "runner-session-test",
-      adapterKind: "smoke",
+      adapterKind: "hermes-cli",
       now: fixedNow
     }));
 
@@ -120,7 +122,7 @@ describe("ResidentRunner", () => {
       workspaceId: "workspace-test",
       runnerId: "runner-test",
       runnerSessionId: "runner-session-test",
-      adapterKind: "smoke",
+      adapterKind: "hermes-cli",
       now: fixedNow
     }));
 
@@ -227,11 +229,14 @@ describe("resident runner HTTP API", () => {
     const rootDir = await tempRoot();
     const port = await freePort();
     const server = fileURLToPath(new URL("../src/resident-runner-server.js", import.meta.url));
+    const hermesCommand = await writeFakeHermesCommand(rootDir);
     const child = spawn(process.execPath, [server], {
       env: {
         ...process.env,
         AGENTS_RUNNER_ROOT: rootDir,
-        AGENTS_RESIDENT_ADAPTER: "smoke",
+        AGENTS_RESIDENT_ADAPTER: "hermes-cli",
+        HERMES_COMMAND: hermesCommand,
+        HERMES_HOME: join(rootDir, "hermes"),
         AGENT_ID: "agent-default",
         AGENT_ROLE: "Default Agent",
         ORG_ID: "org-http",
@@ -345,6 +350,49 @@ describe("resident runner HTTP API", () => {
     assert.notEqual(code, 0);
     assert.match(stderr, /RUNNER_API_TOKEN is required/);
   });
+
+  it("rejects the retired resident smoke adapter configuration", async () => {
+    const rootDir = await tempRoot();
+    const port = await freePort();
+    const child = spawnResidentServer(rootDir, port, { AGENTS_RESIDENT_ADAPTER: "smoke", RUNNER_API_TOKEN: "test-token" });
+    const { code, stderr } = await waitForExitWithOutput(child);
+    assert.notEqual(code, 0);
+    assert.match(stderr, /Unsupported resident adapter: smoke/);
+  });
+
+  it("stores uploaded Hermes auth JSON without exposing it in the response", async () => {
+    const rootDir = await tempRoot();
+    const port = await freePort();
+    const child = spawnResidentServer(rootDir, port, { RUNNER_API_TOKEN: "test-token" });
+    try {
+      await waitForHealth(port);
+      const auth = {
+        version: 1,
+        providers: { "openai-codex": { type: "openai-codex" } },
+        active_provider: "openai-codex",
+        credential_pool: {}
+      };
+      const uploaded = await fetchJson(port, "/credentials/hermes-auth", {
+        method: "POST",
+        token: "test-token",
+        body: { authJson: auth }
+      });
+      assert.equal(uploaded.status, 200);
+      assert.deepEqual(uploaded.body, { status: "stored" });
+
+      const stored = await readFile(join(rootDir, "hermes", "auth.json"), "utf8");
+      assert.deepEqual(JSON.parse(stored), auth);
+      assert.doesNotMatch(JSON.stringify(uploaded.body), /openai-codex/);
+
+      const shutdown = await fetchJson(port, "/shutdown", { method: "POST", token: "test-token" });
+      assert.equal(shutdown.status, 202);
+      await waitForExit(child);
+    } finally {
+      if (child.exitCode === null) {
+        child.kill("SIGTERM");
+      }
+    }
+  });
 });
 
 async function tempRoot(): Promise<string> {
@@ -386,12 +434,30 @@ function restoreEnv(snapshot: Record<string, string | undefined>): void {
   }
 }
 
+async function writeFakeHermesCommand(rootDir: string): Promise<string> {
+  const hermesCommand = join(rootDir, `fake-hermes-${Date.now()}-${Math.random().toString(16).slice(2)}.mjs`);
+  await writeFile(hermesCommand, [
+    "#!/usr/bin/env node",
+    "const queryIndex = process.argv.indexOf('-q');",
+    "const prompt = queryIndex >= 0 ? process.argv[queryIndex + 1] ?? '' : '';",
+    "const agent = prompt.match(/- Agent: ([^\\n]+)/)?.[1]?.trim() ?? 'agent-unknown';",
+    "console.log(`${agent} completed heartbeat.`);",
+    "console.log(prompt);",
+    "console.log(`session_id: session-${agent}`);",
+    ""
+  ].join("\n"));
+  await chmod(hermesCommand, 0o755);
+  return hermesCommand;
+}
+
 function spawnResidentServer(rootDir: string, port: number, overrides: Record<string, string | undefined> = {}): ReturnType<typeof spawn> {
   const server = fileURLToPath(new URL("../src/resident-runner-server.js", import.meta.url));
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     AGENTS_RUNNER_ROOT: rootDir,
-    AGENTS_RESIDENT_ADAPTER: "smoke",
+    AGENTS_RESIDENT_ADAPTER: "hermes-cli",
+    HERMES_HOME: join(rootDir, "hermes"),
+    HERMES_COMMAND: join(rootDir, "missing-fake-hermes"),
     AGENT_ID: "agent-default",
     AGENT_ROLE: "Default Agent",
     ORG_ID: "org-http",

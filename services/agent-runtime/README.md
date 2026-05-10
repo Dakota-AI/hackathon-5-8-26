@@ -33,6 +33,16 @@ The dev ECS task currently defaults to `HERMES_RUNNER_MODE=smoke`. This still us
 the Hermes runner boundary in code, but avoids attaching model/provider secrets
 before the worker IAM, artifact, and event path is proven.
 
+The separate resident user-runner task definition now uses
+`services/agent-runtime/Dockerfile.resident`, which is based on
+`nousresearch/hermes-agent:latest` and defaults to
+`AGENTS_RESIDENT_ADAPTER=hermes-cli`. The dev resident runner receives
+`RUNNER_API_TOKEN` and `HERMES_AUTH_JSON_BOOTSTRAP` through Secrets Manager,
+writes `$HERMES_HOME/auth.json` at container startup, and invokes
+`/opt/hermes/.venv/bin/hermes` from the resident `/wake` path. The latest live
+ECS exercise reached the OpenAI Codex backend but failed on provider quota
+(`HTTP 429 usage_limit_reached`).
+
 Smoke mode verifies the durable lifecycle:
 
 1. Write `run.status/running` to DynamoDB events.

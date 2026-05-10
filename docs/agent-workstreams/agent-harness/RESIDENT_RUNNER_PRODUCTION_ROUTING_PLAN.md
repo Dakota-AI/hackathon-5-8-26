@@ -2,7 +2,7 @@
 
 Workstream: Agent Harness
 Date: 2026-05-10
-Status: live ECS task definition deployed and smoke-tested; modular per-user routing still pending
+Status: live real-Hermes ECS task definition deployed and exercised; modular per-user routing still pending
 
 ## Live Deployment Result
 
@@ -20,36 +20,42 @@ AgentProfilesTable:
   agents-cloud-dev-state-AgentProfilesTableFF4D8E5F-OKROMINWG46P
 
 Resident runner task definition:
-  arn:aws:ecs:us-east-1:625250616301:task-definition/agents-cloud-dev-resident-runner:1
+  arn:aws:ecs:us-east-1:625250616301:task-definition/agents-cloud-dev-resident-runner:4
 
 Resident runner container:
   resident-runner
 
-Resident runner image:
-  625250616301.dkr.ecr.us-east-1.amazonaws.com/cdk-hnb659fds-container-assets-625250616301-us-east-1:c11a8d332109f257309aeb2a0347f677cc28b7bdb74988232d414cf7bf9e9e09
+Hermes auth bootstrap secret:
+  agents-cloud/dev/resident-runner/hermes-auth-json
 ```
 
-Live ECS smoke task:
+Latest live ECS real-Hermes task:
 
 ```text
-arn:aws:ecs:us-east-1:625250616301:task/agents-cloud-dev-cluster/e43f96b820414db8af395525cdcd7187
+arn:aws:ecs:us-east-1:625250616301:task/agents-cloud-dev-cluster/264c24cc42374834b3c006a56822069b
 ```
 
 Result:
 
 - task pulled the resident image from ECR,
 - resident HTTP server started in ECS mode,
+- task-level Secrets Manager injection wrote Hermes auth to
+  `$HERMES_HOME/auth.json`,
 - local task HTTP `/health` succeeded,
-- local task HTTP `/wake` succeeded,
+- local task HTTP `/wake` succeeded and invoked
+  `/opt/hermes/.venv/bin/hermes`,
 - one heartbeat was created,
 - one report artifact was created in local task storage,
-- four canonical events were emitted in local task storage,
-- `/state` showed `totalHeartbeats=1`, `totalArtifacts=1`, `durableEvents=4`,
+- five canonical events were emitted in local task storage because the real
+  provider call failed visibly,
+- Hermes reached the OpenAI Codex backend and returned HTTP `429`
+  `usage_limit_reached` for `gpt-5.5`; this is the current external provider
+  quota blocker,
 - `/shutdown` completed,
 - ECS task exited with code `0`.
 
-The current live smoke is intentionally local-to-task. Events and artifacts are
-not yet written to DynamoDB/S3 by the resident runner.
+The current live exercise is intentionally local-to-task. Events and artifacts
+are not yet written to DynamoDB/S3 by the resident runner.
 
 ## Current Live Shape
 
@@ -199,6 +205,8 @@ image. Use one of:
 - private trusted-runner OAuth bootstrap only after session policy and
   revocation are approved.
 
-The deployed resident task currently defaults to `AGENTS_RESIDENT_ADAPTER=smoke`.
-That is deliberate until the Hermes CLI image layer and scoped provider-secret
-injection are complete.
+The deployed resident task should default to `AGENTS_RESIDENT_ADAPTER=hermes-cli`
+and receive Hermes auth only through Secrets Manager or the token-protected
+runner credential upload route. Public multi-tenant launch still requires a
+brokered per-user/provider credential model instead of sharing one auth JSON
+across runners.

@@ -268,10 +268,11 @@ For resident user runners, the missing runtime capabilities are:
 - Docker local runtime could drift from ECS if it uses a different contract.
   Mitigation: local `resident-dev` and cloud `ecs-resident` should share one
   runner env/mount/secret/health/snapshot contract.
-- The resident image could be mistaken as production-ready because it builds and
-  has an HTTP API. Mitigation: keep `AGENTS_RESIDENT_ADAPTER=smoke` as default
-  and document that Hermes CLI, durable adapters, snapshot restore, and
-  task-spawn wiring are not complete.
+- The resident image could be mistaken as public production-ready because real
+  Hermes now runs in it. Mitigation: keep it token-protected, inject auth only
+  through Secrets Manager or a private credential upload route, and document
+  that durable adapters, snapshot restore, per-user routing, and brokered
+  provider credentials are still required.
 - Codex/ChatGPT OAuth could be overexposed if raw user sessions are passed into
   multi-tenant agent code. Mitigation: production default remains API-key,
   provider-service-account, or brokered credential references; OAuth/bootstrap
@@ -666,6 +667,43 @@ Result:
 - `pnpm infra:synth` passed with only existing CDK deprecation warnings,
 - diff whitespace check passed.
 
+Validation results for the real-Hermes resident update:
+
+```bash
+pnpm contracts:test
+pnpm agent-runtime:test
+pnpm agent-runtime:build
+pnpm --filter @agents-cloud/infra-cdk test
+pnpm agent-runtime:resident:docker:build
+pnpm infra:synth
+cd infra/cdk && pnpm build && pnpm exec cdk deploy --app 'node dist/bin/agents-cloud-cdk.js' agents-cloud-dev-runtime --require-approval never
+```
+
+Result:
+
+- protocol schemas validated,
+- agent-runtime tests passed with 18 tests,
+- agent-runtime build passed,
+- infra CDK tests passed with 9 tests,
+- resident image now builds from `nousresearch/hermes-agent:latest`,
+- resident smoke adapter was removed from resident runtime code and rejected in
+  HTTP-server startup tests,
+- `POST /credentials/hermes-auth` stores `$HERMES_HOME/auth.json` without
+  echoing auth contents,
+- dev Secrets Manager secret
+  `agents-cloud/dev/resident-runner/hermes-auth-json` was created/updated from
+  the local Hermes auth file,
+- `agents-cloud-dev-runtime` deployed resident task definition revision `4`,
+- local Docker real-Hermes `/wake` reached OpenAI Codex and failed with HTTP
+  `429 usage_limit_reached`,
+- live ECS task
+  `arn:aws:ecs:us-east-1:625250616301:task/agents-cloud-dev-cluster/264c24cc42374834b3c006a56822069b`
+  started the resident server, loaded Hermes auth from Secrets Manager, invoked
+  `/opt/hermes/.venv/bin/hermes`, emitted visible failed status/artifact events,
+  and exited `0`,
+- successful model output is blocked by current Codex provider quota, not by ECS
+  container wiring.
+
 ## Progress Log
 
 - 2026-05-10: Audited current `agent-runtime`, `agent-manager`,
@@ -708,6 +746,12 @@ Result:
   `arn:aws:ecs:us-east-1:625250616301:task/agents-cloud-dev-cluster/e43f96b820414db8af395525cdcd7187`,
   verified `/health`, `/wake`, `/state`, and `/shutdown` inside Fargate, and
   documented the remaining per-user routing plan.
+- 2026-05-10: Replaced the resident smoke adapter default with real Hermes CLI,
+  switched the resident image to `nousresearch/hermes-agent:latest`, added
+  token-protected Hermes auth upload, injected Hermes auth through Secrets
+  Manager, deployed resident task definition revision `4`, and verified live ECS
+  reaches the OpenAI Codex backend before failing on current `429`
+  `usage_limit_reached` quota.
 
 ## Completion Criteria
 

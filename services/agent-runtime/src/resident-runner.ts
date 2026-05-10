@@ -10,7 +10,7 @@ import {
   type RunStatus
 } from "@agents-cloud/protocol";
 
-export type ResidentAdapterKind = "smoke" | "hermes-cli";
+export type ResidentAdapterKind = "hermes-cli";
 export type ResidentAgentStatus = "idle" | "running" | "waiting" | "failed" | "succeeded";
 
 export interface ResidentRunnerConfig {
@@ -391,23 +391,17 @@ export class ResidentRunner {
     taskId: string
   ): Promise<AdapterResult> {
     const prompt = renderPrompt(agent, input, this.state.runner, runId, taskId);
-    if (this.config.adapterKind === "smoke") {
-      const sessionId = agent.sessionId ?? `session-${agent.agentId}`;
-      return {
-        summary: `${agent.role} processed objective in smoke mode.`,
-        rawOutput: [
-          `agent=${agent.agentId}`,
-          `profile=${agent.profileId}@${agent.profileVersion}`,
-          `session_id: ${sessionId}`,
-          "",
-          prompt
-        ].join("\n"),
-        sessionId,
-        exitCode: 0
-      };
-    }
-
-    const args = ["chat", "-q", prompt, "-Q", "--source", "agents-cloud"];
+    const args = [
+      "chat",
+      "-q",
+      prompt,
+      "-Q",
+      "--source",
+      "agents-cloud",
+      "--max-turns",
+      process.env.AGENTS_HERMES_MAX_TURNS ?? "8",
+      "--pass-session-id"
+    ];
     if (agent.model) {
       args.push("-m", agent.model);
     }
@@ -419,6 +413,12 @@ export class ResidentRunner {
     }
     if (agent.sessionId) {
       args.push("--resume", agent.sessionId);
+    }
+    if (process.env.HERMES_ACCEPT_HOOKS === "1") {
+      args.push("--accept-hooks");
+    }
+    if (process.env.AGENTS_HERMES_YOLO === "1") {
+      args.push("--yolo");
     }
 
     const rawOutput = await runProcess(
@@ -574,7 +574,7 @@ export class ResidentRunner {
 export function residentRunnerConfigFromPartial(input: ResidentRunnerConfig): Required<ResidentRunnerConfig> {
   return {
     ...input,
-    adapterKind: input.adapterKind ?? "smoke",
+    adapterKind: input.adapterKind ?? "hermes-cli",
     hermesCommand: input.hermesCommand ?? "hermes",
     now: input.now ?? (() => new Date().toISOString())
   };
@@ -703,7 +703,11 @@ function requiredEnv(name: string, fallback: string): string {
 }
 
 function adapterKindFromEnv(): ResidentAdapterKind {
-  return process.env.AGENTS_RESIDENT_ADAPTER === "hermes-cli" ? "hermes-cli" : "smoke";
+  const adapter = process.env.AGENTS_RESIDENT_ADAPTER;
+  if (adapter && adapter !== "hermes-cli") {
+    throw new Error(`Unsupported resident adapter: ${adapter}. Resident runners require AGENTS_RESIDENT_ADAPTER=hermes-cli.`);
+  }
+  return "hermes-cli";
 }
 
 function eventId(runId: string, seq: number): string {

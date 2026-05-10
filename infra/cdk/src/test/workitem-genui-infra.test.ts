@@ -152,6 +152,7 @@ describe("WorkItem/GenUI infrastructure", () => {
       "GET /work-items/{workItemId}/artifacts",
       "GET /runs/{runId}/artifacts",
       "GET /runs/{runId}/artifacts/{artifactId}",
+      "GET /runs/{runId}/artifacts/{artifactId}/download",
       "POST /data-source-refs",
       "GET /data-source-refs/{dataSourceId}",
       "GET /work-items/{workItemId}/data-source-refs",
@@ -211,11 +212,16 @@ describe("WorkItem/GenUI infrastructure", () => {
       ContainerDefinitions: Match.arrayWith([
         Match.objectLike({
           Name: "resident-runner",
-          Secrets: Match.arrayWith([Match.objectLike({ Name: "RUNNER_API_TOKEN" })]),
+          Secrets: Match.arrayWith([
+            Match.objectLike({ Name: "RUNNER_API_TOKEN" }),
+            Match.objectLike({ Name: "HERMES_AUTH_JSON_BOOTSTRAP" })
+          ]),
           PortMappings: Match.arrayWith([Match.objectLike({ ContainerPort: 8787 })]),
           Environment: Match.arrayWith([
             Match.objectLike({ Name: "AGENTS_RUNTIME_MODE", Value: "ecs-resident" }),
-            Match.objectLike({ Name: "AGENTS_RESIDENT_ADAPTER", Value: "smoke" }),
+            Match.objectLike({ Name: "AGENTS_RESIDENT_ADAPTER", Value: "hermes-cli" }),
+            Match.objectLike({ Name: "AGENTS_MODEL_PROVIDER", Value: "openai-codex" }),
+            Match.objectLike({ Name: "HERMES_COMMAND", Value: "/opt/hermes/.venv/bin/hermes" }),
             Match.objectLike({ Name: "EVENTS_TABLE_NAME" }),
             Match.objectLike({ Name: "HOST_NODES_TABLE_NAME" }),
             Match.objectLike({ Name: "USER_RUNNERS_TABLE_NAME" }),

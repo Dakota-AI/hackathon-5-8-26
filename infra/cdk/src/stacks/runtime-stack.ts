@@ -214,6 +214,11 @@ export class RuntimeStack extends AgentsCloudStack {
         passwordLength: 48
       }
     });
+    const residentRunnerHermesAuth = Secret.fromSecretNameV2(
+      this,
+      "ResidentRunnerHermesAuthJson",
+      process.env.AGENTS_CLOUD_HERMES_AUTH_SECRET_NAME ?? `agents-cloud/${props.config.envName}/resident-runner/hermes-auth-json`
+    );
 
     this.residentRunnerContainer = this.residentRunnerTaskDefinition.addContainer("resident-runner", {
       image: ContainerImage.fromDockerImageAsset(residentRunnerImage),
@@ -222,14 +227,19 @@ export class RuntimeStack extends AgentsCloudStack {
         logGroup: props.cluster.agentRuntimeLogGroup
       }),
       secrets: {
-        RUNNER_API_TOKEN: EcsSecret.fromSecretsManager(residentRunnerApiToken)
+        RUNNER_API_TOKEN: EcsSecret.fromSecretsManager(residentRunnerApiToken),
+        HERMES_AUTH_JSON_BOOTSTRAP: EcsSecret.fromSecretsManager(residentRunnerHermesAuth)
       },
       portMappings: [{ containerPort: 8787 }],
       environment: {
         AGENTS_CLOUD_ENV: props.config.envName,
         AGENTS_RUNTIME_MODE: "ecs-resident",
-        AGENTS_RESIDENT_ADAPTER: process.env.AGENTS_CLOUD_RESIDENT_ADAPTER ?? "smoke",
+        AGENTS_RESIDENT_ADAPTER: process.env.AGENTS_CLOUD_RESIDENT_ADAPTER ?? "hermes-cli",
         AGENTS_RUNNER_ROOT: "/runner",
+        AGENTS_MODEL_PROVIDER: process.env.AGENTS_CLOUD_RESIDENT_MODEL_PROVIDER ?? "openai-codex",
+        AGENTS_MODEL: process.env.AGENTS_CLOUD_RESIDENT_MODEL ?? "",
+        AGENTS_HERMES_MAX_TURNS: process.env.AGENTS_CLOUD_RESIDENT_HERMES_MAX_TURNS ?? "8",
+        HERMES_COMMAND: "/opt/hermes/.venv/bin/hermes",
         HERMES_HOME: "/runner/hermes",
         PORT: "8787",
         WORK_ITEMS_TABLE_NAME: props.state.workItemsTable.tableName,

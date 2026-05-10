@@ -2,7 +2,7 @@
 
 Workstream: Agent Harness
 Date: 2026-05-10
-Status: first local/ECS-shaped resident runner container implemented; production launch wiring still pending
+Status: real Hermes CLI resident runner container implemented; per-user launch routing still pending
 
 ## Purpose
 
@@ -82,13 +82,14 @@ resident-runner-container-name
 
 The resident image:
 
-- runs as non-root user `runner`,
+- is based on `nousresearch/hermes-agent:latest`,
+- runs as non-root user `hermes`,
 - exposes HTTP port `8787`,
 - stores local runner data under `/runner`,
 - sets `HERMES_HOME=/runner/hermes`,
-- defaults to deterministic `smoke` adapter mode,
-- can switch to `hermes-cli` mode when Hermes is installed in a future image
-  layer and `AGENTS_RESIDENT_ADAPTER=hermes-cli` is set.
+- defaults to `AGENTS_RESIDENT_ADAPTER=hermes-cli`,
+- expects Hermes auth JSON from Secrets Manager at task start or from the
+  token-protected local credential upload endpoint.
 
 ## Runtime Contract
 
@@ -100,6 +101,7 @@ The HTTP API is intentionally small and local-to-runner shaped:
 | `GET` | `/state` | inspect current runner, logical agents, heartbeats, and metrics |
 | `GET` | `/events` | inspect canonical event ledger written by this runner |
 | `POST` | `/agents` | register or update one logical agent profile in the runner |
+| `POST` | `/credentials/hermes-auth` | write a Hermes `auth.json` into `HERMES_HOME` for a trusted private runner |
 | `POST` | `/wake` | wake one agent or all registered agents for an objective |
 | `POST` | `/shutdown` | stop the local server cleanly |
 
@@ -112,6 +114,12 @@ Authorization: Bearer <token>
 For local developer mode, an omitted `RUNNER_API_TOKEN` leaves the HTTP server open on the local machine for quick testing. For ECS-shaped resident mode, `AGENTS_RUNTIME_MODE=ecs-resident` fails closed at startup unless `RUNNER_API_TOKEN` is present. The current CDK runtime stack injects a generated Secrets Manager token into the resident task definition so accidentally launched ECS tasks are not open by default. Production launch must replace this static placeholder with a scoped, rotated supervisor/runner token broker before any resident task is exposed beyond a trusted control-plane boundary.
 
 JSON write endpoints reject malformed JSON as `400`, reject non-JSON content types as `415`, and cap request bodies at 1 MiB.
+
+`POST /credentials/hermes-auth` always requires `RUNNER_API_TOKEN`, even in
+local mode. It accepts either a JSON object or stringified JSON object in
+`authJson`, writes it to `$HERMES_HOME/auth.json` with mode `0600`, and returns
+only `{ "status": "stored" }`. The response never echoes provider names,
+tokens, or auth contents.
 
 The runtime currently emits durable canonical events only for:
 
@@ -159,7 +167,7 @@ sequenceDiagram
   participant API as Control API or local test
   participant Runner as Resident Runner HTTP API
   participant Agent as Logical Agent
-  participant Adapter as Smoke/Hermes Adapter
+  participant Adapter as Hermes CLI Adapter
   participant Ledger as Events + Artifacts
 
   API->>Runner: POST /wake objective, runId, taskId, agentId?
@@ -231,6 +239,16 @@ docker run --rm \
   agents-cloud-agent-runtime-resident:local
 ```
 
+For local real-Hermes testing, seed credentials at startup from a shell value or
+upload them after the server starts:
+
+```bash
+curl -sS http://127.0.0.1:18787/credentials/hermes-auth \
+  -H 'authorization: Bearer test-token' \
+  -H 'content-type: application/json' \
+  -d '{"authJson":{...}}'
+```
+
 Register a second logical agent:
 
 ```bash
@@ -283,11 +301,10 @@ curl -sS -X POST http://127.0.0.1:18787/shutdown -H 'authorization: Bearer test-
 
 ## Production Gaps
 
-This is not yet ready to push as the production resident runner for users.
+This is ready only for private dev-account production-shape testing, not public
+multi-tenant user launch.
 Remaining work:
 
-- add Hermes CLI into a dedicated production image layer or choose a pinned
-  upstream Hermes image base,
 - add task launch flow that injects per-runner tenant/user/workspace/profile env
   overrides,
 - replace local JSON/NDJSON state with DynamoDB/S3-backed adapters,
@@ -298,34 +315,42 @@ Remaining work:
 - add approval request/decision handling in the resident runner server,
 - add cancellation and duplicate wake idempotency,
 - add tool policy enforcement before enabling real terminal/file/web/git tools,
-- add scoped secret references for provider/model credentials,
+- replace the temporary whole-auth JSON bootstrap with scoped secret references
+  or a brokered provider session per runner,
 - add artifact upload to S3 and metadata writes to DynamoDB,
 - add preview deployment handoff for generated websites,
 - add Realtime relay or Control API bridge for user-visible status updates.
 
-## Live AWS Smoke
+## Live AWS Real-Hermes Exercise
 
 On 2026-05-10, the resident runner task definition was deployed to the live dev
 AWS account and exercised with a Fargate task-level HTTP self-test:
 
 ```text
 Task definition:
-arn:aws:ecs:us-east-1:625250616301:task-definition/agents-cloud-dev-resident-runner:1
+arn:aws:ecs:us-east-1:625250616301:task-definition/agents-cloud-dev-resident-runner:4
 
 Task:
-arn:aws:ecs:us-east-1:625250616301:task/agents-cloud-dev-cluster/e43f96b820414db8af395525cdcd7187
+arn:aws:ecs:us-east-1:625250616301:task/agents-cloud-dev-cluster/264c24cc42374834b3c006a56822069b
 ```
 
 The task exited with code `0` after:
 
 - starting the resident runner HTTP server,
+- writing Hermes auth from Secrets Manager to `$HERMES_HOME/auth.json`,
 - passing `/health`,
 - posting `/wake`,
+- invoking `/opt/hermes/.venv/bin/hermes` through the resident runner,
 - creating one heartbeat,
 - creating one local report artifact,
-- emitting four local canonical events,
-- reading `/state`,
+- emitting five local canonical events because the real provider call failed
+  visibly,
 - shutting down cleanly.
+
+The real Hermes invocation reached the OpenAI Codex backend and failed with
+HTTP `429 usage_limit_reached` for `gpt-5.5`. The image, ECS task, secret
+bootstrap, server, and Hermes process path are live; successful model output is
+currently blocked by provider/account quota rather than by container wiring.
 
 See `RESIDENT_RUNNER_PRODUCTION_ROUTING_PLAN.md` for the remaining modular
 per-user routing work.

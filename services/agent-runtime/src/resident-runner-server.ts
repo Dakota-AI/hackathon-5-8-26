@@ -1,6 +1,8 @@
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import { once } from "node:events";
-import { ResidentRunner, residentRunnerConfigFromPartial, type ResidentAgentProfile, type ResidentWakeRequest } from "./resident-runner.js";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { ResidentRunner, residentRunnerConfigFromPartial, type ResidentAdapterKind, type ResidentAgentProfile, type ResidentWakeRequest } from "./resident-runner.js";
 
 const runner = new ResidentRunner(residentRunnerConfigFromPartial({
   rootDir: process.env.AGENTS_RUNNER_ROOT ?? "/runner",
@@ -9,7 +11,7 @@ const runner = new ResidentRunner(residentRunnerConfigFromPartial({
   workspaceId: process.env.WORKSPACE_ID ?? "workspace-local-001",
   runnerId: process.env.RUNNER_ID ?? "runner-local-001",
   runnerSessionId: process.env.RUNNER_SESSION_ID ?? `session-${Date.now()}`,
-  adapterKind: process.env.AGENTS_RESIDENT_ADAPTER === "hermes-cli" ? "hermes-cli" : "smoke",
+  adapterKind: residentAdapterKindFromEnv(),
   hermesCommand: process.env.HERMES_COMMAND ?? "hermes"
 }));
 
@@ -28,6 +30,10 @@ class HttpError extends Error {
 }
 
 const MAX_JSON_BODY_BYTES = 1_048_576;
+
+interface HermesAuthUpload {
+  readonly authJson?: unknown;
+}
 
 const server = http.createServer(async (request, response) => {
   try {
@@ -49,6 +55,13 @@ const server = http.createServer(async (request, response) => {
       const profile = await readJson<ResidentAgentProfile>(request);
       const agent = await runner.registerAgent(profile);
       return json(response, 201, { agent });
+    }
+    if (request.method === "POST" && url.pathname === "/credentials/hermes-auth") {
+      if (!token) {
+        return json(response, 403, { error: "Forbidden", message: "RUNNER_API_TOKEN is required to upload Hermes credentials." });
+      }
+      await storeHermesAuth(await readJson<HermesAuthUpload>(request));
+      return json(response, 200, { status: "stored" });
     }
     if (request.method === "POST" && url.pathname === "/wake") {
       const wake = await readJson<ResidentWakeRequest>(request);
@@ -113,6 +126,30 @@ async function readJson<T>(request: IncomingMessage): Promise<T> {
   }
 }
 
+async function storeHermesAuth(payload: HermesAuthUpload): Promise<void> {
+  const serialized = serializeHermesAuth(payload.authJson);
+  const hermesHome = process.env.HERMES_HOME ?? join(process.env.AGENTS_RUNNER_ROOT ?? "/runner", "hermes");
+  await mkdir(hermesHome, { recursive: true });
+  const authPath = join(hermesHome, "auth.json");
+  await writeFile(authPath, serialized, { mode: 0o600 });
+  await chmod(authPath, 0o600);
+}
+
+function serializeHermesAuth(value: unknown): string {
+  let parsed = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value) as unknown;
+    } catch {
+      throw new HttpError(400, "authJson string must contain valid JSON.");
+    }
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new HttpError(400, "authJson must be a JSON object or a stringified JSON object.");
+  }
+  return `${JSON.stringify(parsed)}\n`;
+}
+
 function defaultProfilesFromEnvironment(): ResidentAgentProfile[] {
   if (process.env.AGENTS_RESIDENT_PROFILES_JSON) {
     return JSON.parse(process.env.AGENTS_RESIDENT_PROFILES_JSON) as ResidentAgentProfile[];
@@ -149,4 +186,12 @@ function providerFromEnv(): ResidentAgentProfile["provider"] {
     return provider;
   }
   return undefined;
+}
+
+function residentAdapterKindFromEnv(): ResidentAdapterKind {
+  const adapter = process.env.AGENTS_RESIDENT_ADAPTER;
+  if (adapter && adapter !== "hermes-cli") {
+    throw new Error(`Unsupported resident adapter: ${adapter}. Resident runners require AGENTS_RESIDENT_ADAPTER=hermes-cli.`);
+  }
+  return "hermes-cli";
 }

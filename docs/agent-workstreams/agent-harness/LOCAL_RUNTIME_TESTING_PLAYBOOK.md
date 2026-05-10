@@ -115,9 +115,10 @@ curl -sS -X POST http://127.0.0.1:18787/shutdown \
   -H 'authorization: Bearer test-token'
 ```
 
-The resident image currently defaults to `AGENTS_RESIDENT_ADAPTER=smoke`.
-`AGENTS_RESIDENT_ADAPTER=hermes-cli` is wired in code but requires a future
-Hermes-enabled image layer.
+The resident image now defaults to `AGENTS_RESIDENT_ADAPTER=hermes-cli` and is
+built from the upstream Hermes image. Local tests without real model calls must
+use a fake Hermes command through `HERMES_COMMAND`; the production-shaped image
+path itself no longer has a resident smoke adapter.
 
 ## What To Inspect
 

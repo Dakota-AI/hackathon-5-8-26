@@ -4,9 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 void main() {
-  testWidgets('boots Agents Cloud command center', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('boots Agents Cloud command center', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1440, 920);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -57,5 +55,26 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Create diagrams'), findsOneWidget);
+  });
+
+  testWidgets('renders compact mobile shell without desktop sidebar', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const ProviderScope(child: AgentsCloudConsoleApp()),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Command, runs, approvals'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Files'), findsOneWidget);
+    expect(find.text('Command Center'), findsNothing);
+    expect(find.text('Command the company. Track every run.'), findsOneWidget);
+    expect(find.text('Live GenUI surface'), findsOneWidget);
   });
 }

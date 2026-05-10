@@ -43,25 +43,39 @@ class ConsoleShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedPage = ref.watch(selectedPageProvider);
+    final isCompact = MediaQuery.sizeOf(context).width < 760;
 
     return Scaffold(
       backgroundColor: _Palette.background,
       child: SafeArea(
-        child: Row(
-          children: [
-            _Sidebar(selectedPage: selectedPage),
-            const SizedBox(width: 1, child: ColoredBox(color: _Palette.border)),
-            Expanded(
-              child: Column(
+        child: isCompact
+            ? Column(
                 children: [
-                  const _TopBar(),
+                  const _MobileTopBar(),
                   const Divider(height: 1, color: _Palette.border),
                   Expanded(child: _PageBody(page: selectedPage)),
+                  const Divider(height: 1, color: _Palette.border),
+                  _MobileNavBar(selectedPage: selectedPage),
+                ],
+              )
+            : Row(
+                children: [
+                  _Sidebar(selectedPage: selectedPage),
+                  const SizedBox(
+                    width: 1,
+                    child: ColoredBox(color: _Palette.border),
+                  ),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        const _TopBar(),
+                        const Divider(height: 1, color: _Palette.border),
+                        Expanded(child: _PageBody(page: selectedPage)),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -263,6 +277,159 @@ class _TopBar extends StatelessWidget {
   }
 }
 
+class _MobileTopBar extends StatelessWidget {
+  const _MobileTopBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      color: _Palette.sidebar,
+      child: const Row(
+        children: [
+          _LogoMark(),
+          SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Agents Cloud',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                ),
+                SizedBox(height: 1),
+                Text(
+                  'Command, runs, approvals',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: _Palette.muted, fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+          _StatusPill(label: 'Live', color: _Palette.success),
+        ],
+      ),
+    );
+  }
+}
+
+class _MobileNavBar extends ConsumerWidget {
+  const _MobileNavBar({required this.selectedPage});
+
+  final ConsolePage selectedPage;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      height: 58,
+      color: _Palette.sidebar,
+      padding: const EdgeInsets.fromLTRB(6, 5, 6, 6),
+      child: Row(
+        children: [
+          _MobileNavItem(
+            label: 'Home',
+            icon: RadixIcons.dashboard,
+            selected: selectedPage == ConsolePage.commandCenter,
+            onTap: () => ref.read(selectedPageProvider.notifier).state =
+                ConsolePage.commandCenter,
+          ),
+          _MobileNavItem(
+            label: 'Runs',
+            icon: RadixIcons.activityLog,
+            selected: selectedPage == ConsolePage.runs,
+            onTap: () => ref.read(selectedPageProvider.notifier).state =
+                ConsolePage.runs,
+          ),
+          _MobileNavItem(
+            label: 'Agents',
+            icon: RadixIcons.group,
+            selected: selectedPage == ConsolePage.agents,
+            onTap: () => ref.read(selectedPageProvider.notifier).state =
+                ConsolePage.agents,
+          ),
+          _MobileNavItem(
+            label: 'Files',
+            icon: RadixIcons.archive,
+            selected: selectedPage == ConsolePage.artifacts,
+            onTap: () => ref.read(selectedPageProvider.notifier).state =
+                ConsolePage.artifacts,
+          ),
+          _MobileNavItem(
+            label: 'More',
+            icon: RadixIcons.dotsHorizontal,
+            selected:
+                selectedPage == ConsolePage.miro ||
+                selectedPage == ConsolePage.approvals,
+            onTap: () => ref.read(selectedPageProvider.notifier).state =
+                ConsolePage.miro,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MobileNavItem extends StatelessWidget {
+  const _MobileNavItem({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          decoration: BoxDecoration(
+            color: selected ? _Palette.input : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? _Palette.border : Colors.transparent,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: selected ? _Palette.text : _Palette.muted,
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? _Palette.text : _Palette.muted,
+                  fontSize: 10,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PageBody extends StatelessWidget {
   const _PageBody({required this.page});
 
@@ -286,21 +453,31 @@ class _CommandCenterPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).width < 760;
     return ListView(
-      padding: const EdgeInsets.all(14),
-      children: const [
-        _HeroCommandPanel(),
-        SizedBox(height: 12),
-        _MetricsStrip(),
-        SizedBox(height: 12),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(flex: 7, child: _LiveRunTimeline()),
-            SizedBox(width: 12),
-            Expanded(flex: 5, child: _GenUiPreviewPanel()),
-          ],
-        ),
+      padding: EdgeInsets.all(isCompact ? 8 : 14),
+      children: [
+        const _HeroCommandPanel(),
+        SizedBox(height: isCompact ? 8 : 12),
+        const _MetricsStrip(),
+        SizedBox(height: isCompact ? 8 : 12),
+        if (isCompact)
+          const Column(
+            children: [
+              _LiveRunTimeline(),
+              SizedBox(height: 8),
+              _GenUiPreviewPanel(),
+            ],
+          )
+        else
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 7, child: _LiveRunTimeline()),
+              SizedBox(width: 12),
+              Expanded(flex: 5, child: _GenUiPreviewPanel()),
+            ],
+          ),
       ],
     );
   }
@@ -311,36 +488,41 @@ class _HeroCommandPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).width < 760;
     return _Panel(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(isCompact ? 11 : 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
-            children: [
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: const [
               _StatusPill(
                 label: 'Autonomous control plane',
                 color: _Palette.accent,
               ),
-              SizedBox(width: 8),
-              _StatusPill(
-                label: 'CEO command workflow',
-                color: _Palette.success,
-              ),
+              _StatusPill(label: 'CEO workflow', color: _Palette.success),
             ],
           ),
-          const SizedBox(height: 14),
-          const Text(
-            'Issue one strategic command. Agents Cloud plans, staffs, delegates, builds, tests, publishes, and reports back.',
+          SizedBox(height: isCompact ? 10 : 14),
+          Text(
+            'Command the company. Track every run.',
             style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              height: 1.12,
+              fontSize: isCompact ? 22 : 24,
+              fontWeight: FontWeight.w900,
+              height: 1.04,
+              letterSpacing: -0.5,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: isCompact ? 8 : 10),
+          const Text(
+            'Give one objective. Agents Cloud plans, staffs, runs, tests, publishes, and reports back.',
+            style: TextStyle(color: _Palette.muted, fontSize: 13, height: 1.35),
+          ),
+          SizedBox(height: isCompact ? 10 : 12),
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(isCompact ? 10 : 12),
             decoration: BoxDecoration(
               color: _Palette.input,
               borderRadius: BorderRadius.circular(12),
@@ -349,11 +531,15 @@ class _HeroCommandPanel extends StatelessWidget {
             child: const Row(
               children: [
                 Icon(RadixIcons.magicWand, color: _Palette.accent, size: 18),
-                SizedBox(width: 10),
+                SizedBox(width: 9),
                 Expanded(
                   child: Text(
-                    'Create a new product for AI-powered market research, staff the agent team, build the first landing page, test it, and prepare a CEO report.',
-                    style: TextStyle(color: _Palette.text, height: 1.4),
+                    'Build a launch page, research competitors, test it, and prepare a CEO report.',
+                    style: TextStyle(
+                      color: _Palette.text,
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
                   ),
                 ),
               ],
@@ -370,39 +556,32 @@ class _MetricsStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    final isCompact = MediaQuery.sizeOf(context).width < 760;
+    final cards = const [
+      _MetricCard(label: 'Runs', value: '0', hint: 'API live'),
+      _MetricCard(label: 'Teams', value: '3', hint: 'Exec/build/research'),
+      _MetricCard(label: 'Artifacts', value: '0', hint: 'S3 planned'),
+      _MetricCard(label: 'Previews', value: '0', hint: '*.preview'),
+    ];
+
+    if (isCompact) {
+      return GridView.count(
+        crossAxisCount: 2,
+        crossAxisSpacing: 6,
+        mainAxisSpacing: 6,
+        childAspectRatio: 1.52,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        children: cards,
+      );
+    }
+
+    return Row(
       children: [
-        Expanded(
-          child: _MetricCard(
-            label: 'Active runs',
-            value: '0',
-            hint: 'Control API live',
-          ),
-        ),
-        SizedBox(width: 10),
-        Expanded(
-          child: _MetricCard(
-            label: 'Agent teams',
-            value: '3',
-            hint: 'Exec, build, research',
-          ),
-        ),
-        SizedBox(width: 10),
-        Expanded(
-          child: _MetricCard(
-            label: 'Artifacts',
-            value: '0',
-            hint: 'S3 wiring planned',
-          ),
-        ),
-        SizedBox(width: 10),
-        Expanded(
-          child: _MetricCard(
-            label: 'Preview hosts',
-            value: '0',
-            hint: '*.preview domain',
-          ),
-        ),
+        for (var index = 0; index < cards.length; index++) ...[
+          Expanded(child: cards[index]),
+          if (index != cards.length - 1) const SizedBox(width: 10),
+        ],
       ],
     );
   }
@@ -421,24 +600,33 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).width < 760;
     return _Panel(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(isCompact ? 9 : 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: const TextStyle(color: _Palette.muted, fontSize: 12),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: _Palette.muted, fontSize: 11),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: isCompact ? 4 : 6),
           Text(
             value,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+            style: TextStyle(
+              fontSize: isCompact ? 22 : 24,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: isCompact ? 3 : 4),
           Text(
             hint,
-            style: const TextStyle(color: _Palette.muted, fontSize: 11),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: _Palette.muted, fontSize: 10),
           ),
         ],
       ),

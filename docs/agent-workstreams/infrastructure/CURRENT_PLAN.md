@@ -2,7 +2,7 @@
 
 Date: 2026-05-10
 Owner: Infrastructure Workstream
-Status: WorkItem/user-runner state deployed; obsolete sandbox cleanup complete
+Status: WorkItem/user-runner state deployed; runner registration/heartbeat Control API deployed; obsolete sandbox cleanup complete
 
 ## Session Goal
 
@@ -453,28 +453,73 @@ AgentInstancesTable ACTIVE
 
 ## Next Slice Plan: Runner Registration And Heartbeat Control API
 
-Recommended immediate next build slice after cleanup:
+Completed and deployed in this session:
 
 ```text
 Control API -> HostNodes/UserRunners tables -> admin runner visibility
 ```
 
-Scope:
+Implemented scope:
 
-1. Add Control API use cases for HostNode registration/update and heartbeat.
-2. Add Control API use cases for UserRunner create/update/get and heartbeat.
-3. Add bounded admin list/query views for online/stale/failed/restoring runners.
-4. Wire routes into the existing `agents-cloud-dev-control-api` stack only.
-5. Use the deployed runner table GSIs; avoid product-path scans.
-6. Keep auth production-shaped: Cognito/admin for operator views, trusted-supervisor/runner auth contract for heartbeat writes. If the trusted-supervisor token broker is not ready, keep heartbeat writes behind an explicit not-yet-production test/admin path and document it.
+1. Added Control API use cases for HostNode registration/update and heartbeat.
+2. Added Control API use cases for UserRunner create/update/get and heartbeat.
+3. Added bounded admin runner state view for online/stale/failed/restoring runners.
+4. Wired routes into the existing `agents-cloud-dev-control-api` stack only.
+5. DynamoDB store methods query the deployed runner table GSIs for admin status views; no product-path scans were added.
+6. Auth boundary for this v0 slice:
+   - HostNode registration/heartbeat: Cognito user plus admin email allowlist, standing in for the future trusted-supervisor token broker.
+   - UserRunner create/get/update/heartbeat: authenticated owner boundary by `userId + runnerId`.
+   - Admin runner list: Cognito plus admin email allowlist.
 
-Non-scope:
+Routes deployed:
+
+```text
+POST /runner-hosts
+POST /runner-hosts/{hostId}/heartbeat
+POST /user-runners
+GET /user-runners/{runnerId}
+PATCH /user-runners/{runnerId}
+POST /user-runners/{runnerId}/heartbeat
+GET /admin/runners
+```
+
+Deployed smoke evidence:
+
+```text
+agents-cloud-dev-control-api UPDATE_COMPLETE
+RunnerStateFunction: agents-cloud-dev-control--RunnerStateFunction81B59-RgCX0SijZTOJ
+POST /runner-hosts direct Lambda invoke -> 200
+POST /runner-hosts/{hostId}/heartbeat direct Lambda invoke -> 200
+POST /user-runners direct Lambda invoke -> 201
+POST /user-runners/{runnerId}/heartbeat direct Lambda invoke -> 200
+GET /admin/runners direct Lambda invoke -> 200
+Unauthenticated HTTP GET /admin/runners -> 401
+Smoke HostNode id: host-smoke-20260510-0232
+Smoke UserRunner id: runner-smoke-20260510-0232
+```
+
+Validation for this slice:
+
+```bash
+pnpm control-api:test                                 # passed, 24/24 tests
+pnpm --filter @agents-cloud/infra-cdk test            # passed, 8/8 tests
+pnpm infra:build                                      # passed
+pnpm infra:synth                                      # passed, same CDK deprecation warnings
+pnpm --filter @agents-cloud/infra-amplify run typecheck # passed
+find infra/cdk/cdk.out \( -name '.env' -o -name '.env.*' -o -name '.research' -o -name '.vibecode' \) -print # no output
+du -sh infra/cdk/cdk.out                              # 3.5M
+```
+
+Remaining non-scope / next work:
 
 - no alternate CDK app or stack family,
 - no ECS resident service yet,
 - no local Docker supervisor yet,
+- no runner token broker yet,
 - no realtime runner-status relay yet,
 - no frontend UI unless Clients request a minimal admin read view.
+
+Next recommended slice after this one: add the trusted runner/supervisor token broker contract and local Docker supervisor heartbeat client, then wire admin UI read-only runner visibility.
 
 Coordination:
 
@@ -495,4 +540,4 @@ This WorkItem-first infrastructure session is done when:
 
 ## Current Recommendation
 
-WorkItem handler deployment is complete. User-runner state model CDK tables/tests are now deployed as an infrastructure-only slice, with handoffs created for Agent Harness and Realtime Streaming. Next recommended slice: implement Control API/admin read/write endpoints for HostNode registration and UserRunner heartbeat/state using the deployed runner tables. Keep this in the existing Control API/CDK stack family, add tests first, deploy, and smoke real AWS. Auth migration into CDK should follow soon after so the remaining Amplify auth sandbox can be removed.
+Runner registration/heartbeat Control API is now deployed over the existing HostNodes/UserRunners tables in the same production-shaped CDK stack family. Next recommended slice: implement the trusted runner/supervisor token broker plus local Docker supervisor heartbeat client, then expose read-only runner state in the admin UI. Keep all work in the existing CDK path; do not create alternate dev/prod stack families. Auth migration into CDK should follow soon after so the remaining Amplify auth sandbox can be removed.

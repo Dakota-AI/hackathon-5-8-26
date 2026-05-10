@@ -151,7 +151,7 @@ Regression coverage lives in `infra/cdk/src/test/workitem-genui-infra.test.ts` a
 
 ## User Runner State Infrastructure Slice
 
-The current CDK app also includes the first state-only slice for ADR 0008 resident user runners. This slice creates durable state tables and exports only; it does not create a local supervisor, runner token broker, ECS resident service, heartbeat API, or realtime runner-status relay.
+The current CDK app includes ADR 0008 resident user-runner state tables and the first Control API slice over those tables. The state model is deployed in `agents-cloud-dev-state`; the runner registration/heartbeat routes are deployed in the existing `agents-cloud-dev-control-api` stack. This still does not create a local supervisor, runner token broker, ECS resident service, placement scheduler, or realtime runner-status relay.
 
 New state resources:
 
@@ -162,7 +162,25 @@ New state resources:
 
 RunnerPlacement and RunnerHeartbeat are represented as current-state fields/indexes in this v0 slice. If Agent Harness or Realtime Streaming need historical placement/heartbeat queries, those should be added as a later explicit table/API slice.
 
-Regression coverage lives in `infra/cdk/src/test/user-runner-state.test.ts`.
+Runner Control API routes now deployed:
+
+```text
+POST /runner-hosts
+POST /runner-hosts/{hostId}/heartbeat
+POST /user-runners
+GET /user-runners/{runnerId}
+PATCH /user-runners/{runnerId}
+POST /user-runners/{runnerId}/heartbeat
+GET /admin/runners
+```
+
+Current auth boundary:
+
+- HostNode register/heartbeat uses Cognito plus admin email allowlist as the v0 trusted-supervisor stand-in.
+- UserRunner create/get/update/heartbeat is authenticated-owner scoped by `userId + runnerId`.
+- Admin runner state list uses Cognito plus admin email allowlist.
+
+Regression coverage lives in `infra/cdk/src/test/user-runner-state.test.ts`, `infra/cdk/src/test/workitem-genui-infra.test.ts`, and `services/control-api/test/user-runners.test.ts`.
 
 ## Configuration
 

@@ -1,13 +1,13 @@
 # Handoff Template
 From: Infrastructure
 To: Agent Harness / Control API
-Status: proposed
+Status: completed by Infrastructure/Control API slice on 2026-05-10
 Date: 2026-05-10
 Urgency: high
 
 ## Summary
 
-The user-runner state tables are deployed and active. The next backend slice should add production-shaped Control API endpoints for HostNode registration/heartbeat and UserRunner state/heartbeat using the existing Control API stack, not a new stack family.
+The user-runner state tables are deployed and active. The first backend slice for HostNode registration/heartbeat and UserRunner state/heartbeat has been implemented in the existing Control API stack and deployed to `agents-cloud-dev-control-api`. Future work should replace the v0 admin-gated heartbeat write path with a trusted supervisor/runner token broker and local/ECS supervisor client.
 
 ## Why It Matters
 

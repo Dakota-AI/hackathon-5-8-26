@@ -26,7 +26,7 @@ Cleanup status: the obsolete `amplify-amplifybackendapptemplate-sebastian-sandbo
 1. Keep the single CDK path production-shaped and avoid alternate stack families.
 2. Keep CDK asset staging safe and minimal.
 3. Finish product APIs for artifacts, data sources, and generated surfaces.
-4. Add HostNode/UserRunner registration and heartbeat Control API endpoints over the deployed runner state tables.
+4. Runner registration/heartbeat Control API is deployed over HostNodes/UserRunners; next harden it with a trusted supervisor/runner token broker and local supervisor client.
 5. Migrate Cognito/Auth ownership into CDK when ready, then delete the remaining Amplify Auth sandbox.
 6. Add local host placement records/APIs and later the ECS Fargate user-runner service/task definition.
 7. Add scoped task roles, runtime environment variables, alarms, and metrics for failed runs, stale runners, failed snapshots, and high error rates.

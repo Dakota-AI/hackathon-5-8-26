@@ -58,10 +58,11 @@ Deployed dev stack:
 - Connect/default/disconnect Lambda invocations saved a connection, subscribed to `run-idem-191fa7003b2441188aa1ebbc`, returned `pong`, and removed the connection.
 - Direct relay invocation against a malformed stored connection id returned success after deleting the stale/fake connection.
 - Regression test covers both `GoneException`/410 and API Gateway `BadRequestException: Invalid connectionId` stale-connection cleanup.
+- Real WebSocket e2e smoke with a temporary Cognito user passed via `scripts/smoke-websocket-e2e.sh`; latest run `run-idem-32b971ea09ad7c024e8cd6ee` received live events `run.status/running`, `artifact.created`, and `run.status/succeeded` over `wss://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev`.
 
 ## Current limitations
 
-- Browser/native WebSocket smoke with a real Cognito ID token is still pending.
+- Web/native product clients are not wired to the WebSocket URL yet.
 - Workspace membership authorization is not implemented yet.
 - Replay/gap repair is expected through Control API event query, but clients are not wired yet.
 - Notification-specific event schemas still need to be added to `packages/protocol`.

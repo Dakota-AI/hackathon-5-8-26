@@ -22,9 +22,10 @@ Current state:
 - Amplify Hosting app exists and deploys successfully with an explicit `amplify.yml` build spec.
 - The first Control API slice is deployed: create/query run endpoints, Cognito JWT authorizer, DynamoDB transactional run/task/initial-event ledger writes, scoped idempotency lookup, and Step Functions start.
 - The first real worker slice is deployed: a Hermes-boundary ECS runtime writes canonical `run.status`, `artifact.created`, and terminal status events plus one deterministic S3 report artifact. It currently defaults to `HERMES_RUNNER_MODE=smoke`; real CLI/model execution needs scoped provider secret brokering before enabling in ECS.
-- An AWS-native realtime WebSocket first slice is deployed: API Gateway WebSocket API, Lambda `$connect` authorizer, connection/subscription handlers, DynamoDB stream relay, and stale-connection cleanup. Clients are not wired yet and live browser smoke still needs a real Cognito ID token.
+- An AWS-native realtime WebSocket first slice is deployed: API Gateway WebSocket API, Lambda `$connect` authorizer, connection/subscription handlers, DynamoDB stream relay, and stale-connection cleanup. A real WebSocket e2e smoke with temporary Cognito credentials now verifies live run-event delivery; product clients are not wired yet.
 - The Next.js command center now has the first product run loop: create a run from the objective panel, poll the deployed Control API event ledger, render ordered `run.status`/`artifact.created` events, stop on terminal status, and show artifact cards. It has unit coverage for ledger merging/view-model behavior and was browser-dogfooded in local self-test mode.
 - A real authenticated HTTP e2e smoke now exists and passed with a temporary Cognito user: `scripts/smoke-web-http-e2e.sh` created run `run-idem-40e5c2eeae1183234f86c187`, Step Functions returned `SUCCEEDED`, Control API returned run status `succeeded`, four canonical events, and an artifact event.
+- A real WebSocket e2e smoke now exists and passed with a temporary Cognito user: `scripts/smoke-websocket-e2e.sh` created run `run-idem-32b971ea09ad7c024e8cd6ee` and received live `run.status/running`, `artifact.created`, and `run.status/succeeded` messages from the deployed WebSocket API.
 
 Approximate progress:
 

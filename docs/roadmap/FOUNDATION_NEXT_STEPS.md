@@ -29,6 +29,7 @@ Still missing:
 - [x] AWS-native realtime WebSocket first slice implemented, deployed, and Lambda-smoke-tested.
 - [x] Deploy AWS realtime WebSocket stack foundation: live URL is `wss://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev`; client wiring and real-token browser smoke remain pending.
 - [x] Next.js command center first product run loop: authenticated create-run helper, durable event polling, terminal-state detection, event timeline, artifact cards, local browser self-test mode, and real HTTP e2e smoke with a temporary Cognito user.
+- [x] Real WebSocket e2e smoke with temporary Cognito user: create run, subscribe to run channel, receive live worker events from deployed API Gateway WebSocket relay.
 - [ ] Deployed Cloudflare realtime plane and AWS relay integration, deferred unless edge fanout is needed.
 - [ ] Production desktop/mobile client integration.
 - [ ] Miro bridge.

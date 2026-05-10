@@ -110,11 +110,12 @@ Smoke evidence:
 - S3 artifact verified at `s3://agents-cloud-dev-storage-workspaceliveartifactsbuc-8br4g70cte0m/workspaces/workspace-audit-smoke/runs/run-idem-191fa7003b2441188aa1ebbc/artifacts/artifact-task-idem-191fa7003b2441188aa1ebbc-0001/hermes-report.md`.
 - Realtime direct Lambda smoke verified missing-token Deny, connect/subscribe/ping/disconnect, and relay cleanup of malformed stored connection ids.
 - Authenticated HTTP e2e smoke now uses a temporary Cognito user and Amplify SRP sign-in to call the deployed Control API over HTTP. Latest verified run `run-idem-40e5c2eeae1183234f86c187` reached Step Functions `SUCCEEDED`, returned run status `succeeded`, and returned four canonical events including `artifact.created` through `GET /runs/{runId}/events`.
+- Real WebSocket e2e smoke now uses a temporary Cognito user and query-token `$connect` auth against `wss://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev`. Latest verified run `run-idem-32b971ea09ad7c024e8cd6ee` received live `run.status/running`, `artifact.created`, and `run.status/succeeded` messages.
 - Local browser dogfood with `NEXT_PUBLIC_AGENTS_CLOUD_DEV_AUTH_BYPASS=1` and `NEXT_PUBLIC_AGENTS_CLOUD_API_MOCK=1` verified the command panel creates a run, polls the ledger to `Succeeded`, shows event sequence `#1` through `#4`, and renders the Hermes smoke report artifact card with no console errors.
 
 Remaining resume point:
 
-1. Use a real Cognito ID token from web/native to perform an actual WebSocket connection to the deployed URL.
+1. Wire the web/native product clients to the deployed WebSocket URL, with Control API event polling as replay/backfill after reconnect.
 2. Replace the local browser self-test mock with a real persisted test account or seeded dev user for full browser-to-HTTP smoke in CI.
 3. Add replay/gap repair and workspace membership authorization before calling realtime production-grade.
 

@@ -1,4 +1,4 @@
-import type { AuthenticatedUser, ControlApiStore } from "./ports.js";
+import type { AuthenticatedUser, ControlApiStore, RunRecord } from "./ports.js";
 
 export interface QueryResult {
   readonly statusCode: number;
@@ -43,6 +43,81 @@ export async function listRunEvents(deps: {
     statusCode: 200,
     body: { events, nextSeq }
   };
+}
+
+export async function listAdminRuns(deps: {
+  readonly store: ControlApiStore;
+  readonly user: AuthenticatedUser;
+  readonly adminEmails: readonly string[];
+  readonly limit?: number;
+}): Promise<QueryResult> {
+  if (!isAdminUser(deps.user, deps.adminEmails)) {
+    return {
+      statusCode: 403,
+      body: {
+        error: "Forbidden",
+        message: "Admin access is required."
+      }
+    };
+  }
+
+  const runs = await deps.store.listRecentRuns(Math.min(Math.max(deps.limit ?? 50, 1), 100));
+  const summaries = await Promise.all(runs.map(async (run) => summarizeRun(deps.store, run)));
+
+  return {
+    statusCode: 200,
+    body: {
+      runs: summaries,
+      totals: {
+        totalRuns: summaries.length,
+        failedRuns: summaries.filter((run) => run.status === "failed").length,
+        runningRuns: summaries.filter((run) => run.status === "running").length,
+        succeededRuns: summaries.filter((run) => run.status === "succeeded").length
+      }
+    }
+  };
+}
+
+async function summarizeRun(store: ControlApiStore, run: RunRecord): Promise<Record<string, unknown>> {
+  const events = await store.listEvents(run.runId, { limit: 100 });
+  const latestEvent = events.at(-1);
+  const artifactEvents = events.filter((event) => event.type === "artifact.created");
+  const failureEvents = events.filter((event) => event.type === "run.status" && hasFailurePayload(event.payload));
+  const lastFailurePayload = failureEvents.at(-1)?.payload.error;
+
+  return {
+    runId: run.runId,
+    workspaceId: run.workspaceId,
+    userId: run.userId,
+    ownerEmail: run.ownerEmail,
+    objective: run.objective,
+    status: run.status,
+    createdAt: run.createdAt,
+    updatedAt: run.updatedAt,
+    executionArn: run.executionArn,
+    eventCount: events.length,
+    latestEventType: latestEvent?.type,
+    latestEventAt: latestEvent?.createdAt,
+    artifactCount: artifactEvents.length,
+    failureCount: failureEvents.length,
+    lastFailure: isRecord(lastFailurePayload) ? lastFailurePayload : undefined
+  };
+}
+
+function isAdminUser(user: AuthenticatedUser, adminEmails: readonly string[]): boolean {
+  if (!user.email) {
+    return false;
+  }
+  const normalizedUserEmail = user.email.trim().toLowerCase();
+  return adminEmails.map((email) => email.trim().toLowerCase()).includes(normalizedUserEmail);
+}
+
+function hasFailurePayload(payload: Record<string, unknown>): boolean {
+  return payload.status === "failed" || payload.error !== undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function notFound(): QueryResult {

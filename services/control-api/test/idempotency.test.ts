@@ -42,6 +42,10 @@ class IdempotentMemoryStore implements ControlApiStore {
     return this.runs.find((run) => run.idempotencyScope === idempotencyScope);
   }
 
+  async listRecentRuns(): Promise<RunRecord[]> {
+    return [...this.runs].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  }
+
   async listEvents(): Promise<EventRecord[]> {
     return [];
   }

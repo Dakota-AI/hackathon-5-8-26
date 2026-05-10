@@ -61,6 +61,7 @@ export interface ControlApiStore {
   updateRunExecution(input: { readonly workspaceId: string; readonly runId: string; readonly executionArn: string; readonly updatedAt: string }): Promise<void>;
   getRunById(runId: string): Promise<RunRecord | undefined>;
   getRunByIdempotencyScope(idempotencyScope: string): Promise<RunRecord | undefined>;
+  listRecentRuns(limit?: number): Promise<RunRecord[]>;
   listEvents(runId: string, options?: { readonly afterSeq?: number; readonly limit?: number }): Promise<EventRecord[]>;
 }
 

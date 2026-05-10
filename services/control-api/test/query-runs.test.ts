@@ -24,6 +24,10 @@ class MemoryStore implements ControlApiStore {
     return undefined;
   }
 
+  async listRecentRuns(): Promise<RunRecord[]> {
+    return this.run ? [this.run] : [];
+  }
+
   async listEvents(_runId: string, options?: { readonly afterSeq?: number; readonly limit?: number }): Promise<EventRecord[]> {
     return this.events
       .filter((event) => options?.afterSeq === undefined || event.seq > options.afterSeq)

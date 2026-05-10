@@ -1,5 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, ScanCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { ControlApiStore, EventRecord, RunRecord, TaskRecord } from "./ports.js";
 
 export class DynamoControlApiStore implements ControlApiStore {
@@ -112,6 +112,16 @@ export class DynamoControlApiStore implements ControlApiStore {
       })
     );
     return result.Items?.[0] as RunRecord | undefined;
+  }
+
+  async listRecentRuns(limit = 50): Promise<RunRecord[]> {
+    const result = await this.client.send(
+      new ScanCommand({
+        TableName: this.tables.runsTableName,
+        Limit: Math.min(Math.max(limit, 1), 100)
+      })
+    );
+    return ((result.Items ?? []) as RunRecord[]).sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 
   async listEvents(runId: string, options: { readonly afterSeq?: number; readonly limit?: number } = {}): Promise<EventRecord[]> {

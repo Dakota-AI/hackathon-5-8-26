@@ -49,7 +49,8 @@ export class ControlApiStack extends AgentsCloudStack {
       RUNS_TABLE_NAME: props.state.runsTable.tableName,
       TASKS_TABLE_NAME: props.state.tasksTable.tableName,
       EVENTS_TABLE_NAME: props.state.eventsTable.tableName,
-      STATE_MACHINE_ARN: props.orchestration.simpleRunStateMachine.stateMachineArn
+      STATE_MACHINE_ARN: props.orchestration.simpleRunStateMachine.stateMachineArn,
+      ADMIN_EMAILS: "seb4594@gmail.com"
     };
 
     const createRunFunction = new NodejsFunction(this, "CreateRunFunction", {
@@ -79,6 +80,15 @@ export class ControlApiStack extends AgentsCloudStack {
       environment: commonEnvironment
     });
 
+    const listAdminRunsFunction = new NodejsFunction(this, "ListAdminRunsFunction", {
+      runtime: Runtime.NODEJS_22_X,
+      entry: controlApiEntry,
+      handler: "listAdminRunsHandler",
+      timeout: Duration.seconds(15),
+      memorySize: 256,
+      environment: commonEnvironment
+    });
+
     props.state.runsTable.grantReadWriteData(createRunFunction);
     props.state.tasksTable.grantReadWriteData(createRunFunction);
     props.state.eventsTable.grantReadWriteData(createRunFunction);
@@ -87,6 +97,8 @@ export class ControlApiStack extends AgentsCloudStack {
     props.state.runsTable.grantReadData(getRunFunction);
     props.state.runsTable.grantReadData(listRunEventsFunction);
     props.state.eventsTable.grantReadData(listRunEventsFunction);
+    props.state.runsTable.grantReadData(listAdminRunsFunction);
+    props.state.eventsTable.grantReadData(listAdminRunsFunction);
 
     this.api.addRoutes({
       path: "/runs",
@@ -104,6 +116,12 @@ export class ControlApiStack extends AgentsCloudStack {
       path: "/runs/{runId}/events",
       methods: [HttpMethod.GET],
       integration: new HttpLambdaIntegration("ListRunEventsIntegration", listRunEventsFunction),
+      authorizer
+    });
+    this.api.addRoutes({
+      path: "/admin/runs",
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration("ListAdminRunsIntegration", listAdminRunsFunction),
       authorizer
     });
 

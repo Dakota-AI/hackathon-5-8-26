@@ -42,6 +42,10 @@ class MemoryStore implements ControlApiStore {
     return undefined;
   }
 
+  async listRecentRuns(): Promise<[]> {
+    return [];
+  }
+
   async listEvents(): Promise<[]> {
     return [];
   }

@@ -35,6 +35,34 @@ export type RunEvent = {
   payload?: Record<string, unknown>;
 };
 
+export type AdminRunSummary = {
+  runId: string;
+  workspaceId: string;
+  userId: string;
+  ownerEmail?: string;
+  objective?: string;
+  status: string;
+  createdAt?: string;
+  updatedAt?: string;
+  executionArn?: string;
+  eventCount: number;
+  latestEventType?: string;
+  latestEventAt?: string;
+  artifactCount: number;
+  failureCount: number;
+  lastFailure?: Record<string, unknown>;
+};
+
+export type AdminRunsResponse = {
+  runs: AdminRunSummary[];
+  totals: {
+    totalRuns: number;
+    failedRuns: number;
+    runningRuns: number;
+    succeededRuns: number;
+  };
+};
+
 const mockRuns = new Map<string, { createdAt: number; objective: string; workspaceId: string; taskId: string }>();
 
 export function getControlApiHealth(): ControlApiHealth {
@@ -127,6 +155,51 @@ export async function listControlApiRunEvents(
 
   const body = await parseJsonResponse<{ events: RunEvent[] }>(response);
   return body.events;
+}
+
+export async function listControlApiAdminRuns(options: { limit?: number } = {}): Promise<AdminRunsResponse> {
+  if (isMockMode()) {
+    const runs = await Promise.all(
+      [...mockRuns.entries()].map(async ([runId, run]) => {
+        const events = await listMockRunEvents(runId);
+        return {
+          runId,
+          workspaceId: run.workspaceId,
+          userId: "local-user",
+          ownerEmail: "local@example.com",
+          objective: run.objective,
+          status: String([...events].reverse().find((event) => event.type === "run.status")?.payload?.status ?? "queued"),
+          createdAt: new Date(run.createdAt).toISOString(),
+          updatedAt: new Date().toISOString(),
+          eventCount: events.length,
+          latestEventType: events.at(-1)?.type,
+          latestEventAt: events.at(-1)?.createdAt,
+          artifactCount: events.filter((event) => event.type === "artifact.created").length,
+          failureCount: 0
+        } satisfies AdminRunSummary;
+      })
+    );
+    return {
+      runs: runs.slice(0, options.limit ?? 50),
+      totals: {
+        totalRuns: runs.length,
+        failedRuns: runs.filter((run) => run.status === "failed").length,
+        runningRuns: runs.filter((run) => run.status === "running").length,
+        succeededRuns: runs.filter((run) => run.status === "succeeded").length
+      }
+    };
+  }
+
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const params = new URLSearchParams({ limit: String(options.limit ?? 50) });
+  const response = await fetch(`${baseUrl}/admin/runs?${params.toString()}`, {
+    headers: {
+      "authorization": `Bearer ${token}`
+    }
+  });
+
+  return parseJsonResponse<AdminRunsResponse>(response);
 }
 
 export async function requireIdToken(): Promise<string> {

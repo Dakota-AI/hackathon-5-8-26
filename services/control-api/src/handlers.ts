@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { APIGatewayProxyStructuredResultV2, APIGatewayProxyEventV2WithJWTAuthorizer } from "aws-lambda";
 import { createRun } from "./create-run.js";
 import { DynamoControlApiStore } from "./dynamo-store.js";
-import { getRun, listRunEvents } from "./query-runs.js";
+import { getRun, listAdminRuns, listRunEvents } from "./query-runs.js";
 import { StepFunctionsExecutionStarter } from "./step-functions.js";
 import type { AuthenticatedUser } from "./ports.js";
 
@@ -53,6 +53,16 @@ export async function listRunEventsHandler(event: APIGatewayProxyEventV2WithJWTA
   return json(result.statusCode, result.body);
 }
 
+export async function listAdminRunsHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
+  const result = await listAdminRuns({
+    store,
+    user: userFromEvent(event),
+    adminEmails: parseAdminEmails(process.env.ADMIN_EMAILS),
+    limit: parseOptionalInteger(event.queryStringParameters?.limit)
+  });
+  return json(result.statusCode, result.body);
+}
+
 function userFromEvent(event: APIGatewayProxyEventV2WithJWTAuthorizer): AuthenticatedUser {
   const claims = event.requestContext.authorizer.jwt.claims;
   const userId = String(claims.sub ?? "");
@@ -90,6 +100,13 @@ function parseOptionalInteger(value: string | undefined): number | undefined {
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseAdminEmails(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((email) => email.trim())
+    .filter(Boolean);
 }
 
 function json(statusCode: number, body: Record<string, unknown>): APIGatewayProxyStructuredResultV2 {

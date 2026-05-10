@@ -131,6 +131,8 @@ Use these docs in this order:
 14. `docs/roadmap/GENUI_MARKDOWN_CHAT_BROWSER_AUDIT.md`
 15. `docs/roadmap/PAPERCLIP_KANBAN_UI_UX_AUDIT.md`
 16. `docs/roadmap/WORK_BOARD_FLUTTER_KANBAN_ROI_AUDIT.md`
+17. `docs/roadmap/AGENT_CREATED_INTERFACES_GENUI_PRODUCT_VISION.md`
+18. `docs/roadmap/BEST_NEXT_STEPS_EXECUTION_PLAN.md`
 
 The long roadmap and architecture docs are still useful, but this master
 document and `PROJECT_STATUS.md` reflect the current implementation position.

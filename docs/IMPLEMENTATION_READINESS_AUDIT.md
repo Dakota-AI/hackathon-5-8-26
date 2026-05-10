@@ -83,6 +83,15 @@ contract-correct.
 - Flutter Kanban/package alternatives and the highest-ROI next slice are
   captured in `docs/roadmap/WORK_BOARD_FLUTTER_KANBAN_ROI_AUDIT.md`; the
   recommendation is WorkItem v0 before a full drag/drop Kanban package.
+- Agent-created dashboard/report/tool/interface product direction is captured in
+  `docs/roadmap/AGENT_CREATED_INTERFACES_GENUI_PRODUCT_VISION.md`; it extends
+  the WorkItem model with DataSources, Surfaces, reports, dashboards, tools,
+  and mobile notification/review handoff.
+- Recommended next-step execution order is captured in
+  `docs/roadmap/BEST_NEXT_STEPS_EXECUTION_PLAN.md`; it prioritizes WorkItem v0,
+  real web Work page, WorkItem-linked run creation, artifact APIs,
+  DataSourceRef/Surface validation, the first scraper/tracker dashboard demo,
+  Flutter native review, approvals/notifications, and worker/provider hardening.
 
 ### Not Complete
 

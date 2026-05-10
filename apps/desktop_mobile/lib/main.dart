@@ -8,8 +8,12 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import 'backend_config.dart';
+import 'src/auth/auth_controller.dart';
+import 'src/auth/sign_in_page.dart';
 import 'src/data/fixture_work_repository.dart';
 import 'src/domain/work_item_models.dart';
+import 'src/widgets/kanban_board.dart';
+import 'src/widgets/squares_loader.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +23,7 @@ Future<void> main() async {
 
 enum ConsolePage {
   work,
+  kanban,
   genuiLab,
   browser,
   uiKit,
@@ -32,6 +37,8 @@ enum ConsolePage {
 final selectedPageProvider = StateProvider<ConsolePage>(
   (ref) => ConsolePage.work,
 );
+
+final selectedAgentIdProvider = StateProvider<String?>((ref) => null);
 
 final sidebarCollapsedProvider = StateProvider<bool>((ref) => false);
 
@@ -49,9 +56,42 @@ class AgentsCloudConsoleApp extends StatelessWidget {
           colorScheme: ColorSchemes.darkNeutral,
           radius: 0.45,
         ),
-        home: const ConsoleShell(),
+        home: const _AuthGate(),
       ),
     );
+  }
+}
+
+class _AuthGate extends ConsumerStatefulWidget {
+  const _AuthGate();
+
+  @override
+  ConsumerState<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends ConsumerState<_AuthGate> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(authControllerProvider.notifier).bootstrap();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = ref.watch(authControllerProvider);
+    final bypass = ref.watch(authBypassProvider);
+    if (bypass || auth.status == AuthStatus.signedIn) {
+      return const ConsoleShell();
+    }
+    if (auth.status == AuthStatus.unknown) {
+      return const ColoredBox(
+        color: _Palette.background,
+        child: Center(child: SquaresLoader(size: 48)),
+      );
+    }
+    return const SignInPage();
   }
 }
 
@@ -109,55 +149,32 @@ class _Sidebar extends ConsumerWidget {
     final collapsed = ref.watch(sidebarCollapsedProvider);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 160),
-      width: collapsed ? 62 : 218,
+      width: collapsed ? 64 : 220,
       color: _Palette.sidebar,
+      // Top padding clears macOS traffic-light overlay (transparent titlebar).
       padding: EdgeInsets.fromLTRB(
         collapsed ? 8 : 10,
-        10,
+        34,
         collapsed ? 8 : 10,
         10,
       ),
       child: Column(
-        crossAxisAlignment: collapsed
-            ? CrossAxisAlignment.center
-            : CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SidebarCollapseButton(collapsed: collapsed),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           _NavButton(
-            label: 'Work',
-            icon: RadixIcons.dashboard,
+            label: 'Agents',
+            icon: RadixIcons.group,
             page: ConsolePage.work,
             selected: selectedPage == ConsolePage.work,
             collapsed: collapsed,
           ),
           _NavButton(
-            label: 'GenUI Lab',
-            icon: RadixIcons.component1,
-            page: ConsolePage.genuiLab,
-            selected: selectedPage == ConsolePage.genuiLab,
-            collapsed: collapsed,
-          ),
-          _NavButton(
-            label: 'Browser',
-            icon: RadixIcons.globe,
-            page: ConsolePage.browser,
-            selected: selectedPage == ConsolePage.browser,
-            collapsed: collapsed,
-          ),
-          _NavButton(
-            label: 'UI Kit',
-            icon: RadixIcons.tokens,
-            page: ConsolePage.uiKit,
-            selected: selectedPage == ConsolePage.uiKit,
-            collapsed: collapsed,
-          ),
-          const SizedBox(height: 8),
-          _NavButton(
-            label: 'Agents',
-            icon: RadixIcons.group,
-            page: ConsolePage.agents,
-            selected: selectedPage == ConsolePage.agents,
+            label: 'Kanban',
+            icon: RadixIcons.layout,
+            page: ConsolePage.kanban,
+            selected: selectedPage == ConsolePage.kanban,
             collapsed: collapsed,
           ),
           _NavButton(
@@ -167,12 +184,34 @@ class _Sidebar extends ConsumerWidget {
             selected: selectedPage == ConsolePage.approvals,
             collapsed: collapsed,
           ),
+          _NavButton(
+            label: 'Browser',
+            icon: RadixIcons.globe,
+            page: ConsolePage.browser,
+            selected: selectedPage == ConsolePage.browser,
+            collapsed: collapsed,
+          ),
+          const SizedBox(height: 8),
+          _NavButton(
+            label: 'GenUI Lab',
+            icon: RadixIcons.component1,
+            page: ConsolePage.genuiLab,
+            selected: selectedPage == ConsolePage.genuiLab,
+            collapsed: collapsed,
+          ),
+          _NavButton(
+            label: 'UI Kit',
+            icon: RadixIcons.tokens,
+            page: ConsolePage.uiKit,
+            selected: selectedPage == ConsolePage.uiKit,
+            collapsed: collapsed,
+          ),
           const Spacer(),
           if (!collapsed)
             Text(
               'v0.1 · local',
               style: TextStyle(
-                color: _Palette.muted.withValues(alpha: 0.7),
+                color: _Palette.muted.withValues(alpha: 0.6),
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.5,
@@ -284,7 +323,7 @@ class _NavButton extends ConsumerWidget {
         child: Icon(icon, size: 17),
       ),
     );
-    return _NavTooltip(label: label, enabled: collapsed, child: nav);
+    return _NavTooltip(label: label, enabled: true, child: nav);
   }
 }
 
@@ -312,18 +351,40 @@ class _NavTooltip extends StatelessWidget {
   }
 }
 
-class _TopBar extends StatelessWidget {
+class _TopBar extends ConsumerWidget {
   const _TopBar();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authControllerProvider);
+    final email = auth.email;
     return Container(
       height: 42,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Row(
-        children: const [
-          Expanded(child: SizedBox.shrink()),
-          _StatusPill(label: 'Local · fixtures', color: _Palette.muted),
+        children: [
+          const Expanded(child: SizedBox.shrink()),
+          if (email != null) ...[
+            Text(
+              email,
+              style: const TextStyle(color: _Palette.muted, fontSize: 12),
+            ),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: () {
+                ref.read(authControllerProvider.notifier).signOut();
+                ref.read(authBypassProvider.notifier).state = false;
+              },
+              child: const Text(
+                'Sign out',
+                style: TextStyle(
+                  color: _Palette.muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -475,7 +536,8 @@ class _PageBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (page) {
-      ConsolePage.work => const _CommandCenterPage(),
+      ConsolePage.work => const _AgentsWorkspacePage(),
+      ConsolePage.kanban => const _KanbanPage(),
       ConsolePage.genuiLab => const _GenUiLabPage(),
       ConsolePage.browser => const _BrowserPage(),
       ConsolePage.uiKit => const _UiKitPage(),
@@ -488,6 +550,628 @@ class _PageBody extends StatelessWidget {
   }
 }
 
+class _AgentDescriptor {
+  const _AgentDescriptor({
+    required this.id,
+    required this.name,
+    required this.role,
+    required this.status,
+    required this.unread,
+    required this.workItemId,
+  });
+  final String id;
+  final String name;
+  final String role;
+  final String status; // running | idle | waiting | offline
+  final int unread;
+  final String workItemId;
+}
+
+const List<_AgentDescriptor> _fixtureAgents = [
+  _AgentDescriptor(
+    id: 'agent-exec',
+    name: 'Executive',
+    role: 'Plans and delegates',
+    status: 'running',
+    unread: 2,
+    workItemId: 'work-track-pricing',
+  ),
+  _AgentDescriptor(
+    id: 'agent-research',
+    name: 'Research',
+    role: 'Gathers signal',
+    status: 'waiting',
+    unread: 1,
+    workItemId: 'work-track-pricing',
+  ),
+  _AgentDescriptor(
+    id: 'agent-builder',
+    name: 'Builder',
+    role: 'Ships code & sites',
+    status: 'running',
+    unread: 0,
+    workItemId: 'work-launch-preview',
+  ),
+  _AgentDescriptor(
+    id: 'agent-reviewer',
+    name: 'Reviewer',
+    role: 'Approvals & QA',
+    status: 'idle',
+    unread: 3,
+    workItemId: 'work-launch-preview',
+  ),
+  _AgentDescriptor(
+    id: 'agent-comms',
+    name: 'Comms',
+    role: 'Reports & briefs',
+    status: 'idle',
+    unread: 0,
+    workItemId: 'work-miro',
+  ),
+  _AgentDescriptor(
+    id: 'agent-ops',
+    name: 'Ops',
+    role: 'Infra & secrets',
+    status: 'offline',
+    unread: 0,
+    workItemId: 'work-miro',
+  ),
+];
+
+Color _statusColor(String status) {
+  switch (status) {
+    case 'running':
+      return const Color(0xFF22C55E);
+    case 'waiting':
+      return const Color(0xFFEAB308);
+    case 'idle':
+      return _Palette.muted;
+    default:
+      return const Color(0xFF52525B);
+  }
+}
+
+String _statusLabel(String status) {
+  switch (status) {
+    case 'running':
+      return 'Running';
+    case 'waiting':
+      return 'Awaiting input';
+    case 'idle':
+      return 'Idle';
+    default:
+      return 'Offline';
+  }
+}
+
+class _AgentsWorkspacePage extends ConsumerWidget {
+  const _AgentsWorkspacePage();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedId = ref.watch(selectedAgentIdProvider);
+    if (selectedId != null) {
+      final agent = _fixtureAgents.firstWhere(
+        (a) => a.id == selectedId,
+        orElse: () => _fixtureAgents.first,
+      );
+      return _AgentDetailPage(agent: agent);
+    }
+    final width = MediaQuery.sizeOf(context).width;
+    final crossAxisCount = width < 700 ? 2 : (width < 1100 ? 3 : 4);
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        const _SectionHeader(
+          title: 'Workspace',
+          subtitle: 'Your agents. Click in to see what they are doing.',
+        ),
+        const SizedBox(height: 14),
+        GridView.count(
+          crossAxisCount: crossAxisCount,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 1.55,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          children: [
+            for (final agent in _fixtureAgents) _AgentTile(agent: agent),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AgentTile extends ConsumerWidget {
+  const _AgentTile({required this.agent});
+  final _AgentDescriptor agent;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => ref.read(selectedAgentIdProvider.notifier).state = agent.id,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _Palette.panel,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _Palette.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: _Palette.input,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _Palette.border),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    agent.name.substring(0, 1),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: _statusColor(agent.status),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              agent.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              agent.role,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: _Palette.muted, fontSize: 11.5),
+            ),
+            const Spacer(),
+            Row(
+              children: [
+                Text(
+                  _statusLabel(agent.status),
+                  style: const TextStyle(color: _Palette.muted, fontSize: 11),
+                ),
+                const Spacer(),
+                if (agent.unread > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _Palette.text,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    child: Text(
+                      '${agent.unread}',
+                      style: const TextStyle(
+                        color: _Palette.background,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AgentDetailPage extends ConsumerStatefulWidget {
+  const _AgentDetailPage({required this.agent});
+  final _AgentDescriptor agent;
+
+  @override
+  ConsumerState<_AgentDetailPage> createState() => _AgentDetailPageState();
+}
+
+class _AgentDetailPageState extends ConsumerState<_AgentDetailPage> {
+  int _tabIndex = 0;
+  final FixtureWorkRepository _repo = FixtureWorkRepository();
+  late Future<WorkItem?> _detailFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _detailFuture = _repo.getWorkItem(widget.agent.workItemId);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AgentDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.agent.workItemId != widget.agent.workItemId) {
+      _detailFuture = _repo.getWorkItem(widget.agent.workItemId);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<WorkItem?>(
+      future: _detailFuture,
+      builder: (context, snapshot) {
+        return _buildContent(snapshot.data);
+      },
+    );
+  }
+
+  Widget _buildContent(WorkItem? detail) {
+    final agent = widget.agent;
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+          decoration: const BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: _Palette.border, width: 1),
+            ),
+          ),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () =>
+                    ref.read(selectedAgentIdProvider.notifier).state = null,
+                child: const Icon(
+                  RadixIcons.arrowLeft,
+                  size: 16,
+                  color: _Palette.muted,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: _statusColor(agent.status),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                agent.name,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                agent.role,
+                style: const TextStyle(color: _Palette.muted, fontSize: 12),
+              ),
+              const Spacer(),
+              Text(
+                _statusLabel(agent.status),
+                style: const TextStyle(color: _Palette.muted, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          alignment: Alignment.centerLeft,
+          decoration: const BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: _Palette.border, width: 1),
+            ),
+          ),
+          child: Row(
+            children: [
+              for (final entry in const [
+                (0, 'Overview'),
+                (1, 'Activity'),
+                (2, 'Artifacts'),
+                (3, 'Approvals'),
+              ])
+                Padding(
+                  padding: const EdgeInsets.only(right: 18),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _tabIndex = entry.$1),
+                    child: Column(
+                      children: [
+                        Text(
+                          entry.$2,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: _tabIndex == entry.$1
+                                ? _Palette.text
+                                : _Palette.muted,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          height: 2,
+                          width: 22,
+                          color: _tabIndex == entry.$1
+                              ? _Palette.text
+                              : Colors.transparent,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: switch (_tabIndex) {
+            1 => _ActivityTab(detail: detail),
+            2 => _ArtifactsTab(detail: detail),
+            3 => _ApprovalsTab(detail: detail),
+            _ => _OverviewTab(agent: agent, detail: detail),
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _OverviewTab extends StatelessWidget {
+  const _OverviewTab({required this.agent, required this.detail});
+  final _AgentDescriptor agent;
+  final WorkItem? detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _Palette.panel,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _Palette.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Current focus',
+                style: TextStyle(
+                  fontSize: 11,
+                  letterSpacing: 0.5,
+                  color: _Palette.muted,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                detail?.title ?? 'No assigned work',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                detail?.objective ?? '',
+                style: const TextStyle(color: _Palette.muted, fontSize: 12.5),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ActivityTab extends StatelessWidget {
+  const _ActivityTab({required this.detail});
+  final WorkItem? detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final events = detail?.events ?? const [];
+    if (events.isEmpty) {
+      return const Center(
+        child: Text(
+          'No recent activity.',
+          style: TextStyle(color: _Palette.muted),
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemBuilder: (context, i) {
+        final e = events[i];
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _Palette.panel,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _Palette.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                e.label,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '${e.atLabel} · ${e.detail}',
+                style: const TextStyle(color: _Palette.muted, fontSize: 11.5),
+              ),
+            ],
+          ),
+        );
+      },
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemCount: events.length,
+    );
+  }
+}
+
+class _ArtifactsTab extends ConsumerWidget {
+  const _ArtifactsTab({required this.detail});
+  final WorkItem? detail;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final artifacts = detail?.artifacts ?? const [];
+    if (artifacts.isEmpty) {
+      return const Center(
+        child: Text(
+          'No artifacts yet.',
+          style: TextStyle(color: _Palette.muted),
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemBuilder: (context, i) {
+        final a = artifacts[i];
+        final isWeb =
+            a.kind.label.toLowerCase().contains('web') ||
+            a.kind.label.toLowerCase().contains('site') ||
+            a.kind.label.toLowerCase().contains('preview');
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _Palette.panel,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _Palette.border),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                isWeb ? RadixIcons.globe : RadixIcons.archive,
+                size: 16,
+                color: _Palette.muted,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      a.name,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${a.kind.label} · ${a.state.label} · ${a.updatedAtLabel}',
+                      style: const TextStyle(
+                        color: _Palette.muted,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isWeb)
+                GestureDetector(
+                  onTap: () {
+                    ref.read(selectedPageProvider.notifier).state =
+                        ConsolePage.browser;
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    child: Text(
+                      'Open',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: _Palette.text,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemCount: artifacts.length,
+    );
+  }
+}
+
+class _ApprovalsTab extends StatelessWidget {
+  const _ApprovalsTab({required this.detail});
+  final WorkItem? detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final approvals = detail?.approvals ?? const [];
+    if (approvals.isEmpty) {
+      return const Center(
+        child: Text(
+          'No pending approvals.',
+          style: TextStyle(color: _Palette.muted),
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemBuilder: (context, i) {
+        final a = approvals[i];
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _Palette.panel,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _Palette.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                a.title,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Owner: ${a.owner} · ${a.dueLabel}',
+                style: const TextStyle(color: _Palette.muted, fontSize: 11.5),
+              ),
+            ],
+          ),
+        );
+      },
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemCount: approvals.length,
+    );
+  }
+}
+
+class _KanbanPage extends StatelessWidget {
+  const _KanbanPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(padding: EdgeInsets.all(14), child: KanbanBoard());
+  }
+}
+
+// ignore: unused_element
 class _CommandCenterPage extends StatelessWidget {
   const _CommandCenterPage();
 

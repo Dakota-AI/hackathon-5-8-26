@@ -319,7 +319,7 @@ class _HeroCommandPanel extends StatelessWidget {
           const Row(
             children: [
               _StatusPill(
-                label: 'Paperclip-style control plane',
+                label: 'Autonomous control plane',
                 color: _Palette.accent,
               ),
               SizedBox(width: 8),
@@ -633,7 +633,7 @@ class _AgentsPage extends StatelessWidget {
     return const _PlaceholderPage(
       title: 'Agents & Teams',
       subtitle:
-          'Paperclip-inspired org chart, specialist profiles, team staffing, budgets, and heartbeats.',
+          'Agent-team org chart, specialist profiles, team staffing, budgets, and heartbeats.',
       bullets: [
         'Executive agent',
         'Research team',

@@ -4,7 +4,7 @@ _Last updated: 2026-05-09_
 
 This is the task-by-task implementation plan for turning the local Flutter
 boilerplate into the production desktop and mobile app. The
-current scaffold exists under `apps/desktop_mobile`, but backend auth,
+current app exists under `apps/desktop_mobile`, but backend auth,
 Control API, Cloudflare realtime, notifications, and production A2UI event
 streams are not wired yet.
 
@@ -284,7 +284,7 @@ Requires Amplify outputs and a real/sandbox Cognito app client.
 
 ## Phase 8: Miro and previews
 
-### Task 14: Add Miro placeholder-to-real flow
+### Task 14: Add Miro workflow
 
 **Objective:** Let users connect boards and attach them to projects/runs.
 

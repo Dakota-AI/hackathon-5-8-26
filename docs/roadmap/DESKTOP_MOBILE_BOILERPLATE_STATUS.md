@@ -4,7 +4,7 @@ _Last updated: 2026-05-09_
 
 ## Purpose
 
-This app is the desktop and mobile app for the Paperclip-style Agents Cloud platform.
+This app is the desktop and mobile app for Agents Cloud.
 
 It is intentionally separate from the web app. The Flutter app should become the desktop and mobile command surface for:
 
@@ -24,12 +24,12 @@ apps/desktop_mobile
 
 ## Current status
 
-- [x] Flutter app scaffolded for macOS, iOS, and Android.
+- [x] Flutter app created for macOS, iOS, and Android.
 - [x] `shadcn_flutter` dependency added.
 - [x] `flutter_riverpod` dependency added.
 - [x] Google/Flutter `genui` dependency added.
 - [x] Command-center shell added.
-- [x] Paperclip-style navigation added.
+- [x] command-center navigation added.
 - [x] Local GenUI/A2UI preview surface added.
 - [x] Widget tests added and passing for boot/navigation.
 - [x] `flutter analyze` passes.
@@ -42,7 +42,7 @@ apps/desktop_mobile
 
 ## Current screens
 
-The app currently includes planning/placeholder surfaces for:
+The app currently includes planning surfaces for:
 
 - Command Center
 - Runs
@@ -54,14 +54,14 @@ The app currently includes planning/placeholder surfaces for:
 The Command Center includes:
 
 - CEO command workflow hero panel,
-- Paperclip-style control-plane status,
-- platform metrics placeholders,
-- autonomous run timeline placeholder,
-- live GenUI surface scaffold.
+- control-plane status,
+- platform metrics,
+- autonomous run timeline,
+- live GenUI surface.
 
 ## Design direction
 
-Use FinAI Tracker as the quality reference, but adapt it to Agents Cloud.
+Use the product standards in this repository as the quality reference.
 
 The UI should feel like:
 
@@ -94,7 +94,7 @@ Principles:
 
 ## GenUI direction
 
-Current scaffold:
+Current app:
 
 ```text
 local genui.SurfaceController
@@ -244,5 +244,5 @@ docs/roadmap/DESKTOP_MOBILE_BOILERPLATE_STATUS.md
 Related platform architecture:
 
 ```text
-docs/roadmap/PAPERCLIP_STYLE_AUTONOMOUS_AGENT_PLATFORM_ARCHITECTURE.md
+docs/roadmap/AUTONOMOUS_AGENT_COMPANY_ARCHITECTURE.md
 ```

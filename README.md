@@ -7,6 +7,9 @@ Next.js plus Flutter clients.
 Start here:
 
 - [Master Scope And Progress](docs/roadmap/MASTER_SCOPE_AND_PROGRESS.md)
+- [Project Structure Guide](docs/PROJECT_STRUCTURE.md)
+- [Implementation Readiness Audit](docs/IMPLEMENTATION_READINESS_AUDIT.md)
+- [AI Agent Engineering Quality Gates](docs/AI_AGENT_ENGINEERING_QUALITY_GATES.md)
 - [Current Project Status](docs/roadmap/PROJECT_STATUS.md)
 - [Docs Index](docs/README.md)
 - [Repository Agent Instructions](AGENTS.md)
@@ -17,8 +20,8 @@ Start here:
 
 Current next implementation slice:
 
-1. Tighten the protocol package where needed.
-2. Build `ControlApiStack` with authenticated `POST /runs` and read endpoints.
-3. Start the existing Step Functions to ECS path through the API.
-4. Replace the placeholder worker with a minimal artifact/event writer.
+1. Make service-produced events match the canonical protocol envelope.
+2. Make `POST /runs` truly idempotent and failure-safe.
+3. Harden the worker event/artifact path for retries and partial failures.
+4. Exercise the durable run loop from real web/native Cognito sessions.
 5. Add realtime relay and client surfaces after durable run lifecycle works.

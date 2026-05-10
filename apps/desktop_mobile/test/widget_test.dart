@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 void main() {
-  testWidgets('boots Paperclip-style Agents Cloud command center', (
+  testWidgets('boots Agents Cloud command center', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 920);
@@ -20,7 +20,7 @@ void main() {
     expect(find.text('Agents Cloud'), findsOneWidget);
     expect(find.text('Command Center'), findsOneWidget);
     expect(find.text('CEO command center'), findsOneWidget);
-    expect(find.text('Paperclip-style control plane'), findsOneWidget);
+    expect(find.text('Autonomous control plane'), findsOneWidget);
     expect(find.text('Live GenUI surface'), findsOneWidget);
     expect(find.text('Google GenUI bridge'), findsOneWidget);
     expect(find.text('A2UI v0.9'), findsOneWidget);
@@ -41,7 +41,7 @@ void main() {
 
     expect(
       find.text(
-        'Paperclip-inspired org chart, specialist profiles, team staffing, budgets, and heartbeats.',
+        'Agent-team org chart, specialist profiles, team staffing, budgets, and heartbeats.',
       ),
       findsOneWidget,
     );

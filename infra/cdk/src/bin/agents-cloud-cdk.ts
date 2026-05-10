@@ -28,8 +28,7 @@ const orchestration = new OrchestrationStack(app, stackName(config, "orchestrati
   config,
   env,
   cluster,
-  network,
-  runtime
+  network
 });
 const controlApi = new ControlApiStack(app, stackName(config, "control-api"), {
   config,
@@ -56,7 +55,6 @@ cluster.addDependency(network);
 runtime.addDependency(cluster);
 runtime.addDependency(storage);
 runtime.addDependency(state);
-orchestration.addDependency(runtime);
 controlApi.addDependency(orchestration);
 controlApi.addDependency(state);
 if (previewIngress) {

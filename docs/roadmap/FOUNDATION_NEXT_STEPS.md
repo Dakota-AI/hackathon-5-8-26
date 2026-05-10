@@ -1,7 +1,7 @@
 # Foundation Next Steps
 
 Date: 2026-05-09
-Status: Current post-Control API first-slice deployment plan
+Status: Current post-Control API + minimal worker first-slice deployment plan
 
 ## Current Foundation State
 
@@ -16,17 +16,17 @@ Completed:
   stacks exist.
 - [x] Step Functions to ECS Fargate smoke path succeeded.
 - [x] Amplify Auth sandbox exists.
-- [x] Amplify Hosting placeholder is green.
+- [x] Amplify Hosting web build is green.
 - [x] Preview deployment registry table exists.
-- [x] Optional preview ingress stack is scaffolded.
+- [x] Optional preview ingress stack is created.
 - [x] Control API first slice is deployed and smoke-tested.
 
 Still missing:
 
-- [ ] Real worker runtime.
-- [ ] Worker event/artifact writes.
+- [x] Minimal real worker runtime first slice.
+- [x] Worker event/artifact writes first slice.
 - [ ] Event relay.
-- [ ] Cloudflare realtime plane.
+- [ ] Deployed Cloudflare realtime plane and AWS relay integration.
 - [ ] Next.js command center.
 - [ ] Production desktop/mobile client integration.
 - [ ] Miro bridge.
@@ -57,13 +57,14 @@ contract, and worker lifecycle underneath them.
 
 ## Implementation Order
 
-1. Replace the placeholder ECS task with a minimal real worker.
-2. Define the worker context contract: run id, task id, workspace id, user id, objective, event sink, artifact sink.
-3. Have the worker write `running`, artifact-created, and terminal status events.
-4. Have the worker write one small S3 artifact and corresponding artifact metadata.
+1. Harden the ECS worker path. The first deployed smoke/Hermes-runtime slice is in place.
+2. Define the worker context contract: run id, task id, workspace id, user id, objective, event sink, artifact sink. Done in `services/agent-runtime`.
+3. Have the worker write `running`, artifact-created, and terminal status events. Done in deployed smoke.
+4. Have the worker write one small S3 artifact and corresponding artifact metadata. Done in deployed smoke.
 5. Add true idempotency behavior for repeated `POST /runs`.
 6. Exercise Control API with a real Cognito token from the first client.
-7. Add event relay and Cloudflare realtime after durable polling works.
+7. Enable real Hermes CLI/model execution with scoped provider secrets after the smoke path is stable.
+8. Add event relay and Cloudflare realtime after durable polling works.
 
 ## User Inputs Needed Soon
 
@@ -75,7 +76,7 @@ Required soon:
 - [ ] Whether to keep the current single environment named `dev` or deliberately
   rename/redeploy as `prod`.
 - [ ] First GitHub integration mode: GitHub App is preferred for multi-user;
-  OAuth/PAT can work only for early private usage.
+  OAuth/PAT can work only for private trusted-runner usage.
 - [ ] Whether Miro can stay stubbed until the run lifecycle and clients exist.
 - [ ] Whether linked Codex/ChatGPT auth is private/trusted-runner only for the
   first release.
@@ -120,23 +121,23 @@ Exit criteria:
 
 Build:
 
-- [ ] Worker package or service entrypoint.
-- [ ] Dockerfile.
-- [ ] Runtime context contract.
-- [ ] DynamoDB event writer.
-- [ ] S3 artifact writer.
-- [ ] Terminal status handling.
-- [ ] Structured CloudWatch logs.
-- [ ] Container image build/push path.
+- [x] Worker package or service entrypoint.
+- [x] Dockerfile.
+- [x] Runtime context contract.
+- [x] DynamoDB event writer.
+- [x] S3 artifact writer.
+- [x] Terminal status handling.
+- [x] Structured CloudWatch logs.
+- [x] Container image build/push path.
 
 Exit criteria:
 
-- [x] API-created run launches the current placeholder ECS worker via Step Functions.
-- [ ] Worker writes `running`.
-- [ ] Worker writes a test artifact.
-- [ ] Worker writes `succeeded` or `failed`.
-- [ ] Artifact metadata can be queried.
-- [ ] Logs include run id and task id.
+- [x] API-created run launches the current Hermes/smoke ECS worker via Step Functions.
+- [x] Worker writes `running`.
+- [x] Worker writes a test artifact.
+- [x] Worker writes `succeeded` or `failed`.
+- [x] Artifact metadata can be queried.
+- [x] Logs include run id and task id.
 
 ## Phase 3: Realtime Skeleton
 
@@ -185,16 +186,20 @@ pnpm --filter @agents-cloud/infra-amplify run typecheck
 pnpm amplify:hosting:build
 ```
 
-The deployed API smoke test on 2026-05-09 proved:
+The deployed worker smoke test on 2026-05-10 proved:
 
 ```text
-POST /runs
-  -> DynamoDB run row
-  -> DynamoDB event row
-  -> Step Functions execution
-  -> ECS task
-  -> placeholder ECS task succeeds
-
-Still to add: worker-authored running/artifact/terminal events visible through
-`GET /runs/{runId}/events`.
+Step Functions execution
+  -> ECS Fargate task definition agents-cloud-dev-agent-runtime:6
+  -> worker receives run/task/workspace/user/objective context
+  -> DynamoDB event: running
+  -> S3 artifact: hermes-report.md
+  -> DynamoDB artifact metadata + artifact.created event
+  -> DynamoDB terminal event: succeeded
+  -> CloudWatch structured log containing run id and task id
 ```
+
+Smoke execution: `run-hermes-ecs-smoke-1778376731`.
+
+Still to add: real Cognito-token HTTP create-run smoke, idempotent create-run
+semantics, and real Hermes CLI/model execution with scoped provider secrets.

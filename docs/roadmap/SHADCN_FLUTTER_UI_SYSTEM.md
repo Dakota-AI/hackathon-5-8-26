@@ -6,19 +6,7 @@ _Last updated: 2026-05-09_
 
 The Flutter desktop/mobile app should standardize on `shadcn_flutter` for reusable UI primitives and visual language.
 
-Local source reference clone:
-
-```text
-tools/shadcn_flutter
-```
-
-Upstream:
-
-```text
-https://github.com/sunarya-thito/shadcn_flutter
-```
-
-The clone is intentionally ignored by git. It is a local reference copy for source-level research, not vendored product source.
+Use the package through the declared Flutter dependency.
 
 ## Product direction
 
@@ -37,9 +25,10 @@ Default color policy:
 - status chips should be neutral unless a later product requirement needs true semantic color
 - preserve hierarchy through typography, spacing, borders, opacity, and density rather than color
 
-## Source-level findings
+## Package Usage Notes
 
-The upstream README explicitly positions `shadcn_flutter` as a standalone Flutter UI ecosystem that can replace Material/Cupertino UI for app surfaces while allowing incremental adoption.
+`shadcn_flutter` provides a standalone Flutter UI ecosystem that can replace
+Material/Cupertino UI for app surfaces while allowing incremental adoption.
 
 Key exported entrypoint:
 

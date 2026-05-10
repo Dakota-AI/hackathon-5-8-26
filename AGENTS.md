@@ -10,17 +10,19 @@ surfaces, Miro integration, and safe coding/build agents.
 Before making implementation decisions, read these in order:
 
 1. `docs/roadmap/MASTER_SCOPE_AND_PROGRESS.md`
-2. `docs/roadmap/PROJECT_STATUS.md`
-3. `docs/roadmap/FOUNDATION_NEXT_STEPS.md`
-4. `docs/roadmap/CODEBASE_ORIENTATION.md`
-5. `docs/adr/README.md`
-6. `infra/cdk/README.md`
-7. `docs/roadmap/AMPLIFY_NEXT_FRONTEND_PLAN.md` when touching the web app.
-8. `docs/roadmap/WILDCARD_PREVIEW_HOSTING_STATUS.md` when touching previews.
+2. `docs/PROJECT_STRUCTURE.md`
+3. `docs/IMPLEMENTATION_READINESS_AUDIT.md`
+4. `docs/AI_AGENT_ENGINEERING_QUALITY_GATES.md`
+5. `docs/roadmap/PROJECT_STATUS.md`
+6. `docs/roadmap/FOUNDATION_NEXT_STEPS.md`
+7. `docs/roadmap/CODEBASE_ORIENTATION.md`
+8. `docs/adr/README.md`
+9. `infra/cdk/README.md`
+10. `docs/roadmap/AMPLIFY_NEXT_FRONTEND_PLAN.md` when touching the web app.
+11. `docs/roadmap/WILDCARD_PREVIEW_HOSTING_STATUS.md` when touching previews.
 
-The master scope document is the current source of truth. The long roadmap and
-paperclip architecture docs remain useful context, but some early-phase wording
-predates the deployed CDK and Amplify foundation.
+The master scope document is the current source of truth. Supporting roadmap and
+architecture docs should stay aligned with current implementation status.
 
 ## Product Scope
 
@@ -47,30 +49,37 @@ Completed:
 - Deployed AWS CDK foundation.
 - Deployed Step Functions to ECS smoke path.
 - Deployed Amplify Auth sandbox.
-- Green Amplify Hosting placeholder.
-- Preview deployment registry and optional preview ingress scaffold.
-- Local Flutter console scaffold under `apps/desktop_mobile`.
+- Green Amplify Hosting web build.
+- First Control API slice for run creation/querying.
+- Preview deployment registry and optional preview ingress stack.
+- Next.js command center under `apps/web`.
+- Flutter console under `apps/desktop_mobile`.
+- Agent runtime smoke/Hermes adapter package under `services/agent-runtime`.
+- Cloudflare realtime Worker/Durable Object package under
+  `infra/cloudflare/realtime`.
 
 Not complete:
 
-- Control API.
-- Real worker runtime.
+- Full production run lifecycle.
+- Production worker runtime with real model/provider/secrets/workspace policy.
 - Event relay.
-- Cloudflare realtime plane.
-- Next.js app.
-- Production Flutter auth/API/realtime integration.
+- Deployed production Cloudflare realtime relay, replay, and client integration.
+- Production web and Flutter auth/API/realtime integration.
 - Codex/Hermes/Miro integrations.
 - Specialist-agent creation and self-improvement.
 
 ## Highest-Priority Build Rule
 
-The next implementation slice is Control API V1:
+The next implementation slice is completing the durable run loop through real
+clients and a production-shaped worker path:
 
 ```text
-authenticated POST /runs
+authenticated web/native command
+  -> Control API
   -> DynamoDB run/event records
   -> Step Functions execution
   -> ECS worker
+  -> worker status/events/artifacts
   -> queryable ordered events
 ```
 
@@ -99,11 +108,37 @@ into the run ledger, event schema, auth boundary, and worker lifecycle.
 - Keep changes scoped to the layer being implemented.
 - Use the existing pnpm workspace and TypeScript patterns.
 - Prefer structured schemas and generated/shared types over ad hoc strings.
+- Treat `packages/protocol` as the contract source for public event payloads.
+- Make retries, duplicate requests, and partial failures explicit in code and
+  tests for durable workflows.
+- Enforce tenant/workspace authorization before exposing product data across
+  users or clients.
 - Update docs when implementation state changes.
 - Do not commit secrets or environment-specific generated outputs.
 - Do not treat generated `dist`, `cdk.out`, `node_modules`, or Amplify outputs as
   source files.
 - Preserve user changes in the working tree.
+
+## Mandatory Self-Audit Gate
+
+Before finishing any non-trivial implementation, agents must self-review against
+`docs/AI_AGENT_ENGINEERING_QUALITY_GATES.md`.
+
+At minimum, verify:
+
+- architecture still follows the accepted ADRs,
+- events and API payloads match shared protocol contracts,
+- idempotency and retry behavior are safe,
+- workspace/tenant boundaries are enforced or clearly documented as not yet in
+  scope,
+- secrets and credentials are not exposed to clients, logs, or broad worker
+  environments,
+- failure paths cannot silently corrupt durable state,
+- tests cover the behavior or risk introduced,
+- package/status docs changed when implementation reality changed.
+
+Do not claim a feature is complete because it compiles. Completion requires code,
+tests, docs, and implementation status to agree.
 
 ## Flutter Client UI Standards
 
@@ -120,30 +155,38 @@ into the run ledger, event schema, auth boundary, and worker lifecycle.
   `Padding`, etc.) are acceptable for layout/composition, but reusable surfaces,
   buttons, navigation, badges, inputs, cards, dialogs, tables, and controls should
   come from `shadcn_flutter`.
-- The local source clone for deep reference is `tools/shadcn_flutter`; do not
-  vendor or edit it as product source.
+- Use `shadcn_flutter` through the declared Flutter package dependency; do not
+  vendor local source copies into product code.
 
 ## Required Validation Commands
 
-Run the relevant subset before finishing a change, and all of these after broad
-infra/protocol/doc updates:
+Run the relevant subset before finishing a change. For broad contract, infra,
+runtime, or client changes, run the full applicable matrix from
+`docs/AI_AGENT_ENGINEERING_QUALITY_GATES.md`.
+
+Core commands:
 
 ```bash
 pnpm contracts:test
+pnpm control-api:test
+pnpm agent-runtime:test
+pnpm cloudflare:test
+pnpm web:typecheck
+pnpm web:build
 pnpm infra:build
 pnpm infra:synth
 pnpm --filter @agents-cloud/infra-amplify run typecheck
 pnpm amplify:hosting:build
 ```
 
-When touching the Flutter console scaffold, also run:
+When touching the Flutter console, also run:
 
 ```bash
 cd apps/desktop_mobile && flutter analyze
 cd apps/desktop_mobile && flutter test
 ```
 
-When Control API work begins, add tests for:
+When extending Control API work, keep or add tests for:
 
 - request validation,
 - Cognito JWT claim handling,
@@ -157,6 +200,8 @@ When Control API work begins, add tests for:
 
 When progress changes, update:
 
+- `docs/IMPLEMENTATION_READINESS_AUDIT.md` when readiness gaps are closed or new
+  blockers are found.
 - `docs/roadmap/MASTER_SCOPE_AND_PROGRESS.md`
 - `docs/roadmap/PROJECT_STATUS.md`
 - `docs/roadmap/FOUNDATION_NEXT_STEPS.md`

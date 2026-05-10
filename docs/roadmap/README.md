@@ -12,9 +12,8 @@ Planning documents for the autonomous agent cloud platform.
 - [Desktop and Mobile Implementation Plan](DESKTOP_MOBILE_IMPLEMENTATION_PLAN.md)
 - [Implementation Roadmap](AUTONOMOUS_AGENT_PLATFORM_IMPLEMENTATION_ROADMAP.md)
 - [Exa MCP Audit Addendum](AUTONOMOUS_AGENT_PLATFORM_EXA_AUDIT_ADDENDUM.md)
-- [Paperclip-Style Autonomous Agent Platform Architecture](PAPERCLIP_STYLE_AUTONOMOUS_AGENT_PLATFORM_ARCHITECTURE.md)
+- [Autonomous Agent Company Architecture](AUTONOMOUS_AGENT_COMPANY_ARCHITECTURE.md)
 
 `MASTER_SCOPE_AND_PROGRESS.md` and `PROJECT_STATUS.md` reflect the current
-implementation state. The larger roadmap and paperclip architecture docs remain
-useful design references, but some of their early-phase language predates the
-deployed CDK and Amplify foundation.
+implementation state. Supporting roadmap and architecture docs should stay
+aligned with those current status files.

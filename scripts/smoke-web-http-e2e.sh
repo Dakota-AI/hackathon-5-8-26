@@ -45,6 +45,13 @@ aws cognito-idp admin-set-user-password \
   --password "$PASSWORD" \
   --permanent >/dev/null
 
+aws cognito-idp admin-add-user-to-group \
+  --profile "$PROFILE" \
+  --region "$REGION" \
+  --user-pool-id "$USER_POOL_ID" \
+  --username "$TEST_EMAIL" \
+  --group-name agents-cloud-user >/dev/null
+
 ID_TOKEN=$(AGENTS_CLOUD_TEST_USERNAME="$TEST_EMAIL" \
   AGENTS_CLOUD_TEST_PASSWORD="$PASSWORD" \
   NEXT_PUBLIC_AMPLIFY_REGION="$REGION" \

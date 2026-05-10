@@ -80,15 +80,7 @@ class OrbTopBarStatus extends ConsumerWidget {
     final controller = ref.read(orbControlControllerProvider.notifier);
 
     if (state.presence == OrbControlPresence.hidden) {
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: _TopBarControlButton(
-          key: const ValueKey('orb-control-offer-button'),
-          label: 'Demo control',
-          onTap: controller.showTopBarPrompt,
-          muted: true,
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     if (state.presence == OrbControlPresence.voice) {

@@ -22,7 +22,7 @@ export function parseAuthenticatedUser(claims: Readonly<Record<string, unknown>>
 }
 
 export function isAdminUser(user: AuthenticatedUser, adminEmails: readonly string[]): boolean {
-  if (user.isSuspended) {
+  if (isSuspendedUser(user)) {
     return false;
   }
   if (hasGroup(user, ADMIN_GROUP)) {
@@ -36,7 +36,7 @@ export function isAdminUser(user: AuthenticatedUser, adminEmails: readonly strin
 }
 
 export function hasProductAccessGroup(user: AuthenticatedUser): boolean {
-  if (user.isSuspended) {
+  if (isSuspendedUser(user)) {
     return false;
   }
   return hasGroup(user, USER_GROUP) || hasGroup(user, ADMIN_GROUP);
@@ -50,6 +50,10 @@ export function parseGroups(value: unknown): readonly string[] {
 
 function hasGroup(user: AuthenticatedUser, targetGroup: string): boolean {
   return (user.groups ?? []).some((group) => group === targetGroup);
+}
+
+function isSuspendedUser(user: AuthenticatedUser): boolean {
+  return user.isSuspended === true || hasGroup(user, SUSPENDED_GROUP);
 }
 
 function valuesFromRawClaim(value: unknown): string[] {

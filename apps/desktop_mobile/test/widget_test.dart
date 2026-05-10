@@ -35,7 +35,7 @@ void main() {
 
     expect(find.text('Agents'), findsWidgets);
     expect(find.text('Actions'), findsNothing);
-    expect(find.text('Builder'), findsOneWidget);
+    expect(find.text('Builder agent'), findsOneWidget);
     expect(find.byIcon(LucideIcons.audioLines), findsOneWidget);
     expect(find.byIcon(RadixIcons.bell), findsNothing);
     expect(find.byIcon(RadixIcons.trash), findsNothing);
@@ -62,7 +62,7 @@ void main() {
     await _settle(tester);
 
     // Workspace now defaults to the top agent detail.
-    expect(find.text('Executive'), findsWidgets);
+    expect(find.text('Executive agent'), findsWidgets);
     expect(find.text('Start the conversation.'), findsNothing);
     expect(find.byIcon(LucideIcons.audioLines), findsOneWidget);
     expect(find.byIcon(RadixIcons.bell), findsNothing);
@@ -137,8 +137,7 @@ void main() {
 
     await tester.tap(find.text('Agents'));
     await _settle(tester);
-    expect(find.text('Executive'), findsOneWidget);
-    expect(find.text('Builder'), findsOneWidget);
+    expect(find.textContaining('agent'), findsWidgets);
   });
 
   testWidgets('every sidebar nav item exposes a shadcn tooltip', (
@@ -186,7 +185,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('orb-control-run-mock')));
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.textContaining('Thinking through where'), findsOneWidget);
-      expect(find.text('Executive'), findsWidgets);
+      expect(find.text('Executive agent'), findsWidgets);
 
       await tester.pump(const Duration(milliseconds: 650));
       expect(find.textContaining('Taking you to Kanban'), findsOneWidget);

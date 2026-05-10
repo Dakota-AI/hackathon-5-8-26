@@ -68,14 +68,10 @@ enum ConsolePage {
   miro,
 }
 
-const _agentBrowserBridgeAutoOpen = bool.fromEnvironment(
-  'AGENTS_CLOUD_BROWSER_BRIDGE_AUTO_OPEN_BROWSER',
-);
-
 final selectedWorkspaceIdProvider = StateProvider<String?>((ref) => null);
 
 final selectedPageProvider = StateProvider<ConsolePage>(
-  (ref) => _agentBrowserBridgeAutoOpen ? ConsolePage.browser : ConsolePage.work,
+  (ref) => ConsolePage.chat,
 );
 
 final selectedAgentIdProvider = StateProvider<String?>((ref) => null);
@@ -338,6 +334,13 @@ class _Sidebar extends ConsumerWidget {
           _SidebarCollapseButton(collapsed: collapsed),
           const SizedBox(height: 12),
           _NavButton(
+            label: 'Chat',
+            icon: RadixIcons.chatBubble,
+            page: ConsolePage.chat,
+            selected: selectedPage == ConsolePage.chat,
+            collapsed: collapsed,
+          ),
+          _NavButton(
             label: 'Agents',
             icon: RadixIcons.group,
             page: ConsolePage.work,
@@ -548,17 +551,17 @@ class _MobileNavBar extends ConsumerWidget {
       child: Row(
         children: [
           _MobileNavItem(
-            label: 'Work',
-            icon: RadixIcons.layout,
-            selected: selectedPage == ConsolePage.kanban,
-            onTap: () => _selectMobilePage(ref, ConsolePage.kanban),
-          ),
-          _MobileNavItem(
             label: 'Chat',
             icon: RadixIcons.chatBubble,
             selected: selectedPage == ConsolePage.chat,
-            emphasized: true,
             onTap: () => _selectMobilePage(ref, ConsolePage.chat),
+            emphasized: true,
+          ),
+          _MobileNavItem(
+            label: 'Kanban',
+            icon: RadixIcons.layout,
+            selected: selectedPage == ConsolePage.kanban,
+            onTap: () => _selectMobilePage(ref, ConsolePage.kanban),
           ),
           _MobileNavItem(
             label: 'Agents',
@@ -813,7 +816,7 @@ class _AgentsWorkspacePage extends ConsumerWidget {
             if (allAgents.isEmpty) {
               return const _Panel(
                 child: Text(
-                  'No agents in this workspace yet.',
+                  'No agents are currently active in this workspace.',
                   style: TextStyle(color: _Palette.muted),
                 ),
               );

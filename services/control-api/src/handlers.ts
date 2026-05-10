@@ -840,12 +840,12 @@ export async function userEngagementHandler(event: APIGatewayProxyEventV2WithJWT
     const nextSeq = (await nextEventSeq(store, runId)) + 1;
     const eventId = userEventId(runId, nextSeq);
     const eventType = isCall ? "user.call.requested" : "user.notification.requested";
-    const event = buildCanonicalEvent({
+    const engagementEvent = buildCanonicalEvent({
       id: eventId,
       seq: nextSeq,
       createdAt: new Date().toISOString(),
       userId: run.userId,
-        workspaceId: run.workspaceId,
+      workspaceId: run.workspaceId,
       runId,
       taskId,
       idempotencyKey,
@@ -865,14 +865,14 @@ export async function userEngagementHandler(event: APIGatewayProxyEventV2WithJWT
         deliveryStatus: "requested"
       })
     });
-    await store.putEvent(event);
+    await store.putEvent(engagementEvent);
     void emitUserEngagementNotification({
-      type: event.type,
-        targetUserId,
-        runId,
-        workspaceId: run.workspaceId,
-        eventId,
-        title,
+      type: engagementEvent.type,
+      targetUserId,
+      runId,
+      workspaceId: run.workspaceId,
+      eventId,
+      title,
       message: messageBody,
       deepLink,
       urgency

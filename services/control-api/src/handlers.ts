@@ -5,6 +5,7 @@ import { DynamoControlApiStore } from "./dynamo-store.js";
 import { getRun, listAdminRunEvents, listAdminRuns, listRunEvents } from "./query-runs.js";
 import { StepFunctionsExecutionStarter } from "./step-functions.js";
 import { createWorkItem, createWorkItemRun, getWorkItem, listWorkItemEvents, listWorkItemRuns, listWorkItems, updateWorkItemStatus } from "./work-items.js";
+import { createUserRunner, getUserRunner, heartbeatHostNode, heartbeatUserRunner, listAdminRunnerState, registerHostNode, updateUserRunnerDesiredState } from "./user-runners.js";
 import type { AuthenticatedUser } from "./ports.js";
 
 const store = DynamoControlApiStore.fromEnvironment();
@@ -79,6 +80,133 @@ export async function listAdminRunEventsHandler(event: APIGatewayProxyEventV2Wit
     limit: parseOptionalInteger(event.queryStringParameters?.limit)
   });
   return json(result.statusCode, result.body);
+}
+
+export async function runnerStateHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
+  const user = userFromEvent(event);
+  const adminEmails = parseAdminEmails(process.env.ADMIN_EMAILS);
+  const routeKey = event.routeKey;
+
+  if (routeKey === "POST /runner-hosts") {
+    const body = parseJsonBody(event.body);
+    const result = await registerHostNode({
+      store,
+      user,
+      adminEmails,
+      now: () => new Date().toISOString(),
+      request: {
+        hostId: stringField(body, "hostId"),
+        placementTarget: stringField(body, "placementTarget"),
+        status: optionalStringField(body, "status"),
+        capacity: optionalRecordField(body, "capacity"),
+        health: optionalRecordField(body, "health")
+      }
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "POST /runner-hosts/{hostId}/heartbeat") {
+    const hostId = event.pathParameters?.hostId;
+    if (!hostId) {
+      return json(400, { error: "BadRequest", message: "hostId path parameter is required." });
+    }
+    const body = parseJsonBody(event.body);
+    const result = await heartbeatHostNode({
+      store,
+      user,
+      adminEmails,
+      now: () => new Date().toISOString(),
+      hostId,
+      request: {
+        status: optionalStringField(body, "status"),
+        capacity: optionalRecordField(body, "capacity"),
+        health: optionalRecordField(body, "health")
+      }
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "POST /user-runners") {
+    const body = parseJsonBody(event.body);
+    const result = await createUserRunner({
+      store,
+      user,
+      now: () => new Date().toISOString(),
+      newId: () => crypto.randomUUID(),
+      request: {
+        workspaceId: stringField(body, "workspaceId"),
+        runnerId: optionalStringField(body, "runnerId"),
+        status: optionalStringField(body, "status"),
+        desiredState: optionalStringField(body, "desiredState"),
+        hostId: optionalStringField(body, "hostId"),
+        placementTarget: optionalStringField(body, "placementTarget"),
+        resourceLimits: optionalRecordField(body, "resourceLimits"),
+        health: optionalRecordField(body, "health")
+      }
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /user-runners/{runnerId}") {
+    const runnerId = event.pathParameters?.runnerId;
+    if (!runnerId) {
+      return json(400, { error: "BadRequest", message: "runnerId path parameter is required." });
+    }
+    const result = await getUserRunner({ store, user, runnerId });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "PATCH /user-runners/{runnerId}") {
+    const runnerId = event.pathParameters?.runnerId;
+    if (!runnerId) {
+      return json(400, { error: "BadRequest", message: "runnerId path parameter is required." });
+    }
+    const body = parseJsonBody(event.body);
+    const result = await updateUserRunnerDesiredState({
+      store,
+      user,
+      now: () => new Date().toISOString(),
+      runnerId,
+      request: {
+        desiredState: stringField(body, "desiredState"),
+        resourceLimits: optionalRecordField(body, "resourceLimits")
+      }
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "POST /user-runners/{runnerId}/heartbeat") {
+    const runnerId = event.pathParameters?.runnerId;
+    if (!runnerId) {
+      return json(400, { error: "BadRequest", message: "runnerId path parameter is required." });
+    }
+    const body = parseJsonBody(event.body);
+    const result = await heartbeatUserRunner({
+      store,
+      user,
+      now: () => new Date().toISOString(),
+      runnerId,
+      request: {
+        status: optionalStringField(body, "status"),
+        hostId: optionalStringField(body, "hostId"),
+        placementTarget: optionalStringField(body, "placementTarget"),
+        health: optionalRecordField(body, "health")
+      }
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /admin/runners") {
+    const result = await listAdminRunnerState({
+      store,
+      user,
+      adminEmails,
+      limit: parseOptionalInteger(event.queryStringParameters?.limit)
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  return notImplemented("Runner state route is provisioned in infrastructure and will be implemented in the next Control API phase.");
 }
 
 export async function workItemsHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
@@ -223,6 +351,11 @@ function stringField(body: Record<string, unknown>, key: string): string {
 function optionalStringField(body: Record<string, unknown>, key: string): string | undefined {
   const value = body[key];
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function optionalRecordField(body: Record<string, unknown>, key: string): Record<string, unknown> | undefined {
+  const value = body[key];
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
 function parseOptionalInteger(value: string | undefined): number | undefined {

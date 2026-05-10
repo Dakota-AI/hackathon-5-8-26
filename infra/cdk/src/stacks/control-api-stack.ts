@@ -53,6 +53,8 @@ export class ControlApiStack extends AgentsCloudStack {
       ARTIFACTS_TABLE_NAME: props.state.artifactsTable.tableName,
       DATA_SOURCES_TABLE_NAME: props.state.dataSourcesTable.tableName,
       SURFACES_TABLE_NAME: props.state.surfacesTable.tableName,
+      HOST_NODES_TABLE_NAME: props.state.hostNodesTable.tableName,
+      USER_RUNNERS_TABLE_NAME: props.state.userRunnersTable.tableName,
       STATE_MACHINE_ARN: props.orchestration.simpleRunStateMachine.stateMachineArn,
       ADMIN_EMAILS: "seb4594@gmail.com"
     };
@@ -111,6 +113,15 @@ export class ControlApiStack extends AgentsCloudStack {
       environment: commonEnvironment
     });
 
+    const runnerStateFunction = new NodejsFunction(this, "RunnerStateFunction", {
+      runtime: Runtime.NODEJS_22_X,
+      entry: controlApiEntry,
+      handler: "runnerStateHandler",
+      timeout: Duration.seconds(15),
+      memorySize: 256,
+      environment: commonEnvironment
+    });
+
     const artifactsFunction = new NodejsFunction(this, "ArtifactsFunction", {
       runtime: Runtime.NODEJS_22_X,
       entry: controlApiEntry,
@@ -158,6 +169,9 @@ export class ControlApiStack extends AgentsCloudStack {
     props.state.eventsTable.grantReadWriteData(workItemsFunction);
     props.state.artifactsTable.grantReadData(workItemsFunction);
     props.orchestration.simpleRunStateMachine.grantStartExecution(workItemsFunction);
+
+    props.state.hostNodesTable.grantReadWriteData(runnerStateFunction);
+    props.state.userRunnersTable.grantReadWriteData(runnerStateFunction);
 
     props.state.workItemsTable.grantReadData(artifactsFunction);
     props.state.runsTable.grantReadData(artifactsFunction);
@@ -215,6 +229,22 @@ export class ControlApiStack extends AgentsCloudStack {
         path: route.path,
         methods: route.methods,
         integration: new HttpLambdaIntegration(`WorkItemsIntegration${route.path.replace(/[^A-Za-z0-9]/g, "")}${route.methods.join("")}`, workItemsFunction),
+        authorizer
+      });
+    }
+
+    for (const route of [
+      { path: "/runner-hosts", methods: [HttpMethod.POST] },
+      { path: "/runner-hosts/{hostId}/heartbeat", methods: [HttpMethod.POST] },
+      { path: "/user-runners", methods: [HttpMethod.POST] },
+      { path: "/user-runners/{runnerId}", methods: [HttpMethod.GET, HttpMethod.PATCH] },
+      { path: "/user-runners/{runnerId}/heartbeat", methods: [HttpMethod.POST] },
+      { path: "/admin/runners", methods: [HttpMethod.GET] }
+    ]) {
+      this.api.addRoutes({
+        path: route.path,
+        methods: route.methods,
+        integration: new HttpLambdaIntegration(`RunnerStateIntegration${route.path.replace(/[^A-Za-z0-9]/g, "")}${route.methods.join("")}`, runnerStateFunction),
         authorizer
       });
     }

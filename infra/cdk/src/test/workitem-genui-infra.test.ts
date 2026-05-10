@@ -131,7 +131,9 @@ describe("WorkItem/GenUI infrastructure", () => {
           WORK_ITEMS_TABLE_NAME: Match.anyValue(),
           ARTIFACTS_TABLE_NAME: Match.anyValue(),
           DATA_SOURCES_TABLE_NAME: Match.anyValue(),
-          SURFACES_TABLE_NAME: Match.anyValue()
+          SURFACES_TABLE_NAME: Match.anyValue(),
+          HOST_NODES_TABLE_NAME: Match.anyValue(),
+          USER_RUNNERS_TABLE_NAME: Match.anyValue()
         })
       }
     });
@@ -157,7 +159,14 @@ describe("WorkItem/GenUI infrastructure", () => {
       "GET /work-items/{workItemId}/surfaces",
       "GET /runs/{runId}/surfaces",
       "PATCH /surfaces/{surfaceId}",
-      "POST /surfaces/{surfaceId}/publish"
+      "POST /surfaces/{surfaceId}/publish",
+      "POST /runner-hosts",
+      "POST /runner-hosts/{hostId}/heartbeat",
+      "POST /user-runners",
+      "GET /user-runners/{runnerId}",
+      "PATCH /user-runners/{runnerId}",
+      "POST /user-runners/{runnerId}/heartbeat",
+      "GET /admin/runners"
     ]) {
       controlApi.hasResourceProperties("AWS::ApiGatewayV2::Route", { RouteKey: routeKey });
     }

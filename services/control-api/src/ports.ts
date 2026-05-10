@@ -34,6 +34,37 @@ export interface CreateWorkItemRequest {
   readonly idempotencyKey?: string;
 }
 
+export interface HostNodeRecord {
+  readonly hostId: string;
+  readonly hostRecordType: "HOST";
+  readonly placementTarget: string;
+  readonly status: string;
+  readonly placementTargetStatus: string;
+  readonly capacity: Record<string, unknown>;
+  readonly health: Record<string, unknown>;
+  readonly registeredByUserId: string;
+  readonly registeredByEmail?: string;
+  readonly lastHeartbeatAt: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface UserRunnerRecord {
+  readonly userId: string;
+  readonly runnerId: string;
+  readonly workspaceId: string;
+  readonly status: string;
+  readonly desiredState: string;
+  readonly hostId?: string;
+  readonly placementTarget?: string;
+  readonly hostStatus: string;
+  readonly resourceLimits: Record<string, unknown>;
+  readonly health: Record<string, unknown>;
+  readonly lastHeartbeatAt: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
 export interface RunRecord {
   readonly workspaceId: string;
   readonly runId: string;
@@ -96,6 +127,16 @@ export interface ControlApiStore {
   listRecentRuns(limit?: number): Promise<RunRecord[]>;
   listRunsForWorkItem(input: { readonly workItemId: string; readonly limit?: number }): Promise<RunRecord[]>;
   listEvents(runId: string, options?: { readonly afterSeq?: number; readonly limit?: number }): Promise<EventRecord[]>;
+}
+
+export interface RunnerStateStore {
+  putHostNode(item: HostNodeRecord): Promise<void>;
+  getHostNode(hostId: string): Promise<HostNodeRecord | undefined>;
+  listHostNodesByStatus(input: { readonly statuses: readonly string[]; readonly limit?: number }): Promise<HostNodeRecord[]>;
+  putUserRunner(item: UserRunnerRecord): Promise<void>;
+  getUserRunner(userId: string, runnerId: string): Promise<UserRunnerRecord | undefined>;
+  getUserRunnerByRunnerId(runnerId: string): Promise<UserRunnerRecord | undefined>;
+  listUserRunnersByStatus(input: { readonly statuses: readonly string[]; readonly limit?: number }): Promise<UserRunnerRecord[]>;
 }
 
 export interface ExecutionStarter {

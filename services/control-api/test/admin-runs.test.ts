@@ -13,6 +13,13 @@ class MemoryStore implements ControlApiStore {
   async putRun(): Promise<void> {}
   async putTask(): Promise<void> {}
   async putEvent(): Promise<void> {}
+
+  async putWorkItem(): Promise<void> {}
+  async getWorkItem(): Promise<undefined> { return undefined; }
+  async getWorkItemByIdempotencyScope(): Promise<undefined> { return undefined; }
+  async updateWorkItem(): Promise<undefined> { return undefined; }
+  async listWorkItemsForUser(): Promise<[]> { return []; }
+  async listRunsForWorkItem(): Promise<[]> { return []; }
   async createRunLedger(): Promise<void> {}
   async updateRunExecution(): Promise<void> {}
 

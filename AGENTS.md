@@ -15,17 +15,51 @@ Before making implementation decisions, read these in order:
 4. `docs/AI_AGENT_ENGINEERING_QUALITY_GATES.md`
 5. `docs/roadmap/PROJECT_STATUS.md`
 6. `docs/roadmap/PROJECT_REMAINING_WORK_AUDIT_2026_05_10.md`
-7. `docs/roadmap/FOUNDATION_NEXT_STEPS.md`
-8. `docs/roadmap/CODEBASE_ORIENTATION.md`
-9. `docs/adr/README.md`
-10. `docs/adr/0008-user-runner-placement.md`
-11. `docs/roadmap/USER_RUNNER_LOCAL_ECS_ARCHITECTURE.md`
-12. `infra/cdk/README.md`
-13. `docs/roadmap/AMPLIFY_NEXT_FRONTEND_PLAN.md` when touching the web app.
-14. `docs/roadmap/WILDCARD_PREVIEW_HOSTING_STATUS.md` when touching previews.
+7. `docs/agent-workstreams/README.md`
+8. `docs/roadmap/FOUNDATION_NEXT_STEPS.md`
+9. `docs/roadmap/CODEBASE_ORIENTATION.md`
+10. `docs/adr/README.md`
+11. `docs/adr/0008-user-runner-placement.md`
+12. `docs/roadmap/USER_RUNNER_LOCAL_ECS_ARCHITECTURE.md`
+13. `infra/cdk/README.md`
+14. `docs/roadmap/AMPLIFY_NEXT_FRONTEND_PLAN.md` when touching the web app.
+15. `docs/roadmap/WILDCARD_PREVIEW_HOSTING_STATUS.md` when touching previews.
 
 The master scope document is the current source of truth. Supporting roadmap and
 architecture docs should stay aligned with current implementation status.
+
+## Parallel Agent Workstreams
+
+Parallel agents must use `docs/agent-workstreams/` as their coordination map.
+
+Available workstreams:
+
+- Infrastructure: `docs/agent-workstreams/infrastructure/`
+- Clients: `docs/agent-workstreams/clients/`
+- Agent Harness: `docs/agent-workstreams/agent-harness/`
+- Realtime Streaming: `docs/agent-workstreams/realtime-streaming/`
+- Product Coordination: `docs/agent-workstreams/product-coordination/`
+
+Before starting, each agent must read its workstream README and
+`docs/agent-workstreams/COORDINATION.md`. If a change affects another
+workstream, create a handoff note in `docs/agent-workstreams/handoffs/` using
+`docs/agent-workstreams/HANDOFF_TEMPLATE.md`.
+
+Parallel agents should stay in their primary paths by default, inspect current
+git status before editing, preserve unrelated changes, and run the validation
+commands listed for their workstream before claiming completion.
+
+Every workstream agent must scope first. Before broad implementation, create or
+update that lane's `CURRENT_PLAN.md` using
+`docs/agent-workstreams/CURRENT_PLAN_TEMPLATE.md`. The plan must describe
+current state, gaps, risks, expected files, cross-workstream dependencies,
+implementation steps, validation, and completion criteria. Other agents should
+be able to read that plan to understand what is in progress and what contracts
+may change.
+
+If a scheduled agent finds handoffs addressed to its lane, it should triage them
+before starting new work. If it cannot complete a requested handoff, it should
+mark the handoff `blocked` and explain what is missing.
 
 ## Product Scope
 

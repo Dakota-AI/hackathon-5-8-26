@@ -7,11 +7,37 @@ export interface CreateRunRequest {
   readonly workspaceId: string;
   readonly objective: string;
   readonly idempotencyKey?: string;
+  readonly workItemId?: string;
+}
+
+export interface WorkItemRecord {
+  readonly workspaceId: string;
+  readonly workItemId: string;
+  readonly userId: string;
+  readonly ownerEmail?: string;
+  readonly title: string;
+  readonly objective: string;
+  readonly status: string;
+  readonly workspaceStatus: string;
+  readonly priority: string;
+  readonly idempotencyKey?: string;
+  readonly idempotencyScope?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface CreateWorkItemRequest {
+  readonly workspaceId: string;
+  readonly title?: string;
+  readonly objective: string;
+  readonly priority?: string;
+  readonly idempotencyKey?: string;
 }
 
 export interface RunRecord {
   readonly workspaceId: string;
   readonly runId: string;
+  readonly workItemId?: string;
   readonly userId: string;
   readonly ownerEmail?: string;
   readonly objective: string;
@@ -27,6 +53,7 @@ export interface TaskRecord {
   readonly runId: string;
   readonly taskId: string;
   readonly workspaceId: string;
+  readonly workItemId?: string;
   readonly userId: string;
   readonly workerClass: string;
   readonly status: string;
@@ -55,6 +82,11 @@ export interface EventRecord {
 
 export interface ControlApiStore {
   createRunLedger(input: { readonly run: RunRecord; readonly task: TaskRecord; readonly event: EventRecord }): Promise<void>;
+  putWorkItem(item: WorkItemRecord): Promise<void>;
+  getWorkItem(workspaceId: string, workItemId: string): Promise<WorkItemRecord | undefined>;
+  getWorkItemByIdempotencyScope(idempotencyScope: string): Promise<WorkItemRecord | undefined>;
+  updateWorkItem(input: { readonly workspaceId: string; readonly workItemId: string; readonly updates: Partial<WorkItemRecord> }): Promise<WorkItemRecord | undefined>;
+  listWorkItemsForUser(input: { readonly userId: string; readonly workspaceId?: string; readonly limit?: number }): Promise<WorkItemRecord[]>;
   putRun(item: RunRecord): Promise<void>;
   putTask(item: TaskRecord): Promise<void>;
   putEvent(item: EventRecord): Promise<void>;
@@ -62,6 +94,7 @@ export interface ControlApiStore {
   getRunById(runId: string): Promise<RunRecord | undefined>;
   getRunByIdempotencyScope(idempotencyScope: string): Promise<RunRecord | undefined>;
   listRecentRuns(limit?: number): Promise<RunRecord[]>;
+  listRunsForWorkItem(input: { readonly workItemId: string; readonly limit?: number }): Promise<RunRecord[]>;
   listEvents(runId: string, options?: { readonly afterSeq?: number; readonly limit?: number }): Promise<EventRecord[]>;
 }
 

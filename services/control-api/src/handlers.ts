@@ -4,6 +4,7 @@ import { createRun } from "./create-run.js";
 import { DynamoControlApiStore } from "./dynamo-store.js";
 import { getRun, listAdminRunEvents, listAdminRuns, listRunEvents } from "./query-runs.js";
 import { StepFunctionsExecutionStarter } from "./step-functions.js";
+import { createWorkItem, createWorkItemRun, getWorkItem, listWorkItemEvents, listWorkItemRuns, listWorkItems, updateWorkItemStatus } from "./work-items.js";
 import type { AuthenticatedUser } from "./ports.js";
 
 const store = DynamoControlApiStore.fromEnvironment();
@@ -80,8 +81,105 @@ export async function listAdminRunEventsHandler(event: APIGatewayProxyEventV2Wit
   return json(result.statusCode, result.body);
 }
 
-export async function notImplementedWorkItemsHandler(): Promise<APIGatewayProxyStructuredResultV2> {
-  return notImplemented("WorkItem API is provisioned in infrastructure and will be implemented in the Control API phase.");
+export async function workItemsHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
+  const user = userFromEvent(event);
+  const routeKey = event.routeKey;
+
+  if (routeKey === "POST /work-items") {
+    const body = parseJsonBody(event.body);
+    const result = await createWorkItem({
+      store,
+      user,
+      now: () => new Date().toISOString(),
+      newId: () => crypto.randomUUID(),
+      request: {
+        workspaceId: stringField(body, "workspaceId"),
+        title: optionalStringField(body, "title"),
+        objective: stringField(body, "objective"),
+        priority: optionalStringField(body, "priority"),
+        idempotencyKey: optionalStringField(body, "idempotencyKey")
+      }
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /work-items") {
+    const result = await listWorkItems({
+      store,
+      user,
+      workspaceId: event.queryStringParameters?.workspaceId,
+      limit: parseOptionalInteger(event.queryStringParameters?.limit)
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /work-items/{workItemId}") {
+    const workItemId = event.pathParameters?.workItemId;
+    const workspaceId = event.queryStringParameters?.workspaceId;
+    if (!workItemId || !workspaceId) {
+      return json(400, { error: "BadRequest", message: "workspaceId query parameter and workItemId path parameter are required." });
+    }
+    const result = await getWorkItem({ store, user, workspaceId, workItemId });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "PATCH /work-items/{workItemId}" || routeKey === "POST /work-items/{workItemId}/status") {
+    const workItemId = event.pathParameters?.workItemId;
+    const body = parseJsonBody(event.body);
+    const workspaceId = optionalStringField(body, "workspaceId") ?? event.queryStringParameters?.workspaceId;
+    if (!workItemId || !workspaceId) {
+      return json(400, { error: "BadRequest", message: "workspaceId and workItemId are required." });
+    }
+    const result = await updateWorkItemStatus({
+      store,
+      user,
+      workspaceId,
+      workItemId,
+      status: stringField(body, "status"),
+      now: () => new Date().toISOString()
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "POST /work-items/{workItemId}/runs") {
+    const workItemId = event.pathParameters?.workItemId;
+    const body = parseJsonBody(event.body);
+    const workspaceId = optionalStringField(body, "workspaceId") ?? event.queryStringParameters?.workspaceId;
+    if (!workItemId || !workspaceId) {
+      return json(400, { error: "BadRequest", message: "workspaceId and workItemId are required." });
+    }
+    const result = await createWorkItemRun({
+      store,
+      executions,
+      user,
+      now: () => new Date().toISOString(),
+      newId: () => crypto.randomUUID(),
+      workspaceId,
+      workItemId,
+      objective: stringField(body, "objective"),
+      idempotencyKey: optionalStringField(body, "idempotencyKey")
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /work-items/{workItemId}/runs" || routeKey === "GET /work-items/{workItemId}/events") {
+    const workItemId = event.pathParameters?.workItemId;
+    const workspaceId = event.queryStringParameters?.workspaceId;
+    if (!workItemId || !workspaceId) {
+      return json(400, { error: "BadRequest", message: "workspaceId query parameter and workItemId path parameter are required." });
+    }
+    const args = {
+      store,
+      user,
+      workspaceId,
+      workItemId,
+      limit: parseOptionalInteger(event.queryStringParameters?.limit)
+    };
+    const result = routeKey === "GET /work-items/{workItemId}/runs" ? await listWorkItemRuns(args) : await listWorkItemEvents(args);
+    return json(result.statusCode, result.body);
+  }
+
+  return notImplemented("This WorkItem route is provisioned in infrastructure and will be implemented in the next Control API phase.");
 }
 
 export async function notImplementedArtifactsHandler(): Promise<APIGatewayProxyStructuredResultV2> {

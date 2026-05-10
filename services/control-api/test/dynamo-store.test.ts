@@ -37,6 +37,7 @@ class FakeDynamoClient {
 describe("DynamoControlApiStore", () => {
   it("lists recent runs without crashing on malformed rows missing createdAt", async () => {
     const store = new DynamoControlApiStore(new FakeDynamoClient() as never, {
+      workItemsTableName: "work-items",
       runsTableName: "runs",
       tasksTableName: "tasks",
       eventsTableName: "events"

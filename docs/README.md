@@ -8,6 +8,7 @@ Read first:
 - [AI Agent Engineering Quality Gates](AI_AGENT_ENGINEERING_QUALITY_GATES.md)
 - [Current Project Status](roadmap/PROJECT_STATUS.md)
 - [Project Remaining Work Audit](roadmap/PROJECT_REMAINING_WORK_AUDIT_2026_05_10.md)
+- [Parallel Agent Workstreams](agent-workstreams/)
 - [Repository Agent Instructions](../AGENTS.md)
 
 Main sections:
@@ -20,6 +21,7 @@ Core planning and audit docs:
 
 - [Implementation Readiness Audit](IMPLEMENTATION_READINESS_AUDIT.md)
 - [AI Agent Engineering Quality Gates](AI_AGENT_ENGINEERING_QUALITY_GATES.md)
+- [Parallel Agent Workstreams](agent-workstreams/)
 - [Autonomous Agent Platform Roadmap](roadmap/AUTONOMOUS_AGENT_PLATFORM_IMPLEMENTATION_ROADMAP.md)
 - [User Runner Local And ECS Architecture](roadmap/USER_RUNNER_LOCAL_ECS_ARCHITECTURE.md)
 - [Project Remaining Work Audit](roadmap/PROJECT_REMAINING_WORK_AUDIT_2026_05_10.md)

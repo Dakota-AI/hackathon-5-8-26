@@ -403,6 +403,14 @@ flutter build macos --debug
 
 Goal: make the system usable when the user walks away.
 
+Detailed architecture and implementation backlog:
+
+- `docs/adr/0009-proactive-communication-plane.md`
+- `docs/roadmap/PROACTIVE_COMMUNICATION_ARCHITECTURE_AUDIT_2026_05_10.md`
+- `docs/roadmap/COMMUNICATION_EVENT_CONTRACTS_2026_05_10.md`
+- `docs/roadmap/VOICE_CALL_AUDIO_MESSAGE_ARCHITECTURE_2026_05_10.md`
+- `docs/roadmap/PROACTIVE_COMMUNICATION_REMAINING_WORK_2026_05_10.md`
+
 Minimum notification events:
 
 ```text

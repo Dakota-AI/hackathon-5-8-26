@@ -12,3 +12,4 @@ Index:
 - [0006 External Assistant Auth](0006-external-assistant-auth.md)
 - [0007 Preview Hosting](0007-preview-hosting.md)
 - [0008 User Runner Placement](0008-user-runner-placement.md)
+- [0009 Proactive Communication Plane](0009-proactive-communication-plane.md)

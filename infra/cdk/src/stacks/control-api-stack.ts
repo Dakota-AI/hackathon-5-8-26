@@ -105,7 +105,7 @@ export class ControlApiStack extends AgentsCloudStack {
     const workItemsFunction = new NodejsFunction(this, "WorkItemsFunction", {
       runtime: Runtime.NODEJS_22_X,
       entry: controlApiEntry,
-      handler: "notImplementedWorkItemsHandler",
+      handler: "workItemsHandler",
       timeout: Duration.seconds(15),
       memorySize: 256,
       environment: commonEnvironment

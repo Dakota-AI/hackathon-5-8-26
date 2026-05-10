@@ -37,13 +37,14 @@ export async function createRun(deps: CreateRunDependencies): Promise<CreateRunR
         return runResult(existing, 202);
       }
       const taskId = taskIdFromRunId(existing.runId);
-      const execution = await deps.executions.startExecution({
+      const execution = await deps.executions.startExecution(withoutUndefined({
         runId: existing.runId,
         taskId,
         workspaceId: existing.workspaceId,
+        workItemId: existing.workItemId,
         userId: existing.userId,
         objective: existing.objective
-      });
+      }));
       await deps.store.updateRunExecution({
         workspaceId: existing.workspaceId,
         runId: existing.runId,
@@ -62,6 +63,7 @@ export async function createRun(deps: CreateRunDependencies): Promise<CreateRunR
   const run: RunRecord = withoutUndefined({
     workspaceId,
     runId,
+    workItemId: deps.request.workItemId,
     userId: deps.user.userId,
     ownerEmail: deps.user.email,
     objective,
@@ -72,16 +74,17 @@ export async function createRun(deps: CreateRunDependencies): Promise<CreateRunR
     updatedAt: timestamp
   });
 
-  const task: TaskRecord = {
+  const task: TaskRecord = withoutUndefined({
     runId,
     taskId,
     workspaceId,
+    workItemId: deps.request.workItemId,
     userId: deps.user.userId,
     workerClass: "agent-runtime",
     status: "queued",
     createdAt: timestamp,
     updatedAt: timestamp
-  };
+  });
 
   const event: EventRecord = buildRunStatusEvent({
     id: eventId(runId, 1),
@@ -102,13 +105,14 @@ export async function createRun(deps: CreateRunDependencies): Promise<CreateRunR
 
   await deps.store.createRunLedger({ run, task, event });
 
-  const execution = await deps.executions.startExecution({
+  const execution = await deps.executions.startExecution(withoutUndefined({
     runId,
     taskId,
     workspaceId,
+    workItemId: deps.request.workItemId,
     userId: deps.user.userId,
     objective
-  });
+  }));
 
   await deps.store.updateRunExecution({
     workspaceId,

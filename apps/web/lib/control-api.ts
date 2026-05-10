@@ -69,6 +69,51 @@ export type AdminRunEventsResponse = {
   nextSeq?: number;
 };
 
+export type AdminHostNodeRecord = {
+  hostId: string;
+  hostRecordType: "HOST";
+  placementTarget: string;
+  status: string;
+  placementTargetStatus: string;
+  capacity?: Record<string, unknown>;
+  health?: Record<string, unknown>;
+  registeredByUserId?: string;
+  registeredByEmail?: string;
+  lastHeartbeatAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type AdminRunnerRecord = {
+  userId: string;
+  runnerId: string;
+  workspaceId: string;
+  status: string;
+  desiredState: string;
+  hostId?: string;
+  placementTarget?: string;
+  hostStatus: string;
+  resourceLimits?: Record<string, unknown>;
+  health?: Record<string, unknown>;
+  lastHeartbeatAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type AdminRunnerTotals = {
+  hosts: number;
+  runners: number;
+  failedHosts: number;
+  failedRunners: number;
+  staleRunners: number;
+};
+
+export type AdminRunnersResponse = {
+  hosts: AdminHostNodeRecord[];
+  runners: AdminRunnerRecord[];
+  totals: AdminRunnerTotals;
+};
+
 const mockRuns = new Map<string, { createdAt: number; objective: string; workspaceId: string; taskId: string }>();
 
 export function getControlApiHealth(): ControlApiHealth {
@@ -206,6 +251,51 @@ export async function listControlApiAdminRuns(options: { limit?: number } = {}):
   });
 
   return parseJsonResponse<AdminRunsResponse>(response);
+}
+
+export async function listControlApiAdminRunners(options: { limit?: number } = {}): Promise<AdminRunnersResponse> {
+  if (isMockMode()) {
+    const now = new Date().toISOString();
+    return {
+      hosts: [
+        {
+          hostId: "local-host",
+          hostRecordType: "HOST",
+          placementTarget: "local-docker",
+          status: "online",
+          placementTargetStatus: "local-docker#online",
+          lastHeartbeatAt: now,
+          updatedAt: now
+        }
+      ],
+      runners: [
+        {
+          userId: "local-user",
+          runnerId: "local-runner",
+          workspaceId: "local-workspace",
+          status: "online",
+          desiredState: "running",
+          hostId: "local-host",
+          placementTarget: "local-docker",
+          hostStatus: "local-host#online",
+          lastHeartbeatAt: now,
+          updatedAt: now
+        }
+      ],
+      totals: { hosts: 1, runners: 1, failedHosts: 0, failedRunners: 0, staleRunners: 0 }
+    };
+  }
+
+  const baseUrl = requireControlApiBaseUrl();
+  const token = await requireIdToken();
+  const params = new URLSearchParams({ limit: String(options.limit ?? 50) });
+  const response = await fetch(`${baseUrl}/admin/runners?${params.toString()}`, {
+    headers: {
+      "authorization": `Bearer ${token}`
+    }
+  });
+
+  return parseJsonResponse<AdminRunnersResponse>(response);
 }
 
 export async function listControlApiAdminRunEvents(runId: string, options: { limit?: number } = {}): Promise<AdminRunEventsResponse> {

@@ -5,10 +5,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { readAmplifyEnv } from "../lib/amplify-config";
 import { resetAmplifyAuthSession } from "../lib/auth-session-reset";
 import { describeAdminLineageEvent, summarizePipelinePosition } from "../lib/admin-lineage";
+import { describeRunnerHealth, sortRunnerRows } from "../lib/admin-runners";
 import {
   getControlApiHealth,
   listControlApiAdminRunEvents,
+  listControlApiAdminRunners,
   listControlApiAdminRuns,
+  type AdminRunnerRecord,
+  type AdminRunnersResponse,
   type AdminRunSummary,
   type AdminRunsResponse,
   type RunEvent
@@ -21,6 +25,18 @@ const defaultAdminState: AdminRunsResponse = {
     failedRuns: 0,
     runningRuns: 0,
     succeededRuns: 0
+  }
+};
+
+const defaultRunnerState: AdminRunnersResponse = {
+  hosts: [],
+  runners: [],
+  totals: {
+    hosts: 0,
+    runners: 0,
+    failedHosts: 0,
+    failedRunners: 0,
+    staleRunners: 0
   }
 };
 
@@ -44,6 +60,7 @@ export function AdminConsole() {
 function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOut?: () => void }) {
   const api = getControlApiHealth();
   const [data, setData] = useState<AdminRunsResponse>(defaultAdminState);
+  const [runnerData, setRunnerData] = useState<AdminRunnersResponse>(defaultRunnerState);
   const [selectedRunId, setSelectedRunId] = useState<string | undefined>();
   const [lineageEvents, setLineageEvents] = useState<RunEvent[]>([]);
   const [lineageLoading, setLineageLoading] = useState(false);
@@ -56,9 +73,13 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
     setLoading(true);
     setError(undefined);
     try {
-      const response = await listControlApiAdminRuns({ limit: 75 });
-      setData(response);
-      setSelectedRunId((current) => current ?? response.runs[0]?.runId);
+      const [runsResponse, runnersResponse] = await Promise.all([
+        listControlApiAdminRuns({ limit: 75 }),
+        listControlApiAdminRunners({ limit: 75 })
+      ]);
+      setData(runsResponse);
+      setRunnerData(runnersResponse);
+      setSelectedRunId((current) => current ?? runsResponse.runs[0]?.runId);
       setLastLoadedAt(new Date().toISOString());
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to load admin runs.");
@@ -137,6 +158,46 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
         <MetricCard label="Running" value={data.totals.runningRuns} />
         <MetricCard label="Succeeded" value={data.totals.succeededRuns} />
         <MetricCard label="Failed" value={data.totals.failedRuns} danger={data.totals.failedRuns > 0} />
+        <MetricCard label="Runners" value={runnerData.totals.runners} danger={runnerData.totals.failedRunners + runnerData.totals.staleRunners > 0} />
+      </section>
+
+      <section className="admin-panel runner-panel">
+        <div className="panel-heading">
+          <div>
+            <h2>Runner fleet</h2>
+            <p>{describeRunnerHealth(runnerData.totals)}</p>
+          </div>
+        </div>
+        <div className="runner-grid">
+          <div>
+            <h3>Hosts</h3>
+            <div className="runner-list">
+              {runnerData.hosts.length ? (
+                runnerData.hosts.slice(0, 8).map((host) => (
+                  <div className="runner-row" key={host.hostId}>
+                    <span className={`status-dot ${host.status}`} />
+                    <span>
+                      <strong>{host.hostId}</strong>
+                      <small>{host.placementTarget} · {host.status} · heartbeat {formatDate(host.lastHeartbeatAt)}</small>
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="empty-state">No runner hosts have checked in yet.</div>
+              )}
+            </div>
+          </div>
+          <div>
+            <h3>User runners</h3>
+            <div className="runner-list">
+              {runnerData.runners.length ? (
+                sortRunnerRows(runnerData.runners).slice(0, 8).map((runner) => <RunnerRow key={`${runner.userId}-${runner.runnerId}`} runner={runner} />)
+              ) : (
+                <div className="empty-state">No user runners have checked in yet.</div>
+              )}
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="admin-grid admin-main-grid">
@@ -209,6 +270,19 @@ function MetricCard({ label, value, danger = false }: { label: string; value: nu
     <div className={danger ? "metric-card danger" : "metric-card"}>
       <span>{label}</span>
       <strong>{value}</strong>
+    </div>
+  );
+}
+
+function RunnerRow({ runner }: { runner: AdminRunnerRecord }) {
+  return (
+    <div className="runner-row">
+      <span className={`status-dot ${runner.status}`} />
+      <span>
+        <strong>{runner.runnerId}</strong>
+        <small>{runner.userId} · {runner.workspaceId} · {runner.status} / {runner.desiredState}</small>
+        <small>{runner.hostId || "unassigned"} · heartbeat {formatDate(runner.lastHeartbeatAt)}</small>
+      </span>
     </div>
   );
 }

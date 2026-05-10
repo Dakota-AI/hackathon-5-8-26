@@ -34,6 +34,11 @@ void main() {
     expect(find.byIcon(LucideIcons.audioLines), findsOneWidget);
     expect(find.byIcon(RadixIcons.bell), findsNothing);
     expect(find.byIcon(RadixIcons.trash), findsNothing);
+    expect(find.byKey(const ValueKey('orb-control-voice-blob')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('orb-control-offer-button')),
+      findsOneWidget,
+    );
     // No legacy clutter copy
     expect(find.text('CEO command center'), findsNothing);
 
@@ -82,7 +87,7 @@ void main() {
     expect(find.text('Inbox'), findsOneWidget);
 
     await tester.tap(navItems.at(1));
-    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+    await _settle(tester);
     expect(find.text('TODO'), findsOneWidget);
     expect(find.text('IN PROGRESS'), findsOneWidget);
     expect(find.text('REVIEW'), findsOneWidget);
@@ -151,6 +156,64 @@ void main() {
     expect(find.text('Kanban'), findsNothing);
     expect(find.byType(Tooltip), findsWidgets);
   });
+
+  testWidgets(
+    'assistant control stays top-bar first and shows orb only in voice mode',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1440, 920);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_bootApp());
+      await _settle(tester);
+
+      expect(
+        find.byKey(const ValueKey('orb-control-voice-blob')),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(const ValueKey('orb-control-offer-button')));
+      await _settle(tester);
+      expect(
+        find.byKey(const ValueKey('orb-control-topbar-message')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('I can show you'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('orb-control-run-mock')));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.textContaining('Thinking through where'), findsOneWidget);
+      expect(find.text('Executive'), findsWidgets);
+
+      await tester.pump(const Duration(milliseconds: 650));
+      expect(find.textContaining('Taking you to Kanban'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 650));
+      expect(
+        find.textContaining('Opening the preview surface'),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(milliseconds: 650));
+      expect(find.textContaining('Now I need your approval'), findsOneWidget);
+      expect(find.textContaining('Publish launch-demo'), findsOneWidget);
+
+      await tester.tap(find.text('Voice'));
+      await _settle(tester);
+      expect(
+        find.byKey(const ValueKey('orb-control-voice-blob')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Voice walkthrough active'), findsWidgets);
+
+      await tester.tap(find.text('Text'));
+      await _settle(tester);
+      expect(
+        find.byKey(const ValueKey('orb-control-voice-blob')),
+        findsNothing,
+      );
+      expect(find.textContaining('Voice paused'), findsOneWidget);
+    },
+  );
 
   testWidgets('shows sign-in page when auth bypass is off and no session', (
     WidgetTester tester,

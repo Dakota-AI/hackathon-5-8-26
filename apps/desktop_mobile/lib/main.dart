@@ -13,14 +13,20 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import 'backend_config.dart';
 import 'src/api/control_api.dart';
+import 'src/assistant_control/orb_control_controller.dart';
+import 'src/assistant_control/orb_control_layer.dart';
 import 'src/auth/auth_controller.dart';
 import 'src/auth/sign_in_page.dart';
+import 'src/browser/agent_browser_control.dart';
+import 'src/browser/agent_browser_protocol.dart';
+import 'src/browser/agent_browser_websocket_bridge.dart';
 import 'src/data/fixture_work_repository.dart';
 import 'src/data/http_work_repository.dart';
 import 'src/domain/work_item_models.dart';
 import 'src/realtime/realtime_client.dart';
 import 'src/screens/chat_screen.dart';
 import 'src/screens/voice_mode_screen.dart' show VoiceModeScreen;
+import 'src/ui/brand_mark.dart';
 import 'src/conversation/agent_inbox.dart';
 import 'src/conversation/conversation_store.dart';
 import 'src/conversation/store_persistence.dart';
@@ -62,8 +68,12 @@ enum ConsolePage {
   miro,
 }
 
+const _agentBrowserBridgeAutoOpen = bool.fromEnvironment(
+  'AGENTS_CLOUD_BROWSER_BRIDGE_AUTO_OPEN_BROWSER',
+);
+
 final selectedPageProvider = StateProvider<ConsolePage>(
-  (ref) => ConsolePage.work,
+  (ref) => _agentBrowserBridgeAutoOpen ? ConsolePage.browser : ConsolePage.work,
 );
 
 final selectedAgentIdProvider = StateProvider<String?>((ref) => null);
@@ -128,38 +138,70 @@ class ConsoleShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedPage = ref.watch(selectedPageProvider);
+    ref.listen<OrbControlState>(orbControlControllerProvider, (previous, next) {
+      if (previous?.targetRevision == next.targetRevision ||
+          next.targetSurface == null) {
+        return;
+      }
+      final page = switch (next.targetSurface!) {
+        OrbControlSurface.agents => ConsolePage.work,
+        OrbControlSurface.kanban => ConsolePage.kanban,
+        OrbControlSurface.browser => ConsolePage.browser,
+        OrbControlSurface.approvals => ConsolePage.approvals,
+      };
+      ref.read(selectedPageProvider.notifier).state = page;
+      if (next.targetAgentId != null) {
+        ref.read(selectedAgentIdProvider.notifier).state = next.targetAgentId;
+      }
+    });
+
+    final controlState = ref.watch(orbControlControllerProvider);
+    final selectedPage = controlState.targetSurface == null
+        ? ref.watch(selectedPageProvider)
+        : switch (controlState.targetSurface!) {
+            OrbControlSurface.agents => ConsolePage.work,
+            OrbControlSurface.kanban => ConsolePage.kanban,
+            OrbControlSurface.browser => ConsolePage.browser,
+            OrbControlSurface.approvals => ConsolePage.approvals,
+          };
     final isCompact = MediaQuery.sizeOf(context).width < 760;
+
+    final body = isCompact
+        ? Column(
+            children: [
+              Expanded(child: _PageBody(page: selectedPage)),
+              const Divider(height: 1, color: _Palette.border),
+              _MobileNavBar(selectedPage: selectedPage),
+            ],
+          )
+        : Row(
+            children: [
+              _Sidebar(selectedPage: selectedPage),
+              const SizedBox(
+                width: 1,
+                child: ColoredBox(color: _Palette.border),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    const _TopBar(),
+                    const Divider(height: 1, color: _Palette.border),
+                    Expanded(child: _PageBody(page: selectedPage)),
+                  ],
+                ),
+              ),
+            ],
+          );
 
     return Scaffold(
       backgroundColor: _Palette.background,
       child: SafeArea(
-        child: isCompact
-            ? Column(
-                children: [
-                  Expanded(child: _PageBody(page: selectedPage)),
-                  const Divider(height: 1, color: _Palette.border),
-                  _MobileNavBar(selectedPage: selectedPage),
-                ],
-              )
-            : Row(
-                children: [
-                  _Sidebar(selectedPage: selectedPage),
-                  const SizedBox(
-                    width: 1,
-                    child: ColoredBox(color: _Palette.border),
-                  ),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        const _TopBar(),
-                        const Divider(height: 1, color: _Palette.border),
-                        Expanded(child: _PageBody(page: selectedPage)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+        child: Stack(
+          children: [
+            Positioned.fill(child: body),
+            const OrbControlLayer(),
+          ],
+        ),
       ),
     );
   }
@@ -269,7 +311,7 @@ class _SidebarCollapseButton extends ConsumerWidget {
               ? MainAxisAlignment.center
               : MainAxisAlignment.spaceBetween,
           children: [
-            const Icon(RadixIcons.target, size: 16, color: _Palette.text),
+            const BrandMark(size: 17),
             if (!collapsed) ...[
               const Spacer(),
               const Icon(
@@ -360,7 +402,12 @@ class _TopBar extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Row(
         children: [
-          const Expanded(child: SizedBox.shrink()),
+          const Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: OrbTopBarStatus(),
+            ),
+          ),
           if (email != null) ...[
             Text(
               email,
@@ -2904,8 +2951,22 @@ class _BrowserPage extends StatefulWidget {
 
 class _BrowserPageState extends State<_BrowserPage> {
   static const _previewUrl = 'https://example.com';
+  static const _agentSmokeUrl = 'https://agents-cloud.local/browser-smoke';
+  static const _agentBridgeEnabled = bool.fromEnvironment(
+    'AGENTS_CLOUD_BROWSER_BRIDGE',
+  );
+  static const _agentBridgePort = int.fromEnvironment(
+    'AGENTS_CLOUD_BROWSER_BRIDGE_PORT',
+    defaultValue: 48765,
+  );
+  static const _agentBridgeToken = String.fromEnvironment(
+    'AGENTS_CLOUD_BROWSER_BRIDGE_TOKEN',
+  );
+
   late final TextEditingController _urlController;
   WebViewController? _controller;
+  AgentBrowserControl? _agentControl;
+  AgentBrowserWebSocketBridge? _agentBridge;
   String _status = '';
 
   @override
@@ -2920,7 +2981,7 @@ class _BrowserPageState extends State<_BrowserPage> {
             )
           : const PlatformWebViewControllerCreationParams();
       _controller = WebViewController.fromPlatformCreationParams(params)
-        ..setJavaScriptMode(JavaScriptMode.disabled)
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setNavigationDelegate(
           NavigationDelegate(
             onPageStarted: (url) => setState(() => _status = 'Loading $url'),
@@ -2929,17 +2990,27 @@ class _BrowserPageState extends State<_BrowserPage> {
                 _status = '';
                 _urlController.text = url;
               });
+              unawaited(_installAgentBridge());
             },
             onWebResourceError: (error) =>
                 setState(() => _status = 'WebView error: ${error.description}'),
           ),
         )
         ..loadRequest(Uri.parse(_previewUrl));
+      _agentControl = AgentBrowserControl(
+        _controller!,
+        logSink: _logAgentBrowser,
+      );
+      unawaited(_installAgentBridge());
+      unawaited(_startAgentBridgeIfEnabled());
     }
   }
 
   @override
   void dispose() {
+    final bridge = _agentBridge;
+    _agentBridge = null;
+    if (bridge != null) unawaited(bridge.close());
     _urlController.dispose();
     super.dispose();
   }
@@ -2972,19 +3043,216 @@ class _BrowserPageState extends State<_BrowserPage> {
     setState(() => _status = 'Reloading');
   }
 
+  Future<void> _loadAgentSmokePage() async {
+    final controller = _controller;
+    if (controller == null) return;
+    _logAgentBrowser(
+      AgentBrowserLogEntry(
+        level: AgentBrowserLogLevel.info,
+        event: 'smoke-page.load',
+        message: 'Loading local browser smoke page',
+        fields: {'url': _agentSmokeUrl},
+      ),
+    );
+    await controller.loadHtmlString(
+      agentBrowserSmokePageHtml,
+      baseUrl: _agentSmokeUrl,
+    );
+    if (!mounted) return;
+    setState(() {
+      _urlController.text = _agentSmokeUrl;
+      _status = '';
+    });
+    await _installAgentBridge();
+  }
+
+  Future<AgentBrowserResult> _waitForAgentBrowserPage(
+    String expectedTitle,
+  ) async {
+    final control = _agentControl;
+    if (control == null) throw StateError('Browser control is not ready');
+    final deadline = DateTime.now().add(const Duration(seconds: 4));
+    AgentBrowserResult? lastResult;
+    while (DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 75));
+      lastResult = await control.snapshot(maxElements: 40, maxTextChars: 4000);
+      if (lastResult.title == expectedTitle ||
+          lastResult.url == _agentSmokeUrl) {
+        return lastResult;
+      }
+    }
+    throw StateError(
+      'Timed out waiting for $expectedTitle; last page was '
+      '${lastResult?.title ?? 'unknown'} at ${lastResult?.url ?? 'unknown'}',
+    );
+  }
+
   Future<void> _goBack() async {
     final controller = _controller;
     if (controller == null) return;
     if (await controller.canGoBack()) {
       await controller.goBack();
-      setState(() => _status = 'Navigated back');
-    } else {
-      setState(() => _status = 'No browser history yet');
     }
+  }
+
+  Future<void> _installAgentBridge() async {
+    final control = _agentControl;
+    if (control == null) return;
+    try {
+      await control.install();
+    } catch (error) {
+      _logAgentBrowser(
+        AgentBrowserLogEntry(
+          level: AgentBrowserLogLevel.error,
+          event: 'install.error',
+          message: 'Bridge injection failed',
+          fields: {'error': error.toString()},
+        ),
+      );
+    }
+  }
+
+  Future<void> _startAgentBridgeIfEnabled() async {
+    if (!_agentBridgeEnabled || _runningInWidgetTest || _agentBridge != null) {
+      return;
+    }
+    try {
+      final bridge = AgentBrowserWebSocketBridge(
+        dispatcher: _createAgentCommandDispatcher(),
+        logSink: _logAgentBrowser,
+        token: _agentBridgeToken.isEmpty ? null : _agentBridgeToken,
+      );
+      _agentBridge = bridge;
+      await bridge.start(port: _agentBridgePort);
+    } catch (error) {
+      _logAgentBrowser(
+        AgentBrowserLogEntry(
+          level: AgentBrowserLogLevel.error,
+          event: 'ws.start.error',
+          message: 'Failed to start browser bridge WebSocket server',
+          fields: {'error': error.toString(), 'port': _agentBridgePort},
+        ),
+      );
+    }
+  }
+
+  AgentBrowserCommandDispatcher _createAgentCommandDispatcher() {
+    final controller = _controller;
+    final control = _agentControl;
+    if (controller == null || control == null) {
+      throw StateError('Browser controller is not ready');
+    }
+    return AgentBrowserCommandDispatcher(
+      logSink: _logAgentBrowser,
+      handlers: {
+        'load_smoke_page': (_) async {
+          await _loadAgentSmokePage();
+          final result = await _waitForAgentBrowserPage('Agent Browser Smoke');
+          return {
+            'url': result.url,
+            'title': result.title,
+            'message': 'Loaded local browser smoke page',
+          };
+        },
+        'run_smoke': (request) async {
+          await _installAgentBridge();
+          return (await control.runSmokeWorkflow(
+            fillValue: _argString(
+              request.args,
+              'fillValue',
+              fallback: 'agent smoke passed',
+            ),
+          )).toJson();
+        },
+        'snapshot': (request) async {
+          await _installAgentBridge();
+          return (await control.snapshot(
+            maxElements: _argInt(request.args, 'maxElements', fallback: 80),
+            maxTextChars: _argInt(request.args, 'maxTextChars', fallback: 8000),
+          )).toJson();
+        },
+        'find': (request) async {
+          await _installAgentBridge();
+          return (await control.find(
+            _argString(
+              request.args,
+              'query',
+              fallback: _argString(request.args, 'text'),
+            ),
+            maxElements: _argInt(request.args, 'maxElements', fallback: 20),
+          )).toJson();
+        },
+        'scroll_by': (request) async {
+          await _installAgentBridge();
+          return (await control.scrollBy(
+            x: _argInt(request.args, 'x'),
+            y: _argInt(request.args, 'y', fallback: 640),
+          )).toJson();
+        },
+        'scrollBy': (request) async {
+          await _installAgentBridge();
+          return (await control.scrollBy(
+            x: _argInt(request.args, 'x'),
+            y: _argInt(request.args, 'y', fallback: 640),
+          )).toJson();
+        },
+        'click': (request) async {
+          await _installAgentBridge();
+          return (await control.click(_targetFromArgs(request.args))).toJson();
+        },
+        'fill': (request) async {
+          await _installAgentBridge();
+          return (await control.fill(
+            _targetFromArgs(request.args),
+            _argString(request.args, 'value'),
+          )).toJson();
+        },
+        'navigate': (request) async {
+          final uri = _safeHttpsUri(_argString(request.args, 'url'));
+          if (uri == null) throw StateError('Only https URLs are allowed');
+          await controller.loadRequest(uri);
+          if (mounted) setState(() => _urlController.text = uri.toString());
+          return {'url': uri.toString()};
+        },
+        'reload': (_) async {
+          await controller.reload();
+          return {'reloaded': true};
+        },
+        'back': (_) async {
+          final canGoBack = await controller.canGoBack();
+          if (canGoBack) await controller.goBack();
+          return {'navigated': canGoBack};
+        },
+        'forward': (_) async {
+          final canGoForward = await controller.canGoForward();
+          if (canGoForward) await controller.goForward();
+          return {'navigated': canGoForward};
+        },
+      },
+    );
+  }
+
+  void _logAgentBrowser(AgentBrowserLogEntry entry) {
+    debugPrint('[agent-browser] ${entry.toLine()}');
   }
 
   @override
   Widget build(BuildContext context) {
+    final browserFrame = Card(
+      filled: true,
+      fillColor: const Color(0xFF080808),
+      borderColor: _Palette.border,
+      borderRadius: BorderRadius.circular(10),
+      padding: EdgeInsets.zero,
+      boxShadow: const [],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: _runningInWidgetTest
+            ? const Center(child: Text('Preview opened inside the app'))
+            : WebViewWidget(controller: _controller!),
+      ),
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
       child: Column(
@@ -3046,26 +3314,37 @@ class _BrowserPageState extends State<_BrowserPage> {
             ),
           ),
           const SizedBox(height: 8),
-          Expanded(
-            child: Card(
-              filled: true,
-              fillColor: const Color(0xFF080808),
-              borderColor: _Palette.border,
-              borderRadius: BorderRadius.circular(10),
-              padding: EdgeInsets.zero,
-              boxShadow: const [],
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: _runningInWidgetTest
-                    ? const Center(child: Text('Preview opened inside the app'))
-                    : WebViewWidget(controller: _controller!),
-              ),
-            ),
-          ),
+          Expanded(child: browserFrame),
         ],
       ),
     );
   }
+}
+
+int _argInt(Map<String, Object?> args, String key, {int fallback = 0}) {
+  final value = args[key];
+  if (value is int) return value;
+  if (value is num) return value.round();
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+String _argString(
+  Map<String, Object?> args,
+  String key, {
+  String fallback = '',
+}) {
+  final value = args[key];
+  if (value == null) return fallback;
+  final string = value.toString();
+  return string.isEmpty ? fallback : string;
+}
+
+AgentBrowserTarget _targetFromArgs(Map<String, Object?> args) {
+  final target = args['target'];
+  if (target is Map) {
+    return AgentBrowserTarget.fromJson(target.cast<String, Object?>());
+  }
+  return AgentBrowserTarget.fromJson(args);
 }
 
 class _UiKitPage extends StatelessWidget {

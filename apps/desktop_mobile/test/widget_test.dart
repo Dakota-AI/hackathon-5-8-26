@@ -29,12 +29,15 @@ void main() {
     await tester.pumpWidget(_bootApp());
     await _settle(tester);
 
-    expect(find.text('Workspace'), findsOneWidget);
-    expect(find.text('Executive'), findsOneWidget);
+    expect(find.text('Agents'), findsWidgets);
+    expect(find.text('Chat'), findsNothing);
     expect(find.text('Builder'), findsOneWidget);
+    expect(find.byIcon(LucideIcons.audioLines), findsOneWidget);
+    expect(find.byIcon(RadixIcons.bell), findsNothing);
+    expect(find.byIcon(RadixIcons.trash), findsNothing);
     // No legacy clutter copy
     expect(find.text('CEO command center'), findsNothing);
-    expect(find.text('Local · fixtures'), findsNothing);
+
     expect(find.text('Amplify Auth configured'), findsNothing);
   });
 
@@ -49,13 +52,18 @@ void main() {
     await tester.pumpWidget(_bootApp());
     await _settle(tester);
 
-    await tester.tap(find.text('Executive'));
-    await _settle(tester);
-
-    expect(find.text('Overview'), findsOneWidget);
+    // Workspace now defaults to the top agent detail.
+    expect(find.text('Executive'), findsWidgets);
+    expect(find.text('Chat'), findsNothing);
+    expect(find.text('Start the conversation.'), findsOneWidget);
+    expect(find.byIcon(LucideIcons.audioLines), findsOneWidget);
+    expect(find.byIcon(RadixIcons.bell), findsNothing);
+    expect(find.byIcon(RadixIcons.trash), findsNothing);
     expect(find.text('Activity'), findsOneWidget);
     expect(find.text('Artifacts'), findsOneWidget);
     expect(find.text('Approvals'), findsWidgets);
+    await tester.tap(find.text('Work'));
+    await _settle(tester);
     expect(find.text('Current focus'), findsOneWidget);
   });
 
@@ -73,29 +81,27 @@ void main() {
     // Sidebar order: Agents(0), Kanban(1), Approvals(2), Browser(3),
     // GenUI Lab(4), UI Kit(5).
     final navItems = find.byType(NavigationItem);
-    expect(navItems, findsNWidgets(8));
+    expect(navItems, findsNWidgets(6));
 
-    // Agents(0) Chat(1) Live Call(2) Kanban(3) Approvals(4) Browser(5)
-    // GenUI Lab(6) UI Kit(7)
-    await tester.tap(navItems.at(3));
+    await tester.tap(navItems.at(1));
     await tester.pumpAndSettle(const Duration(milliseconds: 300));
     expect(find.text('TODO'), findsOneWidget);
     expect(find.text('IN PROGRESS'), findsOneWidget);
     expect(find.text('REVIEW'), findsOneWidget);
     expect(find.text('DONE'), findsOneWidget);
 
-    await tester.tap(navItems.at(5));
+    await tester.tap(navItems.at(3));
     await _settle(tester);
     expect(find.text('Embedded browser'), findsOneWidget);
-    expect(find.text('Load URL'), findsOneWidget);
+    expect(find.text('Load'), findsOneWidget);
 
-    await tester.tap(navItems.at(6));
+    await tester.tap(navItems.at(4));
     await _settle(tester);
     expect(find.byType(LineChart), findsOneWidget);
     expect(find.byType(BarChart), findsOneWidget);
     expect(find.byType(PieChart), findsOneWidget);
 
-    await tester.tap(navItems.at(7));
+    await tester.tap(navItems.at(5));
     await _settle(tester);
     expect(find.text('UI testing suite'), findsOneWidget);
   });

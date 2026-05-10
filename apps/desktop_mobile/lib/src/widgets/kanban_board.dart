@@ -208,67 +208,113 @@ class _CountBadge extends StatelessWidget {
   }
 }
 
-class _KanbanCard extends StatelessWidget {
+class _KanbanCard extends StatefulWidget {
   const _KanbanCard({required this.item});
 
   final WorkItem item;
 
   @override
+  State<_KanbanCard> createState() => _KanbanCardState();
+}
+
+class _KanbanCardState extends State<_KanbanCard> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
     final summary = item.summary;
     final artifactCount = summary.artifactCount;
     final approvalCount = summary.pendingApprovalCount;
-    return Card(
-      filled: true,
-      fillColor: _KanbanPalette.card,
-      borderColor: _KanbanPalette.border,
-      borderRadius: BorderRadius.circular(10),
-      padding: const EdgeInsets.all(10),
-      boxShadow: const [],
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            item.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: _KanbanPalette.text,
-              fontWeight: FontWeight.w800,
-              height: 1.2,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            item.nextAction,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: _KanbanPalette.muted,
-              fontSize: 11,
-              height: 1.3,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        transform: Matrix4.translationValues(0, _hovered ? -2 : 0, 0),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: _hovered
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.24),
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
+                  ),
+                ]
+              : const [],
+        ),
+        child: Card(
+          filled: true,
+          fillColor: _hovered ? const Color(0xFF121212) : _KanbanPalette.card,
+          borderColor: _hovered ? _KanbanPalette.muted : _KanbanPalette.border,
+          borderRadius: BorderRadius.circular(10),
+          padding: const EdgeInsets.all(10),
+          boxShadow: const [],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _StatusPill(label: summary.statusLabel),
-              _MutedMetaText(
-                text:
-                    '$artifactCount '
-                    '${artifactCount == 1 ? 'artifact' : 'artifacts'}',
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      item.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _KanbanPalette.text,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                  AnimatedOpacity(
+                    opacity: _hovered ? 1 : 0,
+                    duration: const Duration(milliseconds: 120),
+                    child: const Padding(
+                      padding: EdgeInsets.only(left: 8, top: 1),
+                      child: Icon(
+                        RadixIcons.chatBubble,
+                        size: 13,
+                        color: _KanbanPalette.muted,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              _MutedMetaText(
-                text:
-                    '$approvalCount '
-                    '${approvalCount == 1 ? 'approval' : 'approvals'}',
+              const SizedBox(height: 4),
+              Text(
+                item.nextAction,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _KanbanPalette.muted,
+                  fontSize: 11,
+                  height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _StatusPill(label: summary.statusLabel),
+                  _MutedMetaText(
+                    text:
+                        '$artifactCount ${artifactCount == 1 ? 'artifact' : 'artifacts'}',
+                  ),
+                  _MutedMetaText(
+                    text:
+                        '$approvalCount ${approvalCount == 1 ? 'approval' : 'approvals'}',
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

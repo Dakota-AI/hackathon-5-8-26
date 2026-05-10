@@ -66,7 +66,9 @@ final selectedPageProvider = StateProvider<ConsolePage>(
   (ref) => ConsolePage.work,
 );
 
-final selectedAgentIdProvider = StateProvider<String?>((ref) => null);
+final selectedAgentIdProvider = StateProvider<String?>(
+  (ref) => _fixtureAgents.first.id,
+);
 
 final sidebarCollapsedProvider = StateProvider<bool>((ref) => false);
 
@@ -196,20 +198,6 @@ class _Sidebar extends ConsumerWidget {
             icon: RadixIcons.group,
             page: ConsolePage.work,
             selected: selectedPage == ConsolePage.work,
-            collapsed: collapsed,
-          ),
-          _NavButton(
-            label: 'Chat',
-            icon: RadixIcons.chatBubble,
-            page: ConsolePage.agentChat,
-            selected: selectedPage == ConsolePage.agentChat,
-            collapsed: collapsed,
-          ),
-          _NavButton(
-            label: 'Live Call',
-            icon: RadixIcons.speakerLoud,
-            page: ConsolePage.voiceCall,
-            selected: selectedPage == ConsolePage.voiceCall,
             collapsed: collapsed,
           ),
           _NavButton(
@@ -384,7 +372,7 @@ class _NavTooltip extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!enabled) return child;
     return Tooltip(
-      waitDuration: Duration.zero,
+      waitDuration: const Duration(milliseconds: 450),
       anchorAlignment: Alignment.centerRight,
       alignment: Alignment.centerLeft,
       tooltip: (context) => TooltipContainer(child: Text(label)),
@@ -473,20 +461,6 @@ class _MobileNavBar extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(6, 5, 6, 6),
       child: Row(
         children: [
-          _MobileNavItem(
-            label: 'Chat',
-            icon: RadixIcons.chatBubble,
-            selected: selectedPage == ConsolePage.agentChat,
-            onTap: () => ref.read(selectedPageProvider.notifier).state =
-                ConsolePage.agentChat,
-          ),
-          _MobileNavItem(
-            label: 'Call',
-            icon: RadixIcons.speakerLoud,
-            selected: selectedPage == ConsolePage.voiceCall,
-            onTap: () => ref.read(selectedPageProvider.notifier).state =
-                ConsolePage.voiceCall,
-          ),
           _MobileNavItem(
             label: 'Work',
             icon: RadixIcons.dashboard,
@@ -579,8 +553,8 @@ class _PageBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (page) {
       ConsolePage.work => const _AgentsWorkspacePage(),
-      ConsolePage.agentChat => const ChatScreen(),
-      ConsolePage.voiceCall => const _ComingSoonPage(label: 'Voice mode'),
+      ConsolePage.agentChat => const _AgentsWorkspacePage(),
+      ConsolePage.voiceCall => const _AgentsWorkspacePage(),
       ConsolePage.kanban => const _KanbanPage(),
       ConsolePage.genuiLab => const _GenUiLabPage(),
       ConsolePage.browser => const _BrowserPage(),
@@ -693,133 +667,294 @@ class _AgentsWorkspacePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedId = ref.watch(selectedAgentIdProvider);
-    if (selectedId != null) {
-      final agent = _fixtureAgents.firstWhere(
-        (a) => a.id == selectedId,
-        orElse: () => _fixtureAgents.first,
+    final selectedId =
+        ref.watch(selectedAgentIdProvider) ?? _fixtureAgents.first.id;
+    final selected = _fixtureAgents.firstWhere(
+      (agent) => agent.id == selectedId,
+      orElse: () => _fixtureAgents.first,
+    );
+    final compact = MediaQuery.sizeOf(context).width < 980;
+    if (compact) {
+      return Column(
+        children: [
+          SizedBox(
+            height: 118,
+            child: _AgentRail(selectedId: selected.id, horizontal: true),
+          ),
+          const Divider(height: 1, color: _Palette.border),
+          Expanded(child: _AgentDetailPage(agent: selected)),
+        ],
       );
-      return _AgentDetailPage(agent: agent);
     }
-    final width = MediaQuery.sizeOf(context).width;
-    final crossAxisCount = width < 700 ? 2 : (width < 1100 ? 3 : 4);
-    return ListView(
-      padding: const EdgeInsets.all(18),
+    return Row(
       children: [
-        const _SectionHeader(
-          title: 'Workspace',
-          subtitle: 'Your agents. Click in to see what they are doing.',
-        ),
-        const SizedBox(height: 14),
-        GridView.count(
-          crossAxisCount: crossAxisCount,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 1.55,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          children: [
-            for (final agent in _fixtureAgents) _AgentTile(agent: agent),
-          ],
-        ),
+        SizedBox(width: 310, child: _AgentRail(selectedId: selected.id)),
+        const VerticalDivider(width: 1, color: _Palette.border),
+        Expanded(child: _AgentDetailPage(agent: selected)),
       ],
     );
   }
 }
 
-class _AgentTile extends ConsumerWidget {
-  const _AgentTile({required this.agent});
-  final _AgentDescriptor agent;
+class _AgentRail extends ConsumerWidget {
+  const _AgentRail({required this.selectedId, this.horizontal = false});
+
+  final String selectedId;
+  final bool horizontal;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => ref.read(selectedAgentIdProvider.notifier).state = agent.id,
+    final content = [
+      Padding(
+        padding: EdgeInsets.fromLTRB(
+          horizontal ? 10 : 12,
+          10,
+          horizontal ? 6 : 12,
+          8,
+        ),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Agents',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Select an agent, chat, review work.',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: _Palette.muted, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            _MiniIconButton(icon: RadixIcons.plus, label: 'New agent'),
+          ],
+        ),
+      ),
+      if (!horizontal) const Divider(height: 1, color: _Palette.border),
+      if (horizontal)
+        Expanded(
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            itemBuilder: (context, index) => SizedBox(
+              width: 220,
+              child: _AgentListItem(
+                agent: _fixtureAgents[index],
+                selected: _fixtureAgents[index].id == selectedId,
+              ),
+            ),
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemCount: _fixtureAgents.length,
+          ),
+        )
+      else
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.all(8),
+            itemBuilder: (context, index) => _AgentListItem(
+              agent: _fixtureAgents[index],
+              selected: _fixtureAgents[index].id == selectedId,
+            ),
+            separatorBuilder: (_, _) => const SizedBox(height: 6),
+            itemCount: _fixtureAgents.length,
+          ),
+        ),
+    ];
+
+    return ColoredBox(
+      color: _Palette.sidebar,
+      child: horizontal
+          ? Column(children: content)
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: content,
+            ),
+    );
+  }
+}
+
+class _MiniIconButton extends StatelessWidget {
+  const _MiniIconButton({required this.icon, required this.label});
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      tooltip: (context) => TooltipContainer(child: Text(label)),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        width: 28,
+        height: 28,
         decoration: BoxDecoration(
-          color: _Palette.panel,
-          borderRadius: BorderRadius.circular(12),
+          color: _Palette.input,
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: _Palette.border),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: _Palette.input,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: _Palette.border),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    agent.name.substring(0, 1),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 15,
+        child: Icon(icon, size: 14, color: _Palette.muted),
+      ),
+    );
+  }
+}
+
+class _AgentListItem extends ConsumerStatefulWidget {
+  const _AgentListItem({required this.agent, required this.selected});
+  final _AgentDescriptor agent;
+  final bool selected;
+
+  @override
+  ConsumerState<_AgentListItem> createState() => _AgentListItemState();
+}
+
+class _AgentListItemState extends ConsumerState<_AgentListItem> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final agent = widget.agent;
+    final selected = widget.selected;
+    final borderColor = selected
+        ? _Palette.text.withValues(alpha: 0.65)
+        : _hovered
+        ? _Palette.muted.withValues(alpha: 0.6)
+        : _Palette.border;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () =>
+            ref.read(selectedAgentIdProvider.notifier).state = agent.id,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          transform: Matrix4.translationValues(0, _hovered ? -1 : 0, 0),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: selected
+                ? _Palette.input
+                : (_hovered
+                      ? _Palette.input.withValues(alpha: 0.72)
+                      : _Palette.panel),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: borderColor, width: selected ? 1.3 : 1),
+            boxShadow: _hovered
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.22),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
+                  ]
+                : const [],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _Palette.background,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Text(
+                  agent.name.substring(0, 1),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
-                const Spacer(),
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: _statusColor(agent.status),
-                    shape: BoxShape.circle,
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            agent.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: _statusColor(agent.status),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            agent.role,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _Palette.muted,
+                              fontSize: 10.5,
+                            ),
+                          ),
+                        ),
+                        if (agent.unread > 0)
+                          Container(
+                            margin: const EdgeInsets.only(left: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 1.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _Palette.text,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '${agent.unread}',
+                              style: const TextStyle(
+                                color: _Palette.background,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              AnimatedOpacity(
+                opacity: _hovered || selected ? 1 : 0,
+                duration: const Duration(milliseconds: 120),
+                child: const Padding(
+                  padding: EdgeInsets.only(left: 8),
+                  child: Icon(
+                    RadixIcons.chatBubble,
+                    size: 14,
+                    color: _Palette.muted,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              agent.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              agent.role,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _Palette.muted, fontSize: 11.5),
-            ),
-            const Spacer(),
-            Row(
-              children: [
-                Text(
-                  _statusLabel(agent.status),
-                  style: const TextStyle(color: _Palette.muted, fontSize: 11),
-                ),
-                const Spacer(),
-                if (agent.unread > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _Palette.text,
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                    child: Text(
-                      '${agent.unread}',
-                      style: const TextStyle(
-                        color: _Palette.background,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -878,16 +1013,6 @@ class _AgentDetailPageState extends ConsumerState<_AgentDetailPage> {
           ),
           child: Row(
             children: [
-              GestureDetector(
-                onTap: () =>
-                    ref.read(selectedAgentIdProvider.notifier).state = null,
-                child: const Icon(
-                  RadixIcons.arrowLeft,
-                  size: 16,
-                  color: _Palette.muted,
-                ),
-              ),
-              const SizedBox(width: 12),
               Container(
                 width: 8,
                 height: 8,
@@ -928,10 +1053,11 @@ class _AgentDetailPageState extends ConsumerState<_AgentDetailPage> {
           child: Row(
             children: [
               for (final entry in const [
-                (0, 'Overview'),
-                (1, 'Activity'),
-                (2, 'Artifacts'),
-                (3, 'Approvals'),
+                (0, '', RadixIcons.chatBubble),
+                (1, 'Work', null),
+                (2, 'Activity', null),
+                (3, 'Artifacts', null),
+                (4, 'Approvals', null),
               ])
                 Padding(
                   padding: const EdgeInsets.only(right: 18),
@@ -939,16 +1065,25 @@ class _AgentDetailPageState extends ConsumerState<_AgentDetailPage> {
                     onTap: () => setState(() => _tabIndex = entry.$1),
                     child: Column(
                       children: [
-                        Text(
-                          entry.$2,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w800,
+                        if (entry.$3 != null)
+                          Icon(
+                            entry.$3,
+                            size: 15,
                             color: _tabIndex == entry.$1
                                 ? _Palette.text
                                 : _Palette.muted,
+                          )
+                        else
+                          Text(
+                            entry.$2,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                              color: _tabIndex == entry.$1
+                                  ? _Palette.text
+                                  : _Palette.muted,
+                            ),
                           ),
-                        ),
                         const SizedBox(height: 6),
                         Container(
                           height: 2,
@@ -966,10 +1101,17 @@ class _AgentDetailPageState extends ConsumerState<_AgentDetailPage> {
         ),
         Expanded(
           child: switch (_tabIndex) {
-            1 => _ActivityTab(detail: detail),
-            2 => _ArtifactsTab(detail: detail),
-            3 => _ApprovalsTab(detail: detail),
-            _ => _OverviewTab(agent: agent, detail: detail),
+            1 => _OverviewTab(agent: agent, detail: detail),
+            2 => _ActivityTab(detail: detail),
+            3 => _ArtifactsTab(detail: detail),
+            4 => _ApprovalsTab(detail: detail),
+            _ => AgentChatSurface(
+              key: ValueKey('agent-chat-${agent.id}'),
+              agentName: '${agent.name} chat',
+              showTopBar: false,
+              showVoiceAction: true,
+              compact: true,
+            ),
           },
         ),
       ],
@@ -1288,21 +1430,6 @@ class _KanbanPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Padding(padding: EdgeInsets.all(14), child: KanbanBoard());
-  }
-}
-
-class _ComingSoonPage extends StatelessWidget {
-  const _ComingSoonPage({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        '$label coming soon',
-        style: const TextStyle(color: _Palette.muted, fontSize: 14),
-      ),
-    );
   }
 }
 
@@ -2291,7 +2418,9 @@ class _GeneratedLineChartCard extends StatelessWidget {
                 fl.FlLine(color: _Palette.border, strokeWidth: 1),
           ),
           borderData: fl.FlBorderData(show: false),
-          titlesData: _chartTitles(),
+          titlesData: _chartTitles(
+            bottomLabels: const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+          ),
           lineTouchData: const fl.LineTouchData(enabled: true),
           lineBarsData: [
             fl.LineChartBarData(
@@ -2306,7 +2435,7 @@ class _GeneratedLineChartCard extends StatelessWidget {
               isCurved: true,
               color: _Palette.text,
               barWidth: 2.4,
-              dotData: const fl.FlDotData(show: false),
+              dotData: const fl.FlDotData(show: true),
               belowBarData: fl.BarAreaData(
                 show: true,
                 color: _Palette.text.withValues(alpha: 0.08),
@@ -2379,36 +2508,94 @@ class _GeneratedPieChartCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _ChartCard(
       title: 'Approval mix',
-      child: fl.PieChart(
-        fl.PieChartData(
-          centerSpaceRadius: 36,
-          sectionsSpace: 2,
-          pieTouchData: fl.PieTouchData(enabled: true),
-          sections: [
-            _pieSection('Ready', 45, _Palette.text),
-            _pieSection('Waiting', 35, _Palette.muted),
-            _pieSection('Blocked', 20, _Palette.border),
-          ],
-        ),
+      child: Row(
+        children: [
+          Expanded(
+            child: fl.PieChart(
+              fl.PieChartData(
+                centerSpaceRadius: 34,
+                sectionsSpace: 2,
+                pieTouchData: fl.PieTouchData(enabled: true),
+                sections: [
+                  _pieSection(45, _Palette.text),
+                  _pieSection(35, _Palette.muted),
+                  _pieSection(20, const Color(0xFF525252)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          const SizedBox(
+            width: 96,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _LegendDot(label: 'Ready', value: '45%', color: _Palette.text),
+                SizedBox(height: 8),
+                _LegendDot(
+                  label: 'Waiting',
+                  value: '35%',
+                  color: _Palette.muted,
+                ),
+                SizedBox(height: 8),
+                _LegendDot(
+                  label: 'Blocked',
+                  value: '20%',
+                  color: Color(0xFF525252),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  static fl.PieChartSectionData _pieSection(
-    String title,
-    double value,
-    Color color,
-  ) {
+  static fl.PieChartSectionData _pieSection(double value, Color color) {
     return fl.PieChartSectionData(
-      title: '${value.toInt()}%',
+      title: '',
       value: value,
       color: color,
       radius: 42,
-      titleStyle: const TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w900,
-        color: _Palette.background,
-      ),
+      titleStyle: const TextStyle(fontSize: 0),
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 10.5, color: _Palette.muted),
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
+        ),
+      ],
     );
   }
 }
@@ -2445,8 +2632,19 @@ class _ChartCard extends StatelessWidget {
 
 fl.FlTitlesData _chartTitles({List<String>? bottomLabels}) {
   return fl.FlTitlesData(
-    leftTitles: const fl.AxisTitles(
-      sideTitles: fl.SideTitles(showTitles: false),
+    leftTitles: fl.AxisTitles(
+      sideTitles: fl.SideTitles(
+        showTitles: true,
+        reservedSize: 28,
+        interval: 2,
+        getTitlesWidget: (value, meta) => fl.SideTitleWidget(
+          meta: meta,
+          child: Text(
+            value.toInt().toString(),
+            style: const TextStyle(color: _Palette.muted, fontSize: 10),
+          ),
+        ),
+      ),
     ),
     rightTitles: const fl.AxisTitles(
       sideTitles: fl.SideTitles(showTitles: false),
@@ -2850,109 +3048,101 @@ class _BrowserPageState extends State<_BrowserPage> {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(14),
-      children: [
-        const _SectionHeader(
-          title: 'Embedded browser',
-          subtitle:
-              'Dedicated in-app WKWebView preview browser for generated domains and signed artifact URLs. HTTPS only; Web content receives no app secrets.',
-        ),
-        const SizedBox(height: 12),
-        Card(
-          filled: true,
-          fillColor: _Palette.input,
-          borderColor: _Palette.border,
-          borderRadius: BorderRadius.circular(12),
-          padding: const EdgeInsets.all(8),
-          boxShadow: const [],
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      child: Column(
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  const Button.outline(
-                    enabled: false,
-                    child: Text('Open external'),
-                  ),
-                  const SizedBox(width: 6),
-                  Button.outline(onPressed: _goBack, child: const Text('Back')),
-                  const SizedBox(width: 6),
-                  Button.outline(
-                    onPressed: _reload,
-                    child: const Text('Reload'),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _urlController,
-                      placeholder: const Text('https://example.com'),
-                      onSubmitted: (_) => _loadTypedUrl(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Button.primary(
-                    onPressed: _loadTypedUrl,
-                    child: const Text('Load URL'),
-                  ),
-                  const SizedBox(width: 6),
-                  const Button.outline(enabled: false, child: Text('Copy URL')),
-                ],
+              const Expanded(
+                child: _SectionHeader(
+                  title: 'Embedded browser',
+                  subtitle:
+                      'Full-height in-app preview for generated domains and signed artifact URLs. HTTPS only; no app secrets enter web content.',
+                ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(
-                    RadixIcons.lockClosed,
-                    size: 14,
-                    color: _Palette.text,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _urlController.text,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: _Palette.text,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _StatusPill(label: _status, color: _Palette.success),
-                ],
-              ),
+              _StatusPill(label: _status, color: _Palette.success),
             ],
           ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          filled: true,
-          fillColor: const Color(0xFF080808),
-          borderColor: _Palette.border,
-          borderRadius: BorderRadius.circular(12),
-          padding: EdgeInsets.zero,
-          boxShadow: const [],
-          child: SizedBox(
-            height: 520,
-            child: _runningInWidgetTest
-                ? const Center(child: Text('Preview opened inside the app'))
-                : Stack(
+          const SizedBox(height: 8),
+          Card(
+            filled: true,
+            fillColor: _Palette.input,
+            borderColor: _Palette.border,
+            borderRadius: BorderRadius.circular(12),
+            padding: const EdgeInsets.all(8),
+            boxShadow: const [],
+            child: Row(
+              children: [
+                Button.outline(
+                  onPressed: _goBack,
+                  child: const Icon(RadixIcons.arrowLeft, size: 14),
+                ),
+                const SizedBox(width: 6),
+                Button.outline(
+                  onPressed: _reload,
+                  child: const Icon(RadixIcons.reload, size: 14),
+                ),
+                const SizedBox(width: 8),
+                const Icon(
+                  RadixIcons.lockClosed,
+                  size: 14,
+                  color: _Palette.muted,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _urlController,
+                    placeholder: const Text('https://example.com'),
+                    onSubmitted: (_) => _loadTypedUrl(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Button.primary(
+                  onPressed: _loadTypedUrl,
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      WebViewWidget(controller: _controller!),
-                      Positioned(
-                        left: 12,
-                        top: 12,
-                        child: _StatusPill(
-                          label: _status,
-                          color: _Palette.success,
-                        ),
-                      ),
+                      Text('Load'),
+                      SizedBox(width: 6),
+                      Icon(RadixIcons.arrowRight, size: 13),
                     ],
                   ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          Expanded(
+            child: Card(
+              filled: true,
+              fillColor: const Color(0xFF080808),
+              borderColor: _Palette.border,
+              borderRadius: BorderRadius.circular(12),
+              padding: EdgeInsets.zero,
+              boxShadow: const [],
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _runningInWidgetTest
+                    ? const Center(child: Text('Preview opened inside the app'))
+                    : Stack(
+                        children: [
+                          WebViewWidget(controller: _controller!),
+                          Positioned(
+                            left: 12,
+                            top: 12,
+                            child: _StatusPill(
+                              label: _status,
+                              color: _Palette.success,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2981,7 +3171,120 @@ class _UiKitPage extends StatelessWidget {
             Expanded(child: _ApprovalExamplePanel()),
           ],
         ),
+        SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: _AgentRowSpecPanel()),
+            SizedBox(width: 12),
+            Expanded(child: _ChatSpecPanel()),
+            SizedBox(width: 12),
+            Expanded(child: _BrowserSpecPanel()),
+          ],
+        ),
       ],
+    );
+  }
+}
+
+class _AgentRowSpecPanel extends StatelessWidget {
+  const _AgentRowSpecPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          _SectionHeader(
+            title: 'Agent sidebar rows',
+            subtitle:
+                'Compact default selection, hover lift, unread count, and chat affordance.',
+          ),
+          SizedBox(height: 12),
+          _AgentListItem(
+            agent: _AgentDescriptor(
+              id: 'sample',
+              name: 'Executive',
+              role: 'Plans and delegates',
+              status: 'running',
+              unread: 2,
+              workItemId: 'work-track-pricing',
+            ),
+            selected: true,
+          ),
+          SizedBox(height: 6),
+          _AgentListItem(
+            agent: _AgentDescriptor(
+              id: 'sample2',
+              name: 'Builder',
+              role: 'Ships code & previews',
+              status: 'idle',
+              unread: 0,
+              workItemId: 'work-launch-preview',
+            ),
+            selected: false,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatSpecPanel extends StatelessWidget {
+  const _ChatSpecPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          _SectionHeader(
+            title: 'Agent chat states',
+            subtitle:
+                'Every selected agent owns a transcript and composer in the workspace.',
+          ),
+          SizedBox(height: 12),
+          _ChatBubble(
+            role: 'You',
+            body: 'Prioritize the launch preview and show blockers.',
+          ),
+          SizedBox(height: 8),
+          _ChatBubble(
+            role: 'Executive',
+            body:
+                'I am routing Builder to preview work and Reviewer to approvals.',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BrowserSpecPanel extends StatelessWidget {
+  const _BrowserSpecPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          _SectionHeader(
+            title: 'Browser chrome',
+            subtitle:
+                'Full-height preview shell: URL bar, back/reload, status, and large content canvas.',
+          ),
+          SizedBox(height: 12),
+          _SmallSurfaceLine(
+            title: 'HTTPS preview canvas',
+            subtitle:
+                'Generated sites and artifact links open in the main browser page, not a cramped card.',
+            leading: RadixIcons.globe,
+          ),
+        ],
+      ),
     );
   }
 }

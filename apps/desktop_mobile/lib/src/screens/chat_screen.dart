@@ -18,14 +18,33 @@ import 'voice_mode_screen.dart';
 ///
 /// Sign-out and other global actions live in the outer agents-cloud
 /// shell `_TopBar`, not here.
-class ChatScreen extends StatefulWidget {
+class ChatScreen extends StatelessWidget {
   const ChatScreen({super.key});
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  Widget build(BuildContext context) => const AgentChatSurface();
 }
 
-class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
+class AgentChatSurface extends StatefulWidget {
+  const AgentChatSurface({
+    super.key,
+    this.agentName = 'Agent',
+    this.showTopBar = false,
+    this.showVoiceAction = true,
+    this.compact = false,
+  });
+
+  final String agentName;
+  final bool showTopBar;
+  final bool showVoiceAction;
+  final bool compact;
+
+  @override
+  State<AgentChatSurface> createState() => _AgentChatSurfaceState();
+}
+
+class _AgentChatSurfaceState extends State<AgentChatSurface>
+    with WidgetsBindingObserver {
   final _store = ConversationStore();
   late final AgentInbox _inbox;
   final _composer = TextEditingController();
@@ -121,7 +140,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    NotificationService.instance.setChatVisible(state == AppLifecycleState.resumed);
+    NotificationService.instance.setChatVisible(
+      state == AppLifecycleState.resumed,
+    );
     if (state == AppLifecycleState.resumed) {
       // The background reply isolate may have appended turns to disk
       // while we were suspended. Pull the canonical state back in.
@@ -157,12 +178,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       // OS level for now+_pingDelay. Survives app suspension.
       await _inbox.manualPing(delay: _pingDelay);
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _pingGenerating = false;
-        _pingSecondsLeft = _pingDelay.inSeconds;
-      });
+      if (mounted) {
+        setState(() {
+          _pingGenerating = false;
+          _pingSecondsLeft = _pingDelay.inSeconds;
+        });
+      }
     }
+    if (!mounted) return;
     // Decorative countdown so the user knows when to background the app.
     _pingCountdown = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -227,24 +250,34 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return Scaffold(
       backgroundColor: Palette.background,
       child: SafeArea(
-        bottom: false, // Composer handles its own bottom inset via SafeArea below.
+        bottom:
+            false, // Composer handles its own bottom inset via SafeArea below.
         child: Column(
           children: [
-            _ChatTopBar(
-              providerLabel: _store.providerLabel,
-              onConversation: _startConversation,
-              onPing: _ping,
-              pingCountdown: _pingCountdown != null ? _pingSecondsLeft : 0,
-              pingGenerating: _pingGenerating,
-              onClearHistory: _store.turns.isEmpty ? null : _clearHistory,
-            ),
-            Container(height: 1, color: Palette.border),
+            if (widget.showTopBar)
+              _ChatTopBar(
+                providerLabel: _store.providerLabel,
+                title: widget.agentName,
+                onConversation: widget.showVoiceAction
+                    ? _startConversation
+                    : null,
+                onPing: _ping,
+                pingCountdown: _pingCountdown != null ? _pingSecondsLeft : 0,
+                pingGenerating: _pingGenerating,
+                onClearHistory: _store.turns.isEmpty ? null : _clearHistory,
+              ),
+            if (widget.showTopBar) Container(height: 1, color: Palette.border),
             Expanded(
               child: _store.turns.isEmpty
                   ? const _EmptyState()
                   : ListView.builder(
                       controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      padding: EdgeInsets.fromLTRB(
+                        widget.compact ? 10 : 16,
+                        widget.compact ? 10 : 16,
+                        widget.compact ? 10 : 16,
+                        8,
+                      ),
                       itemCount: _store.turns.length,
                       itemBuilder: (context, index) {
                         final turn = _store.turns[index];
@@ -257,6 +290,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               focusNode: _focus,
               busy: _store.isResponding,
               onSubmit: _send,
+              onConversation: widget.showVoiceAction
+                  ? _startConversation
+                  : null,
             ),
           ],
         ),
@@ -267,6 +303,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
 class _ChatTopBar extends StatelessWidget {
   const _ChatTopBar({
+    required this.title,
     required this.providerLabel,
     required this.onConversation,
     required this.onPing,
@@ -275,8 +312,9 @@ class _ChatTopBar extends StatelessWidget {
     required this.onClearHistory,
   });
 
+  final String title;
   final String providerLabel;
-  final VoidCallback onConversation;
+  final VoidCallback? onConversation;
   final VoidCallback onPing;
   final int pingCountdown; // 0 when idle, >0 while counting down to OS banner
   final bool pingGenerating; // true while LLM is producing the proactive text
@@ -295,8 +333,8 @@ class _ChatTopBar extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Chat',
+                Text(
+                  title,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
@@ -321,62 +359,63 @@ class _ChatTopBar extends StatelessWidget {
           GestureDetector(
             onLongPress: () => NotificationService.instance.testFireNow(),
             child: GhostButton(
-            density:
-                (pingGenerating || pingCountdown > 0)
-                    ? ButtonDensity.compact
-                    : ButtonDensity.icon,
-            onPressed: (pingGenerating || pingCountdown > 0) ? null : onPing,
-            child: pingGenerating
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      SizedBox.square(
-                        dimension: 12,
-                        child: CircularProgressIndicator(),
-                      ),
-                      Gap(6),
-                      Text(
-                        'Generating…',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: Palette.text,
+              density: (pingGenerating || pingCountdown > 0)
+                  ? ButtonDensity.compact
+                  : ButtonDensity.icon,
+              onPressed: (pingGenerating || pingCountdown > 0) ? null : onPing,
+              child: pingGenerating
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        SizedBox.square(
+                          dimension: 12,
+                          child: CircularProgressIndicator(),
                         ),
-                      ),
-                    ],
-                  )
-                : pingCountdown > 0
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(RadixIcons.bell, size: 13),
-                          const Gap(6),
-                          Text(
-                            'Banner in ${pingCountdown}s',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: Palette.text,
-                            ),
+                        Gap(6),
+                        Text(
+                          'Generating…',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: Palette.text,
                           ),
-                        ],
-                      )
-                    : const Icon(RadixIcons.bell, size: 14),
+                        ),
+                      ],
+                    )
+                  : pingCountdown > 0
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(RadixIcons.bell, size: 13),
+                        const Gap(6),
+                        Text(
+                          'Banner in ${pingCountdown}s',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: Palette.text,
+                          ),
+                        ),
+                      ],
+                    )
+                  : const Icon(RadixIcons.bell, size: 14),
             ),
           ),
-          const Gap(4),
-          GhostButton(
-            density: ButtonDensity.compact,
-            onPressed: onConversation,
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(LucideIcons.audioLines, size: 13),
-                Gap(6),
-                Text('Conversation'),
-              ],
+          if (onConversation != null) ...[
+            const Gap(4),
+            GhostButton(
+              density: ButtonDensity.compact,
+              onPressed: onConversation,
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(LucideIcons.audioLines, size: 13),
+                  Gap(6),
+                  Text('Conversation'),
+                ],
+              ),
             ),
-          ),
+          ],
           const Gap(4),
           GhostButton(
             density: ButtonDensity.icon,
@@ -470,8 +509,9 @@ class _TurnViewState extends State<_TurnView>
     final alignment = isUser ? Alignment.centerRight : Alignment.centerLeft;
     final bg = isUser ? Palette.input : Palette.panel;
     final border = isUser ? Palette.borderStrong : Palette.border;
-    final segments =
-        isUser ? const <AgentSegment>[] : parseAgentText(turn.text);
+    final segments = isUser
+        ? const <AgentSegment>[]
+        : parseAgentText(turn.text);
     final hasGenui = segments.any((s) => s is GenUiSegment);
     final isProactive = turn.origin == TurnOrigin.proactive;
 
@@ -613,11 +653,7 @@ class _PlainOrMarkdown extends StatelessWidget {
     if (!hasMarkdown) {
       return Text(
         text,
-        style: const TextStyle(
-          color: Palette.text,
-          fontSize: 14,
-          height: 1.45,
-        ),
+        style: const TextStyle(color: Palette.text, fontSize: 14, height: 1.45),
       );
     }
     return md.MarkdownBlock(
@@ -707,12 +743,14 @@ class _Composer extends StatelessWidget {
     required this.focusNode,
     required this.busy,
     required this.onSubmit,
+    required this.onConversation,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool busy;
   final VoidCallback onSubmit;
+  final VoidCallback? onConversation;
 
   @override
   Widget build(BuildContext context) {
@@ -733,6 +771,17 @@ class _Composer extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              if (onConversation != null) ...[
+                SizedBox(
+                  height: 44,
+                  child: GhostButton(
+                    density: ButtonDensity.icon,
+                    onPressed: onConversation,
+                    child: const Icon(LucideIcons.audioLines, size: 16),
+                  ),
+                ),
+                const Gap(8),
+              ],
               Expanded(
                 child: TextArea(
                   controller: controller,

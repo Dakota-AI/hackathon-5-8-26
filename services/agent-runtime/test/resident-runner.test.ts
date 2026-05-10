@@ -111,6 +111,31 @@ describe("ResidentRunner", () => {
     );
   });
 
+  it("rejects unsafe wake identifiers before writing artifacts or logs", async () => {
+    const rootDir = await tempRoot();
+    const runner = new ResidentRunner(residentRunnerConfigFromPartial({
+      rootDir,
+      orgId: "org-test",
+      userId: "user-test",
+      workspaceId: "workspace-test",
+      runnerId: "runner-test",
+      runnerSessionId: "runner-session-test",
+      adapterKind: "smoke",
+      now: fixedNow
+    }));
+
+    await runner.initialize([agentProfile("agent-safe", "Research Agent")]);
+
+    await assert.rejects(
+      runner.wake({ objective: "bad run", runId: "../escape", taskId: "task-safe" }),
+      /runId must be a safe identifier/
+    );
+    await assert.rejects(
+      runner.wake({ objective: "bad task", runId: "run-safe", taskId: "../escape" }),
+      /taskId must be a safe identifier/
+    );
+  });
+
   it("marks the wake failed when a selected agent heartbeat fails", async () => {
     const rootDir = await tempRoot();
     const runner = new ResidentRunner(residentRunnerConfigFromPartial({

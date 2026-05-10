@@ -2,8 +2,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CfnOutput } from "aws-cdk-lib";
 import { DockerImageAsset, Platform } from "aws-cdk-lib/aws-ecr-assets";
-import { AwsLogDriver, ContainerDefinition, ContainerImage, FargateTaskDefinition } from "aws-cdk-lib/aws-ecs";
+import { AwsLogDriver, ContainerDefinition, ContainerImage, FargateTaskDefinition, Secret as EcsSecret } from "aws-cdk-lib/aws-ecs";
 import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
+import { Secret } from "aws-cdk-lib/aws-secretsmanager";
 import type { Construct } from "constructs";
 import { logicalName } from "../config/environments.js";
 import { AgentsCloudStack } from "./agents-cloud-stack.js";
@@ -206,12 +207,23 @@ export class RuntimeStack extends AgentsCloudStack {
       ]
     });
 
+    const residentRunnerApiToken = new Secret(this, "ResidentRunnerApiToken", {
+      description: "Bearer token placeholder for the Agents Cloud resident runner HTTP API. Replace with brokered supervisor tokens before public launch.",
+      generateSecretString: {
+        excludePunctuation: true,
+        passwordLength: 48
+      }
+    });
+
     this.residentRunnerContainer = this.residentRunnerTaskDefinition.addContainer("resident-runner", {
       image: ContainerImage.fromDockerImageAsset(residentRunnerImage),
       logging: new AwsLogDriver({
         streamPrefix: "resident-runner",
         logGroup: props.cluster.agentRuntimeLogGroup
       }),
+      secrets: {
+        RUNNER_API_TOKEN: EcsSecret.fromSecretsManager(residentRunnerApiToken)
+      },
       portMappings: [{ containerPort: 8787 }],
       environment: {
         AGENTS_CLOUD_ENV: props.config.envName,

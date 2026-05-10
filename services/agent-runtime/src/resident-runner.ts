@@ -264,7 +264,9 @@ export class ResidentRunner {
   public async wake(input: ResidentWakeRequest): Promise<ResidentWakeResult> {
     const agents = this.selectAgents(input.agentId);
     const runId = input.runId ?? `run-${Date.now()}`;
+    assertSafeId(runId, "runId");
     const taskId = input.taskId ?? `task-${runId}`;
+    assertSafeId(taskId, "taskId");
     const events: CanonicalEventEnvelope[] = [];
     const artifacts: ResidentArtifactRecord[] = [];
     const heartbeats: ResidentHeartbeatRecord[] = [];

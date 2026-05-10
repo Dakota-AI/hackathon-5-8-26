@@ -109,7 +109,7 @@ The HTTP API is intentionally small and local-to-runner shaped:
 Authorization: Bearer <token>
 ```
 
-For local developer mode, an omitted `RUNNER_API_TOKEN` leaves the HTTP server open on the local machine for quick testing. For ECS-shaped resident mode, `AGENTS_RUNTIME_MODE=ecs-resident` now fails closed at startup unless `RUNNER_API_TOKEN` is present. Production launch must replace this local bearer token with a scoped supervisor/runner token broker before any resident task is exposed beyond a trusted control-plane boundary.
+For local developer mode, an omitted `RUNNER_API_TOKEN` leaves the HTTP server open on the local machine for quick testing. For ECS-shaped resident mode, `AGENTS_RUNTIME_MODE=ecs-resident` fails closed at startup unless `RUNNER_API_TOKEN` is present. The current CDK runtime stack injects a generated Secrets Manager token into the resident task definition so accidentally launched ECS tasks are not open by default. Production launch must replace this static placeholder with a scoped, rotated supervisor/runner token broker before any resident task is exposed beyond a trusted control-plane boundary.
 
 JSON write endpoints reject malformed JSON as `400`, reject non-JSON content types as `415`, and cap request bodies at 1 MiB.
 

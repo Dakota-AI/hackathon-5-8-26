@@ -211,6 +211,7 @@ describe("WorkItem/GenUI infrastructure", () => {
       ContainerDefinitions: Match.arrayWith([
         Match.objectLike({
           Name: "resident-runner",
+          Secrets: Match.arrayWith([Match.objectLike({ Name: "RUNNER_API_TOKEN" })]),
           PortMappings: Match.arrayWith([Match.objectLike({ ContainerPort: 8787 })]),
           Environment: Match.arrayWith([
             Match.objectLike({ Name: "AGENTS_RUNTIME_MODE", Value: "ecs-resident" }),

@@ -1,0 +1,27 @@
+{
+  "id": "evt-run-123-000005",
+  "type": "tool.approval",
+  "seq": 5,
+  "createdAt": "2026-05-10T12:00:00.000Z",
+  "orgId": "org:user-123",
+  "userId": "user-123",
+  "workspaceId": "workspace-abc",
+  "runId": "run-123",
+  "taskId": "task-123",
+  "source": {
+    "kind": "worker",
+    "name": "agent-runtime.local-harness"
+  },
+  "payload": {
+    "approvalId": "approval-run-123-preview-001",
+    "kind": "request",
+    "toolName": "preview.register_static_site",
+    "risk": "medium",
+    "requestedAction": "Publish a static website preview artifact and reserve a preview URL.",
+    "argumentsPreview": {
+      "requestedLabel": "stock-dashboard",
+      "artifactKind": "website"
+    },
+    "expiresAt": "2026-05-10T12:15:00.000Z"
+  }
+}

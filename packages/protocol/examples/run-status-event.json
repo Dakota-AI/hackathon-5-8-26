@@ -1,6 +1,6 @@
 {
   "id": "evt_01",
-  "type": "run.status.changed",
+  "type": "run.status",
   "seq": 1,
   "createdAt": "2026-05-09T00:00:00.000Z",
   "orgId": "org_demo",

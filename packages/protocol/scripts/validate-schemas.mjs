@@ -32,11 +32,21 @@ const runStatusSchema = JSON.parse(
 const example = JSON.parse(
   await readFile(join(root, "examples/run-status-event.json"), "utf8")
 );
+const toolApprovalRequestExample = JSON.parse(
+  await readFile(join(root, "examples/tool-approval-request-event.json"), "utf8")
+);
+const toolApprovalDecisionExample = JSON.parse(
+  await readFile(join(root, "examples/tool-approval-decision-event.json"), "utf8")
+);
 
 const validateEnvelope = ajv.getSchema(envelopeSchema.$id);
 const validateRunStatus = ajv.getSchema(runStatusSchema.$id);
+const toolApprovalSchema = JSON.parse(
+  await readFile(join(root, "schemas/events/tool-approval.schema.json"), "utf8")
+);
+const validateToolApproval = ajv.getSchema(toolApprovalSchema.$id);
 
-if (!validateEnvelope || !validateRunStatus) {
+if (!validateEnvelope || !validateRunStatus || !validateToolApproval) {
   throw new Error("Expected validators were not registered.");
 }
 
@@ -46,6 +56,15 @@ if (!validateEnvelope(example)) {
 
 if (!validateRunStatus(example.payload)) {
   throw new Error(`Invalid run status payload: ${JSON.stringify(validateRunStatus.errors, null, 2)}`);
+}
+
+for (const item of [toolApprovalRequestExample, toolApprovalDecisionExample]) {
+  if (!validateEnvelope(item)) {
+    throw new Error(`Invalid tool approval envelope: ${JSON.stringify(validateEnvelope.errors, null, 2)}`);
+  }
+  if (!validateToolApproval(item.payload)) {
+    throw new Error(`Invalid tool approval payload: ${JSON.stringify(validateToolApproval.errors, null, 2)}`);
+  }
 }
 
 console.log("Protocol schemas validated.");

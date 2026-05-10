@@ -1,0 +1,23 @@
+{
+  "id": "evt-run-123-000006",
+  "type": "tool.approval",
+  "seq": 6,
+  "createdAt": "2026-05-10T12:01:00.000Z",
+  "orgId": "org:user-123",
+  "userId": "user-123",
+  "workspaceId": "workspace-abc",
+  "runId": "run-123",
+  "taskId": "task-123",
+  "source": {
+    "kind": "client",
+    "name": "web"
+  },
+  "payload": {
+    "approvalId": "approval-run-123-preview-001",
+    "kind": "decision",
+    "decision": "approved",
+    "decidedBy": "user-123",
+    "decidedAt": "2026-05-10T12:01:00.000Z",
+    "reason": "Approved in local runtime harness."
+  }
+}

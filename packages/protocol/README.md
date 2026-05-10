@@ -21,13 +21,15 @@ Every backend service and client must treat these schemas and builders as the sh
 - `buildCanonicalEvent(...)`
 - `buildRunStatusEvent(...)`
 - `buildArtifactCreatedEvent(...)`
+- `buildToolApprovalEvent(...)`
 - `RunStatus`
 - `ArtifactKind`
+- `ToolApprovalPayload`
 - `CanonicalEventEnvelope`
 
 Control API and agent-runtime now use these helpers for service-produced
-`run.status` and `artifact.created` events so event envelope fields do not drift
-between producers.
+`run.status`, `artifact.created`, and `tool.approval` events so event envelope
+fields do not drift between producers.
 
 ## Commands
 

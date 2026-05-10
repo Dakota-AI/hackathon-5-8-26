@@ -13,6 +13,29 @@ export type RunStatus =
 
 export type ArtifactKind = "document" | "website" | "dataset" | "report" | "diff" | "miro-board" | "log" | "trace" | "other";
 
+export type ToolApprovalRisk = "low" | "medium" | "high" | "critical";
+
+export interface ToolApprovalRequestPayload extends Record<string, unknown> {
+  readonly approvalId: string;
+  readonly kind: "request";
+  readonly toolName: string;
+  readonly risk: ToolApprovalRisk;
+  readonly requestedAction: string;
+  readonly argumentsPreview?: Record<string, unknown>;
+  readonly expiresAt?: string;
+}
+
+export interface ToolApprovalDecisionPayload extends Record<string, unknown> {
+  readonly approvalId: string;
+  readonly kind: "decision";
+  readonly decision: "approved" | "rejected";
+  readonly decidedBy: string;
+  readonly decidedAt: string;
+  readonly reason?: string;
+}
+
+export type ToolApprovalPayload = ToolApprovalRequestPayload | ToolApprovalDecisionPayload;
+
 export interface CanonicalEventEnvelope<TPayload extends Record<string, unknown> = Record<string, unknown>> {
   readonly id: string;
   readonly type: string;
@@ -157,6 +180,33 @@ export function buildArtifactCreatedEvent(input: CanonicalEventBaseInput & Artif
       bytes: input.bytes,
       metadata: input.metadata
     })
+  });
+}
+
+export function buildToolApprovalEvent(input: CanonicalEventBaseInput & ToolApprovalPayload): CanonicalEventEnvelope<ToolApprovalPayload> {
+  const payload: ToolApprovalPayload = input.kind === "request"
+    ? withoutUndefined({
+      approvalId: input.approvalId,
+      kind: input.kind,
+      toolName: input.toolName,
+      risk: input.risk,
+      requestedAction: input.requestedAction,
+      argumentsPreview: input.argumentsPreview,
+      expiresAt: input.expiresAt
+    })
+    : withoutUndefined({
+      approvalId: input.approvalId,
+      kind: input.kind,
+      decision: input.decision,
+      decidedBy: input.decidedBy,
+      decidedAt: input.decidedAt,
+      reason: input.reason
+    });
+
+  return buildCanonicalEvent({
+    ...input,
+    type: "tool.approval",
+    payload
   });
 }
 

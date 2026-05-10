@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 import { GlobeIcon, LockClosedIcon } from "@radix-ui/react-icons";
 import { cn } from "../../lib/utils";
@@ -9,6 +11,14 @@ type BrowserToolbarProps = {
 };
 
 export function BrowserToolbar({ url, className }: BrowserToolbarProps) {
+  const [copied, setCopied] = React.useState(false);
+
+  async function onShare() {
+    await navigator.clipboard?.writeText(url);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
+
   return (
     <div
       className={cn(
@@ -18,11 +28,11 @@ export function BrowserToolbar({ url, className }: BrowserToolbarProps) {
     >
       <LockClosedIcon className="h-3.5 w-3.5 shrink-0 text-app-text" />
       <div className="min-w-0 flex-1 truncate text-[12px] text-app-text font-mono">{url}</div>
-      <Button variant="outline" size="sm" disabled>
+      <Button variant="outline" size="sm" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
         Open
       </Button>
-      <Button variant="outline" size="sm" disabled>
-        Share
+      <Button variant="outline" size="sm" onClick={() => void onShare()}>
+        {copied ? "Copied" : "Share"}
       </Button>
     </div>
   );

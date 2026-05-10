@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 import { cn } from "../../lib/utils";
 import { StatusPill } from "./status-pill";
@@ -9,6 +11,7 @@ type ArtifactTileProps = {
   body: string;
   action: string;
   storage?: string;
+  href?: string;
   className?: string;
 };
 
@@ -18,8 +21,18 @@ export function ArtifactTile({
   body,
   action,
   storage = "S3 pointer",
+  href,
   className
 }: ArtifactTileProps) {
+  function onOpen() {
+    if (!href) return;
+    if (href.startsWith("#")) {
+      document.querySelector(href)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    window.location.assign(href);
+  }
+
   return (
     <div
       className={cn(
@@ -33,7 +46,7 @@ export function ArtifactTile({
       </div>
       <div className="text-sm font-black text-app-text truncate">{title}</div>
       <div className="flex-1 text-[12px] leading-[1.3] text-app-muted line-clamp-4">{body}</div>
-      <Button variant="outline" size="sm" disabled>
+      <Button variant="outline" size="sm" onClick={onOpen} disabled={!href}>
         {action}
       </Button>
     </div>

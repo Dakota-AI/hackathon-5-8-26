@@ -171,6 +171,7 @@ export function ApprovalsBoard() {
                   approval={a}
                   busy={actingOn === a.approvalId}
                   onApprove={() => void decide(a, "approved")}
+                  onRevision={() => void decide(a, "rejected")}
                   onDeny={() => void decide(a, "rejected")}
                 />
               ))
@@ -185,11 +186,13 @@ function RealApproval({
   approval,
   busy,
   onApprove,
+  onRevision,
   onDeny
 }: {
   approval: ApprovalRecord;
   busy: boolean;
   onApprove: () => void;
+  onRevision: () => void;
   onDeny: () => void;
 }) {
   const decided = approval.status !== "requested";
@@ -214,7 +217,7 @@ function RealApproval({
         <Button variant="primary" size="md" onClick={onApprove} disabled={busy || decided}>
           {decided ? approval.status : busy ? "Recording…" : "Approve"}
         </Button>
-        <Button variant="outline" size="md" disabled>
+        <Button variant="outline" size="md" onClick={onRevision} disabled={busy || decided}>
           Request revision
         </Button>
         <Button variant="destructive" size="md" onClick={onDeny} disabled={busy || decided}>

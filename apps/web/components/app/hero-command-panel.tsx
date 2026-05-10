@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { GlobeIcon, PaperPlaneIcon, ReaderIcon } from "@radix-ui/react-icons";
 import {
   createControlApiRun,
@@ -37,6 +38,7 @@ const placeholder =
   "Describe the strategic objective — research a market, build a launch page, prepare a CEO report…";
 
 export function HeroCommandPanel() {
+  const router = useRouter();
   const { isAuthed, openSignIn } = useAuth();
   const { workspaceId } = useWorkspace();
   const api = getControlApiHealth();
@@ -174,11 +176,11 @@ export function HeroCommandPanel() {
             <PaperPlaneIcon />
             {!isAuthed ? "Sign in to start" : submitting ? "Starting…" : "Create run"}
           </Button>
-          <Button type="button" variant="outline" disabled>
+          <Button type="button" variant="outline" onClick={() => router.push("/artifacts#document")}>
             <ReaderIcon />
             Draft report
           </Button>
-          <Button type="button" variant="outline" disabled>
+          <Button type="button" variant="outline" onClick={() => router.push("/artifacts#preview")}>
             <GlobeIcon />
             Preview site
           </Button>

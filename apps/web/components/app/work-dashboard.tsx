@@ -267,7 +267,12 @@ function FixtureDetail({
               Sign in to approve
             </Button>
           ) : (
-            <Button variant="primary" size="md" disabled className="mt-1 self-start">
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => window.location.assign("/approvals")}
+              className="mt-1 self-start"
+            >
               Approve
             </Button>
           )}

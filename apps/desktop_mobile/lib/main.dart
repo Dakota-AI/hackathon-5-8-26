@@ -3,7 +3,11 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:genui/genui.dart' as genui;
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
-void main() {
+import 'backend_config.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AgentsCloudBackend.configureAmplify();
   runApp(const AgentsCloudConsoleApp());
 }
 
@@ -212,10 +216,15 @@ class _ConnectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _StatusPill(label: 'Planning mode', color: _Palette.warning),
+          _StatusPill(
+            label: 'Amplify Auth configured',
+            color: _Palette.success,
+          ),
+          SizedBox(height: 8),
+          _StatusPill(label: 'Control API configured', color: _Palette.success),
           SizedBox(height: 8),
           Text(
-            'Next: Control API, Cloudflare realtime, ECS agent runtime.',
+            'Cognito Auth and the deployed Control API endpoint are available for native client wiring.',
             style: TextStyle(color: _Palette.muted, fontSize: 11, height: 1.35),
           ),
         ],
@@ -240,9 +249,12 @@ class _TopBar extends StatelessWidget {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
           ),
-          _StatusPill(label: 'Amplify Auth pending', color: _Palette.warning),
+          _StatusPill(
+            label: 'Amplify Auth configured',
+            color: _Palette.success,
+          ),
           SizedBox(width: 8),
-          _StatusPill(label: 'Cloudflare WS planned', color: _Palette.info),
+          _StatusPill(label: 'Control API live', color: _Palette.success),
           SizedBox(width: 8),
           _StatusPill(label: 'GenUI ready', color: _Palette.success),
         ],
@@ -364,7 +376,7 @@ class _MetricsStrip extends StatelessWidget {
           child: _MetricCard(
             label: 'Active runs',
             value: '0',
-            hint: 'Control API next',
+            hint: 'Control API live',
           ),
         ),
         SizedBox(width: 10),
@@ -447,14 +459,14 @@ class _LiveRunTimeline extends StatelessWidget {
           _SectionHeader(
             title: 'Autonomous run timeline',
             subtitle:
-                'This will bind to Control API events, then Cloudflare Durable Object realtime.',
+                'This binds next to Control API events, then Cloudflare Durable Object realtime.',
           ),
           SizedBox(height: 14),
           _TimelineItem(
             status: 'Planned',
             title: 'Control API creates durable run records',
             body:
-                'POST /runs will create DynamoDB state and start Step Functions.',
+                'POST /runs creates DynamoDB state and starts Step Functions.',
           ),
           _TimelineItem(
             status: 'Planned',

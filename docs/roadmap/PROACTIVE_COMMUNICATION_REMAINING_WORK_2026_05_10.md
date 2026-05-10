@@ -327,7 +327,7 @@ failed
 
 Work:
 
-- provider interface for Cloudflare Realtime or LiveKit,
+- Cloudflare Realtime session/adapter interface,
 - short-lived media credentials,
 - signed runner claim,
 - agent runner media bridge,
@@ -346,7 +346,7 @@ Prerequisites:
 - opt-out and suppression lists,
 - region/calling-hour policy,
 - legal/compliance review,
-- Twilio/LiveKit SIP provider decision,
+- PSTN/SIP provider decision,
 - webhook signature verification,
 - cost controls,
 - call recording consent.

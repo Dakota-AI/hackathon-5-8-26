@@ -23,6 +23,16 @@ resume, and safe execution.
 6. Emit canonical events and artifact records.
 7. Keep tool execution scoped by workspace, credential, and approval policy.
 
+Current proposal docs:
+
+- `PROACTIVE_COMMUNICATION_AGENT_INTERFACE_AUDIT.md`
+- `LOCAL_DOCKER_ECS_RUNTIME_PLAN.md`
+- `TOOL_CATALOG_AND_POLICY_PLAN.md`
+- `AGENT_BUILDER_RUNTIME_INTEGRATION_PLAN.md`
+- `RUNTIME_WORKFLOW_VISUALS.md`
+- `LOCAL_RUNTIME_TESTING_PLAYBOOK.md`
+- `AGENT_RUNTIME_NEXT_WORK_AUDIT_2026_05_10.md`
+
 ## Must Coordinate With
 
 - Infrastructure for task definitions, environment variables, IAM scope,
@@ -65,4 +75,3 @@ Create a handoff when:
 - clients need to render a new status/artifact/approval shape,
 - snapshot storage paths or restore semantics change,
 - a tool requires a new credential or approval boundary.
-

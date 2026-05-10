@@ -98,7 +98,7 @@ try {
     console.log(JSON.stringify(result, null, 2));
   } else {
     console.error("Usage: node dist/src/cli.js --scenario <scenario.json>");
-    console.error("   or: node dist/src/cli.js --interactive");
+    console.error("   or: node dist/src/cli.js --interactive [--bundle-dir <out-dir>]");
     process.exit(2);
   }
 } catch (error) {

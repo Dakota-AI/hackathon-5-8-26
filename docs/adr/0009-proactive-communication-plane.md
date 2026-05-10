@@ -42,9 +42,9 @@ Agent/runtime intent
   -> user response is written back to AWS
 ```
 
-Agents and runners must not call APNs, FCM, PushKit, CallKit, Twilio, LiveKit,
-or Cloudflare client fanout directly. They emit typed communication requests to
-the platform. The communication broker decides whether and how to deliver them.
+Agents and runners must not call APNs, FCM, PushKit, CallKit, Twilio, or
+Cloudflare client fanout directly. They emit typed communication requests to the
+platform. The communication broker decides whether and how to deliver them.
 
 Use these durable product objects:
 
@@ -193,5 +193,4 @@ or where a push notification is the only record that an agent asked a question.
 - OpenAI Realtime WebRTC: https://developers.openai.com/docs/guides/realtime-webrtc
 - OpenAI Realtime SIP: https://developers.openai.com/api/docs/guides/realtime-sip
 - OpenAI Agents voice transports: https://openai.github.io/openai-agents-js/guides/voice-agents/transport
-- LiveKit telephony: https://docs.livekit.io/agents/start/telephony/
 - Cloudflare Realtime media adapters: https://developers.cloudflare.com/realtime/sfu/media-transport-adapters/

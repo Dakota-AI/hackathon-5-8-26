@@ -7,6 +7,10 @@ _Last updated: 2026-05-10_
 Treat voice and audio as interaction channels attached to durable work, not as
 the source of agent truth.
 
+Cloudflare Realtime is the selected media layer for this integration. The
+existing AI caller work already uses it, so the V1 plan is to adapt that path
+into Agents Cloud rather than introduce LiveKit or a separate telephony provider.
+
 Recommended order:
 
 1. Durable audio messages.
@@ -102,12 +106,14 @@ audio message       -> normal notification / inbox
 real incoming call  -> PushKit VoIP + CallKit
 ```
 
-## Media Provider Recommendation
+## Selected Media Infrastructure
 
-For Agents Cloud V1, reuse the existing AI caller Cloudflare Realtime work if
-speed matters, but define it behind a provider interface.
+For Agents Cloud V1, reuse the existing AI caller Cloudflare Realtime work.
+Infrastructure should harden the current Cloudflare session/adapter path rather
+than introduce LiveKit.
 
-Provider interface:
+The internal media interface can still be narrow so callers and runners are not
+coupled to raw Cloudflare API details:
 
 ```text
 createCallSession
@@ -118,18 +124,14 @@ refreshMedia
 recordOrExportTranscript
 ```
 
-Provider options:
-
-### Cloudflare Realtime
-
-Pros:
+Cloudflare Realtime fit:
 
 - already used by the AI caller prototype,
 - WebRTC fits mobile/browser calls,
 - WebSocket media adapters can bridge AI services,
 - aligns with the current Cloudflare realtime direction.
 
-Risks:
+Risks to handle in Agents Cloud:
 
 - Realtime SFU has no room abstraction; the app must own participant/session
   state,
@@ -137,70 +139,12 @@ Risks:
 - call lifecycle, room semantics, and recording/transcript management need more
   platform code.
 
-Best use:
+OpenAI Realtime, local STT/TTS, or another voice model can be used inside the
+agent runner, but that is an agent-runtime implementation detail. It does not
+change the mobile/infrastructure media layer for this slice.
 
-- first in-app AI voice prototype if the existing code is kept and hardened.
-
-### LiveKit
-
-Pros:
-
-- room/participant model fits user + agent + optional SIP participant,
-- Flutter/Web/native SDKs exist,
-- telephony/SIP can connect PSTN later,
-- common AI-agent examples and server SDKs.
-
-Risks:
-
-- new platform dependency,
-- cost and operational setup,
-- migration from existing Cloudflare media code.
-
-Best use:
-
-- production voice room model if Cloudflare Realtime room/lifecycle code becomes
-  too custom.
-
-### OpenAI Realtime
-
-Pros:
-
-- low-latency speech-to-speech models,
-- WebRTC for browser/mobile sessions,
-- WebSocket for server-side loops,
-- SIP support for telephony-style calls,
-- server-side controls can keep tools and policy private.
-
-Risks:
-
-- model transport is not a full product call/session system,
-- app still needs durable state, auth, notifications, and call lifecycle,
-- OpenAI keys must remain server-side or be exchanged for scoped ephemeral
-  client credentials.
-
-Best use:
-
-- voice intelligence inside the agent runner,
-- server-side voice loop,
-- sideband control for tools/guardrails.
-
-### Twilio
-
-Pros:
-
-- mature PSTN and mobile voice SDK ecosystem,
-- iOS Voice SDK handles VoIP push registration/call invites,
-- Media Streams can bridge calls to AI over WebSockets.
-
-Risks:
-
-- PSTN compliance and cost,
-- another provider-specific lifecycle,
-- bidirectional Media Streams have audio-format and stream-count constraints.
-
-Best use:
-
-- PSTN calling after product consent/compliance is ready.
+Twilio/PSTN remains a later compliance-gated product feature, not part of the
+AI caller Cloudflare Realtime integration.
 
 ## Recommended V1 Media Shape
 
@@ -213,7 +157,7 @@ CallRequest in AWS
   -> Control API returns short-lived session credentials
   -> Flutter joins WebRTC media session
   -> ECS/user runner joins as agent participant
-  -> runner uses OpenAI Realtime over server-side WebSocket or provider adapter
+  -> runner runs the agent voice loop through Cloudflare media adapters
   -> transcript/events summarized back to AWS
 ```
 
@@ -287,10 +231,5 @@ gate exists.
 - OpenAI Realtime WebRTC: https://developers.openai.com/docs/guides/realtime-webrtc
 - OpenAI Realtime SIP: https://developers.openai.com/api/docs/guides/realtime-sip
 - OpenAI Agents voice transports: https://openai.github.io/openai-agents-js/guides/voice-agents/transport
-- Twilio Voice iOS SDK: https://www.twilio.com/docs/voice/sdks/ios
-- Twilio Media Streams: https://www.twilio.com/docs/voice/media-streams
-- Twilio Media Stream messages: https://www.twilio.com/docs/voice/media-streams/websocket-messages
-- LiveKit telephony: https://docs.livekit.io/agents/start/telephony/
-- LiveKit outbound SIP calls: https://docs.livekit.io/sip/outbound-calls/
 - Cloudflare Realtime SFU: https://developers.cloudflare.com/realtime/sfu/
 - Cloudflare WebSocket adapter: https://developers.cloudflare.com/realtime/sfu/media-transport-adapters/websocket-adapter/

@@ -54,14 +54,7 @@ Future<void> main() async {
   runApp(const AgentsCloudConsoleApp());
 }
 
-enum ConsolePage {
-  chat,
-  work,
-  agents,
-  kanban,
-  browser,
-  inbox,
-}
+enum ConsolePage { chat, work, agents, kanban, browser, inbox }
 
 final selectedWorkspaceIdProvider = StateProvider<String?>((ref) => null);
 
@@ -283,15 +276,35 @@ class _RealtimeOrbControlBridgeState
       await realtime.connect();
       if (!mounted) return;
       _subscription ??= realtime.events.listen((event) {
-        ref
-            .read(orbControlControllerProvider.notifier)
-            .applyRealtimeEvent(event);
+        _onRealtimeEvent(event);
       });
     } catch (_) {
       // The visible GenUI realtime card surfaces connection errors. The shell
       // bridge stays quiet so the orb is not noisy when the user is signed out
       // or offline.
     }
+  }
+
+  void _onRealtimeEvent(Map<String, dynamic> event) {
+    ref.read(orbControlControllerProvider.notifier).applyRealtimeEvent(event);
+
+    if (!_isRunProgressEvent(event)) {
+      return;
+    }
+    ref.read(workItemsRefreshCounterProvider.notifier).state++;
+  }
+
+  bool _isRunProgressEvent(Map<String, dynamic> event) {
+    final type = event['type']?.toString() ?? '';
+    if (type.startsWith('run.')) {
+      return true;
+    }
+    return type == 'artifact.created' ||
+        type == 'artifact.updated' ||
+        type == 'artifact.ready' ||
+        type == 'artifact.failed' ||
+        type == 'user.notification.requested' ||
+        type == 'user.call.requested';
   }
 
   @override
@@ -538,7 +551,7 @@ class _MobileNavBar extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(6, 5, 6, 6),
       child: Row(
         children: [
-        _MobileNavItem(
+          _MobileNavItem(
             label: 'Work',
             icon: RadixIcons.layout,
             selected: selectedPage == ConsolePage.work,
@@ -2113,13 +2126,24 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
     text:
         'Build a launch page, research competitors, test it, publish a preview, and prepare a CEO report.',
   );
+  final _workspaceController = TextEditingController();
   bool _isSubmitting = false;
   String? _status;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    final selectedWorkspaceId = ref.read(selectedWorkspaceIdProvider);
+    if (selectedWorkspaceId != null && selectedWorkspaceId.trim().isNotEmpty) {
+      _workspaceController.text = selectedWorkspaceId.trim();
+    }
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
+    _workspaceController.dispose();
     super.dispose();
   }
 
@@ -2142,7 +2166,8 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
     if (workspaceId == null) {
       setState(() {
         _isSubmitting = false;
-        _error = 'No workspace context yet. Create a workspace from web first.';
+        _error =
+            'Provide a workspace-id first (or create it from web and refresh).';
       });
       return;
     }
@@ -2164,16 +2189,21 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
       if (workItemId == null) {
         throw StateError('No WorkItem id returned from Control API.');
       }
-      await api.startRun(
+      final runResult = await api.startRun(
         workItemId: workItemId,
         workspaceId: workspaceId,
         objective: objective,
       );
+      final runId = _extractRunId(runResult);
+      if (runId != null) {
+        await _subscribeToRun(workspaceId: workspaceId, runId: runId);
+      }
 
       if (!mounted) return;
       ref.read(workItemsRefreshCounterProvider.notifier).state++;
       setState(() {
-        _status = 'WorkItem created and run started: $workItemId';
+        final runSuffix = runId == null ? '' : ' | run=$runId';
+        _status = 'WorkItem created and run started: $workItemId$runSuffix';
       });
     } catch (error) {
       if (!mounted) return;
@@ -2200,15 +2230,55 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
     return null;
   }
 
+  String? _extractRunId(Map<String, dynamic> body) {
+    final direct = body['runId'];
+    if (direct is String && direct.isNotEmpty) return direct;
+
+    final nested = body['run'];
+    if (nested is Map<String, dynamic>) {
+      final nestedRunId = nested['runId'];
+      if (nestedRunId is String && nestedRunId.isNotEmpty) {
+        return nestedRunId;
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> _subscribeToRun({
+    required String workspaceId,
+    required String runId,
+  }) async {
+    final realtime = ref.read(realtimeClientProvider);
+    if (!realtime.isConnected) {
+      try {
+        await realtime.connect();
+      } catch (_) {
+        return;
+      }
+    }
+
+    try {
+      await realtime.subscribeRun(workspaceId: workspaceId, runId: runId);
+    } catch (_) {
+      // Realtime subscriptions are best-effort for this path.
+    }
+  }
+
   String? _resolveActiveWorkspaceId() {
     final idsState = ref.read(workspaceIdsProvider);
     final selectedWorkspaceId = ref.read(selectedWorkspaceIdProvider);
-    return idsState.when(
+    final workspaceIdFromItems = idsState.when(
       data: (workspaceIds) =>
           _resolveWorkspaceId(workspaceIds, selectedWorkspaceId),
       error: (_, _) => null,
       loading: () => null,
     );
+    if (workspaceIdFromItems != null) {
+      return workspaceIdFromItems;
+    }
+    final manual = _workspaceController.text.trim();
+    return manual.isNotEmpty ? manual : null;
   }
 
   @override
@@ -2222,9 +2292,16 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
       data: (ids) => _resolveWorkspaceId(ids, selectedWorkspaceId),
       orElse: () => null,
     );
-    final workspaceLabel = activeWorkspaceId == null
+    final manualWorkspaceId = _workspaceController.text.trim();
+    final resolvedWorkspaceId = manualWorkspaceId.isNotEmpty
+        ? manualWorkspaceId
+        : activeWorkspaceId;
+    final showWorkspaceOverride =
+        activeWorkspaceId == null ||
+        workspaceIds.maybeWhen(data: (ids) => ids.isEmpty, orElse: () => false);
+    final workspaceLabel = resolvedWorkspaceId == null
         ? 'Workspace: detecting'
-        : 'Workspace: $activeWorkspaceId';
+        : 'Workspace: $resolvedWorkspaceId';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2267,6 +2344,21 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
             ),
           ],
         ),
+        if (showWorkspaceOverride) ...[
+          const SizedBox(height: 10),
+          TextField(
+            controller: _workspaceController,
+            placeholder: const Text('workspace-id (required for first run)'),
+            onChanged: (_) {
+              setState(() {});
+            },
+            onSubmitted: (_) {
+              if (!_isSubmitting) {
+                _createAndRun();
+              }
+            },
+          ),
+        ],
         if (_status != null) ...[
           const SizedBox(height: 8),
           Text(

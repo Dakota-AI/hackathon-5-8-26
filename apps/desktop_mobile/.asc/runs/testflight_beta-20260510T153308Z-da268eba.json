@@ -1,0 +1,10 @@
+{
+  "run_id": "testflight_beta-20260510T153308Z-da268eba",
+  "workflow": "testflight_beta",
+  "workflow_file": "/Users/sebastian/Developer/agents-cloud/apps/desktop_mobile/.asc/workflow.json",
+  "definition_hash": "f35686badffeb825daca93b06b8e76f499fcdd8a05af1a6219ee5cc65926b04a",
+  "status": "error",
+  "failed_step": "validate_inputs",
+  "created_at": "2026-05-10T15:33:08Z",
+  "updated_at": "2026-05-10T15:33:08Z"
+}

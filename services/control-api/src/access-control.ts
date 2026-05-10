@@ -80,10 +80,14 @@ function normalizedStringList(raw: string): string[] {
         return parsed.map((item) => (typeof item === "string" ? item.trim() : ""));
       }
     } catch {
-      return [];
+      // API Gateway may stringify Cognito array claims as [group-a, group-b]
+      // rather than strict JSON. Fall through to delimiter parsing.
     }
   }
-  return raw.split(",").map((group) => group.trim());
+  return raw
+    .replace(/^\[|\]$/g, "")
+    .split(/[\s,]+/)
+    .map((group) => group.trim().replace(/^['\"]|['\"]$/g, ""));
 }
 
 function isJsonArray(raw: string): boolean {

@@ -3,6 +3,17 @@ import type { AuthenticatedUser, HostNodeRecord, RunnerStateStore, UserRunnerRec
 import { isAdminUser } from "./access-control.js";
 
 const ADMIN_RUNNER_STATUSES = ["online", "starting", "stale", "failed", "offline", "draining", "restoring"];
+const USER_RUNNER_STATUSES = [
+  "online",
+  "running",
+  "ready",
+  "starting",
+  "restoring",
+  "stale",
+  "failed",
+  "offline",
+  "draining",
+];
 
 type Result = { readonly statusCode: number; readonly body: Record<string, unknown> };
 
@@ -124,6 +135,32 @@ export async function getUserRunner(input: { readonly store: RunnerStateStore; r
     return notFound("UserRunner was not found.");
   }
   return { statusCode: 200, body: { runner } };
+}
+
+export async function listUserRunners(input: {
+  readonly store: RunnerStateStore;
+  readonly user: AuthenticatedUser;
+  readonly limit?: number;
+}): Promise<Result> {
+  const limit = clampLimit(input.limit, 100);
+  const rows = await input.store.listUserRunnersByStatus({
+    statuses: USER_RUNNER_STATUSES,
+    limit,
+  });
+
+  const userRunners = rows
+    .filter((runner) => runner.userId === input.user.userId)
+    .filter((runner, index, all) =>
+      all.findIndex((candidate) => candidate.runnerId === runner.runnerId) === index)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+    .slice(0, limit);
+
+  return {
+    statusCode: 200,
+    body: {
+      items: userRunners,
+    },
+  };
 }
 
 export async function updateUserRunnerDesiredState(input: {

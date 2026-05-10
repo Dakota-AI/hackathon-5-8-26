@@ -22,6 +22,15 @@ describe("access-control", () => {
     assert.deepEqual(user.groups, ["agents-cloud-admin", "agents-cloud-user"]);
   });
 
+  it("parses API Gateway stringified Cognito group arrays", () => {
+    const user = parseAuthenticatedUser({
+      sub: "user-api-gateway",
+      "cognito:groups": "[agents-cloud-user agents-cloud-admin]"
+    });
+
+    assert.deepEqual(user.groups, ["agents-cloud-admin", "agents-cloud-user"]);
+  });
+
   it("requires a Cognito sub claim", () => {
     assert.throws(() => {
       parseAuthenticatedUser({});

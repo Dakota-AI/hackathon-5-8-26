@@ -3,6 +3,8 @@ import type { AgentProfileVersion, ProfileLifecycleState, ValidationResult } fro
 export interface AuthenticatedUser {
   readonly userId: string;
   readonly email?: string;
+  readonly groups?: readonly string[];
+  readonly isSuspended?: boolean;
 }
 
 export interface CreateRunRequest {

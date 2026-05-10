@@ -21,6 +21,10 @@ class _FakeControlApi implements ControlApi {
   final List<Map<String, dynamic>> artifacts;
   final Object? listWorkItemsThrows;
   final Object? runsThrows;
+  final List<String?> detailWorkspaceIds = <String?>[];
+  final List<String?> runsWorkspaceIds = <String?>[];
+  final List<String?> eventsWorkspaceIds = <String?>[];
+  final List<String?> artifactsWorkspaceIds = <String?>[];
 
   @override
   Future<List<Map<String, dynamic>>> listWorkItems({
@@ -31,23 +35,41 @@ class _FakeControlApi implements ControlApi {
   }
 
   @override
-  Future<Map<String, dynamic>> getWorkItem(String id) async {
+  Future<Map<String, dynamic>> getWorkItem(
+    String id, {
+    String? workspaceId,
+  }) async {
+    detailWorkspaceIds.add(workspaceId);
     return detail;
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listRuns(String workItemId) async {
+  Future<List<Map<String, dynamic>>> listRuns(
+    String workItemId, {
+    String? workspaceId,
+  }) async {
+    runsWorkspaceIds.add(workspaceId);
     if (runsThrows != null) throw runsThrows!;
     return runs;
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listEvents(String workItemId) async =>
-      events;
+  Future<List<Map<String, dynamic>>> listEvents(
+    String workItemId, {
+    String? workspaceId,
+  }) async {
+    eventsWorkspaceIds.add(workspaceId);
+    return events;
+  }
 
   @override
-  Future<List<Map<String, dynamic>>> listArtifacts(String workItemId) async =>
-      artifacts;
+  Future<List<Map<String, dynamic>>> listArtifacts(
+    String workItemId, {
+    String? workspaceId,
+  }) async {
+    artifactsWorkspaceIds.add(workspaceId);
+    return artifacts;
+  }
 
   @override
   Future<Map<String, dynamic>> getArtifactDownload({
@@ -57,7 +79,7 @@ class _FakeControlApi implements ControlApi {
 
   @override
   Future<Map<String, dynamic>> createWorkItem({
-    required String workspaceId,
+    String? workspaceId,
     required String title,
     String? objective,
   }) => throw UnimplementedError();
@@ -69,7 +91,7 @@ class _FakeControlApi implements ControlApi {
   @override
   Future<Map<String, dynamic>> startRun({
     required String workItemId,
-    required String workspaceId,
+    String? workspaceId,
     required String objective,
   }) => throw UnimplementedError();
 
@@ -131,8 +153,16 @@ void main() {
 
     test('getWorkItem merges runs/events/artifacts side endpoints', () async {
       final api = _FakeControlApi(
+        workItems: const [
+          {
+            'id': 'wi_2',
+            'workspaceId': 'workspace-live',
+            'title': 'Build preview',
+          },
+        ],
         detail: {
           'id': 'wi_2',
+          'workspaceId': 'workspace-live',
           'title': 'Build preview',
           'objective': 'Stakeholder preview',
           'status': 'running',
@@ -170,11 +200,36 @@ void main() {
           },
         ],
       );
-      final item = await HttpWorkRepository(api: api).getWorkItem('wi_2');
+      final repo = HttpWorkRepository(api: api);
+      await repo.listWorkItems();
+      final item = await repo.getWorkItem('wi_2');
       expect(item, isNotNull);
       expect(item!.runs.single.status, WorkItemRunStatus.succeeded);
       expect(item.events.single.tone, WorkItemEventTone.active);
       expect(item.artifacts.single.kind, WorkItemArtifactKind.preview);
+      expect(api.detailWorkspaceIds.single, 'workspace-live');
+      expect(api.runsWorkspaceIds.single, 'workspace-live');
+      expect(api.eventsWorkspaceIds.single, 'workspace-live');
+      expect(api.artifactsWorkspaceIds.single, 'workspace-live');
+    });
+
+    test('getWorkItem unwraps Control API {workItem} response shape', () async {
+      final api = _FakeControlApi(
+        detail: const {
+          'workItem': {
+            'id': 'wi_wrapped',
+            'workspaceId': 'workspace-wrapped',
+            'title': 'Wrapped item',
+            'status': 'running',
+            'priority': 'normal',
+          },
+        },
+      );
+      final item = await HttpWorkRepository(api: api).getWorkItem('wi_wrapped');
+      expect(item, isNotNull);
+      expect(item!.id, 'wi_wrapped');
+      expect(item.workspaceId, 'workspace-wrapped');
+      expect(item.title, 'Wrapped item');
     });
 
     test(

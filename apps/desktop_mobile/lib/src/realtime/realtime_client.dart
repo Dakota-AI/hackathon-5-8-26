@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:desktop_mobile/backend_config.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../auth/auth_controller.dart';
-
-const String agentsCloudRealtimeUrl =
-    'wss://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev';
 
 class RealtimeClient {
   RealtimeClient(this._idTokenFn);

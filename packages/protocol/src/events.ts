@@ -106,6 +106,21 @@ export interface ArtifactCreatedPayload extends Record<string, unknown> {
   readonly metadata?: Record<string, unknown>;
 }
 
+export interface AssistantResponseFinalPayload extends Record<string, unknown> {
+  readonly messageId: string;
+  readonly agentId?: string;
+  readonly agentName?: string;
+  readonly agentRole?: string;
+  readonly role: "assistant";
+  readonly content: string;
+  readonly markdown?: string;
+  readonly text?: string;
+  readonly format: "markdown" | "text";
+  readonly sessionId?: string;
+  readonly workItemId?: string;
+  readonly artifactId?: string;
+}
+
 export type ClientControlKind = "show_page" | "open_artifact" | "open_report" | "open_browser" | "highlight" | "enter_voice_mode" | "exit_voice_mode";
 export type BrowserControlKind = "snapshot" | "find" | "click" | "fill" | "scroll_by" | "navigate" | "reload" | "back" | "forward" | "run_smoke";
 
@@ -198,6 +213,27 @@ export function buildArtifactCreatedEvent(input: CanonicalEventBaseInput & Artif
       sha256: input.sha256,
       bytes: input.bytes,
       metadata: input.metadata
+    })
+  });
+}
+
+export function buildAssistantResponseFinalEvent(input: CanonicalEventBaseInput & AssistantResponseFinalPayload): CanonicalEventEnvelope<AssistantResponseFinalPayload> {
+  return buildCanonicalEvent({
+    ...input,
+    type: "assistant.response.final",
+    payload: withoutUndefined({
+      messageId: input.messageId,
+      agentId: input.agentId,
+      agentName: input.agentName,
+      agentRole: input.agentRole,
+      role: input.role,
+      content: input.content,
+      markdown: input.markdown,
+      text: input.text,
+      format: input.format,
+      sessionId: input.sessionId,
+      workItemId: input.workItemId,
+      artifactId: input.artifactId
     })
   });
 }

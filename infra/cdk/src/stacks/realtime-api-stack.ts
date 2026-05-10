@@ -32,7 +32,8 @@ export class RealtimeApiStack extends AgentsCloudStack {
     super(scope, id, props);
 
     const commonEnvironment = {
-      REALTIME_CONNECTIONS_TABLE_NAME: props.state.realtimeConnectionsTable.tableName
+      REALTIME_CONNECTIONS_TABLE_NAME: props.state.realtimeConnectionsTable.tableName,
+      RUNS_TABLE_NAME: props.state.runsTable.tableName
     };
 
     const authorizerFunction = new NodejsFunction(this, "RealtimeAuthorizerFunction", {
@@ -124,6 +125,7 @@ export class RealtimeApiStack extends AgentsCloudStack {
     props.state.realtimeConnectionsTable.grantReadWriteData(defaultFunction);
     props.state.realtimeConnectionsTable.grantReadWriteData(relayFunction);
     props.state.eventsTable.grantStreamRead(relayFunction);
+    props.state.runsTable.grantReadData(defaultFunction);
     this.webSocketApi.grantManageConnections(defaultFunction);
     this.webSocketApi.grantManageConnections(relayFunction);
 

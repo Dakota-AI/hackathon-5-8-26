@@ -9,6 +9,7 @@ import { AwsArtifactSink } from "./aws-artifact-sink.js";
 import { DynamoEventSink } from "./dynamo-event-sink.js";
 import {
   buildArtifactCreatedEvent,
+  buildAssistantResponseFinalEvent,
   buildCanonicalEvent,
   buildRunStatusEvent,
   type ArtifactKind,
@@ -426,6 +427,7 @@ export class ResidentRunner {
       const artifact = await this.writeHeartbeatArtifact(agent, runId, taskId, input.workItemId, adapterResult);
       artifacts.push(artifact);
       events.push(await this.emitArtifact(runId, taskId, artifact));
+      events.push(await this.emitAssistantResponseFinal(agent, input, runId, taskId, artifact, adapterResult));
 
       const finishedAt = this.config.now();
       const record: ResidentHeartbeatRecord = {
@@ -590,6 +592,7 @@ export class ResidentRunner {
     const extracted = extractActionableAgentEvents(rawOutput);
     const events: CanonicalEventEnvelope[] = [];
     for (const item of extracted) {
+      const type = normalizeActionableEventType(item.type);
       const event = buildCanonicalEvent({
         id: eventId(runId, this.nextSeq()),
         seq: this.seq,
@@ -600,20 +603,57 @@ export class ResidentRunner {
         runId,
         taskId,
         source: SOURCE,
-        type: item.type,
+        type,
         payload: withoutUndefined({
           agentId: agent.agentId,
           agentRole: agent.role,
           profileId: agent.profileId,
           profileVersion: agent.profileVersion,
           rootWorkItemId: input.workItemId,
+          legacyEventType: type === item.type ? undefined : item.type,
           ...item.payload
         })
       });
       await this.persistEvent(event);
+      if (type === "artifact.created" && this.config.artifactSink) {
+        await this.persistAgentArtifactRecord(runId, taskId, input.workItemId, event.payload);
+      }
       events.push(event);
     }
     return events;
+  }
+
+  private async persistAgentArtifactRecord(
+    runId: string,
+    taskId: string,
+    workItemId: string | undefined,
+    payload: Record<string, unknown>
+  ): Promise<void> {
+    if (!this.config.artifactSink) return;
+    const artifactId = stringValue(payload.artifactId);
+    const kind = stringValue(payload.kind);
+    const name = stringValue(payload.name);
+    const uri = stringValue(payload.uri);
+    if (!artifactId || !kind || !name || !uri) return;
+    const createdAt = this.config.now();
+    await this.config.artifactSink.putArtifactRecord(withoutUndefined({
+      artifactId,
+      runId,
+      taskId,
+      workItemId,
+      workspaceId: this.config.workspaceId,
+      userId: this.config.userId,
+      kind,
+      name,
+      title: name,
+      uri,
+      s3Uri: uri.startsWith("s3://") ? uri : undefined,
+      contentType: stringValue(payload.contentType),
+      metadata: payload.metadata && typeof payload.metadata === "object" && !Array.isArray(payload.metadata) ? payload.metadata : undefined,
+      previewUrl: stringValue(payload.previewUrl),
+      createdAt,
+      updatedAt: createdAt
+    }));
   }
 
   private async writeHeartbeatArtifact(
@@ -756,6 +796,42 @@ export class ResidentRunner {
     return event;
   }
 
+  private async emitAssistantResponseFinal(
+    agent: ResidentAgentRuntimeState,
+    input: ResidentWakeRequest,
+    runId: string,
+    taskId: string,
+    artifact: ResidentArtifactRecord,
+    adapterResult: AdapterResult
+  ): Promise<CanonicalEventEnvelope> {
+    const content = finalAssistantContent(adapterResult);
+    const event = buildAssistantResponseFinalEvent({
+      id: eventId(runId, this.nextSeq()),
+      seq: this.seq,
+      createdAt: this.config.now(),
+      orgId: this.config.orgId,
+      userId: this.config.userId,
+      workspaceId: this.config.workspaceId,
+      runId,
+      taskId,
+      source: SOURCE,
+      messageId: `message-${runId}-${agent.agentId}-final`,
+      agentId: agent.agentId,
+      agentName: agent.role,
+      agentRole: agent.role,
+      role: "assistant",
+      content,
+      markdown: content,
+      text: content,
+      format: "markdown",
+      sessionId: adapterResult.sessionId ?? agent.sessionId,
+      workItemId: input.workItemId,
+      artifactId: artifact.artifactId
+    });
+    await this.persistEvent(event);
+    return event;
+  }
+
   private async persistEvent(event: CanonicalEventEnvelope): Promise<void> {
     await appendFile(this.eventsPath, `${JSON.stringify(event)}\n`);
     const eventSink = this.config.eventSink ?? eventSinkForEvent(event, this.config.now);
@@ -861,8 +937,9 @@ function renderPrompt(
     "You are {{role}}, a resident Agents Cloud logical agent.",
     "Work autonomously inside the scoped workspace, but do not publish, spend, delete, contact users, change infrastructure, or write source control without platform approval.",
     "Keep durable progress visible through status, artifact, approval, question, or message events. Do not emit noisy internal tool calls.",
-    "Only emit high-signal platform events when something actionable happens: delegated agent/work item created, agent profile requested/promoted, review feedback recorded, or webpage/artifact published.",
+    "Only emit high-signal platform events when something actionable happens: delegated agent/work item created, agent profile requested/promoted, review feedback recorded, or webpage/artifact published. Use dotted event names such as agent.delegated, work.item.created, work.item.assigned, webpage.published, artifact.created, client.control.requested, and browser.control.requested.",
     "When you need to contact the user, use the local CLI tool instead of inventing a channel: `agents-cloud-user notify --body \"...\"` for a notification-style message, or `agents-cloud-user call --summary \"...\"` to request a phone call. These commands record durable platform events for the current run.",
+    "When you build or start a web app on a local port, publish it with `agents-cloud-preview expose --port <port> --label <short-name>`. Start long-running dev servers and this preview command in the background so the run can finish; the command prints a redacted artifact.created preview event with a clickable previewUrl.",
     "When you need the foreground client to move, emit a single `client.control.requested` event with payload `{ kind: \"show_page\", surface: \"browser|kanban|approvals|agents\", message: \"short user-facing reason\" }`. For embedded browser work, emit `browser.control.requested` with a bounded command and a short message. Do not emit arbitrary JavaScript or unbounded UI commands.",
     "To emit one, include a fenced block exactly like ```agents-cloud-event followed by JSON with type and payload, then closing ```.",
     "",
@@ -989,6 +1066,9 @@ function buildAdapterEnvironment(context: {
     env.AGENTS_USER_ENGAGEMENT_TOKEN = engagementToken;
   }
   env.AGENTS_USER_TOOL = "agents-cloud-user";
+  env.AGENTS_CLOUD_PREVIEW_TOOL = "agents-cloud-preview";
+  copyEnv(env, "AGENTS_CLOUD_PREVIEW_TUNNEL_API_URL");
+  copyEnv(env, "AGENTS_CLOUD_PREVIEW_TUNNEL_API_TOKEN");
 
   if (process.env.AGENTS_ALLOW_RAW_PROVIDER_KEYS_TO_AGENT === "1") {
     for (const key of [
@@ -1042,14 +1122,23 @@ const ACTIONABLE_AGENT_EVENT_TYPES = new Set([
   "agent.profile.requested",
   "agent.profile.revision_proposed",
   "agent.profile.promoted",
+  "work.item.created",
+  "work.item.assigned",
   "work_item.created",
   "work_item.assigned",
   "review.session.created",
   "review.feedback.recorded",
   "webpage.published",
+  "artifact.created",
   "client.control.requested",
   "browser.control.requested"
 ]);
+
+function normalizeActionableEventType(type: string): string {
+  if (type === "work_item.created") return "work.item.created";
+  if (type === "work_item.assigned") return "work.item.assigned";
+  return type;
+}
 
 interface ActionableAgentEvent {
   readonly type: string;
@@ -1098,9 +1187,30 @@ const CLIENT_CONTROL_KINDS = new Set([
 
 const CLIENT_CONTROL_SURFACES = new Set(["agents", "kanban", "browser", "approvals"]);
 
+const ARTIFACT_KINDS = new Set(["document", "website", "dataset", "report", "diff", "miro-board", "log", "trace", "other"]);
+
 const BROWSER_CONTROL_KINDS = new Set(["snapshot", "find", "click", "fill", "scroll_by", "navigate", "reload", "back", "forward", "run_smoke"]);
 
 function normalizeActionEventPayload(type: string, payload: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (type === "artifact.created") {
+    const artifactId = stringValue(payload.artifactId);
+    const kind = stringValue(payload.kind);
+    const name = stringValue(payload.name);
+    const uri = stringValue(payload.uri);
+    const contentType = stringValue(payload.contentType) ?? "application/octet-stream";
+    if (!artifactId || !kind || !ARTIFACT_KINDS.has(kind) || !name || !uri || !isHttpLikeUri(uri)) return undefined;
+    const previewUrl = stringValue(payload.previewUrl);
+    if (previewUrl && !isHttpLikeUri(previewUrl)) return undefined;
+    return limitActionEventText({
+      artifactId,
+      kind,
+      name,
+      uri,
+      contentType,
+      previewUrl,
+      metadata: payload.metadata && typeof payload.metadata === "object" && !Array.isArray(payload.metadata) ? payload.metadata : undefined
+    });
+  }
   if (type === "client.control.requested") {
     const kind = stringValue(payload.kind);
     const surface = stringValue(payload.surface);
@@ -1173,6 +1283,15 @@ function nonEmpty(value: string | undefined): string | undefined {
   return value && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+function isHttpLikeUri(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "s3:" || url.protocol === "file:";
+  } catch {
+    return false;
+  }
+}
+
 function eventId(runId: string, seq: number): string {
   return `evt-${runId}-${String(seq).padStart(6, "0")}`;
 }
@@ -1194,6 +1313,11 @@ function stripSessionLine(value: string): string {
     .filter((line) => !line.trim().startsWith("session_id:"))
     .join("\n")
     .trim();
+}
+
+function finalAssistantContent(result: AdapterResult): string {
+  const cleaned = stripSessionLine(result.rawOutput);
+  return cleaned.length > 0 ? cleaned : result.summary;
 }
 
 function assertSafeId(value: string, label: string): void {

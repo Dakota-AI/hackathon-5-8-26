@@ -1,4 +1,5 @@
 import type { AuthenticatedUser, ControlApiStore, RunRecord } from "./ports.js";
+import { isAdminUser } from "./access-control.js";
 
 export interface QueryResult {
   readonly statusCode: number;
@@ -143,14 +144,6 @@ async function summarizeRun(store: ControlApiStore, run: RunRecord): Promise<Rec
     failureCount: failureEvents.length,
     lastFailure: isRecord(lastFailurePayload) ? lastFailurePayload : undefined
   };
-}
-
-function isAdminUser(user: AuthenticatedUser, adminEmails: readonly string[]): boolean {
-  if (!user.email) {
-    return false;
-  }
-  const normalizedUserEmail = user.email.trim().toLowerCase();
-  return adminEmails.map((email) => email.trim().toLowerCase()).includes(normalizedUserEmail);
 }
 
 function hasFailurePayload(payload: Record<string, unknown>): boolean {

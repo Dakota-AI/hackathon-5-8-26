@@ -5,9 +5,7 @@ import '../data/http_work_repository.dart';
 import '../domain/work_item_models.dart';
 
 /// Async list of [WorkItem]s used by the Kanban board. Uses the unified
-/// [workRepositoryProvider] which is live (Control API) when signed in and
-/// fixture-backed otherwise. Per-call failures inside HttpWorkRepository
-/// also fall back to fixtures.
+/// [workRepositoryProvider] backed by the live Control API when signed in.
 final kanbanWorkItemsProvider = FutureProvider<List<WorkItem>>((ref) async {
   final repo = ref.watch(workRepositoryProvider);
   return repo.listWorkItems();

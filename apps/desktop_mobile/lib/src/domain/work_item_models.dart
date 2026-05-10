@@ -155,6 +155,7 @@ class WorkItemSurfaceSummary {
 class WorkItem {
   const WorkItem({
     required this.id,
+    this.workspaceId,
     required this.title,
     required this.objective,
     required this.status,
@@ -170,6 +171,7 @@ class WorkItem {
   });
 
   final String id;
+  final String? workspaceId;
   final String title;
   final String objective;
   final WorkItemStatus status;
@@ -191,6 +193,7 @@ class WorkItem {
 
   WorkItem copyWith({
     String? id,
+    String? workspaceId,
     String? title,
     String? objective,
     WorkItemStatus? status,
@@ -206,6 +209,7 @@ class WorkItem {
   }) {
     return WorkItem(
       id: id ?? this.id,
+      workspaceId: workspaceId ?? this.workspaceId,
       title: title ?? this.title,
       objective: objective ?? this.objective,
       status: status ?? this.status,

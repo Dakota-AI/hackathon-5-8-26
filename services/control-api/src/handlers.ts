@@ -1,10 +1,12 @@
 import crypto from "node:crypto";
 import type { APIGatewayProxyStructuredResultV2, APIGatewayProxyEventV2WithJWTAuthorizer } from "aws-lambda";
+import { buildCanonicalEvent } from "@agents-cloud/protocol";
 import { getArtifactDownloadUrl, getRunArtifact, listRunArtifacts, listWorkItemArtifacts } from "./artifacts.js";
 import { S3ArtifactPresigner } from "./s3-presigner.js";
 import { approveAgentProfileVersion, createAgentProfileDraft, getAgentProfileVersion, listAgentProfiles, S3AgentProfileBundleStore } from "./agent-profiles.js";
 import { createRun } from "./create-run.js";
 import { DynamoControlApiStore } from "./dynamo-store.js";
+import { hasProductAccessGroup, parseAuthenticatedUser } from "./access-control.js";
 import { getRun, listAdminRunEvents, listAdminRuns, listRunEvents, listRuns } from "./query-runs.js";
 import { createDataSourceRef, getDataSourceRef, listDataSourceRefsForRun, listDataSourceRefsForWorkItem } from "./data-source-refs.js";
 import { StepFunctionsExecutionStarter } from "./step-functions.js";
@@ -34,6 +36,10 @@ const artifactPresigner = S3ArtifactPresigner.fromEnvironment();
 
 export async function createRunHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
   const user = userFromEvent(event);
+  const productAccessError = requireProductAccess(user);
+  if (productAccessError) {
+    return productAccessError;
+  }
   const body = parseJsonBody(event.body);
   const result = await createRun({
     store,
@@ -69,15 +75,26 @@ export async function getRunHandler(event: APIGatewayProxyEventV2WithJWTAuthoriz
   if (!runId) {
     return json(400, { error: "BadRequest", message: "runId path parameter is required." });
   }
+  const user = userFromEvent(event);
+  const productAccessError = requireProductAccess(user);
+  if (productAccessError) {
+    return productAccessError;
+  }
 
-  const result = await getRun({ store, user: userFromEvent(event), runId });
+  const result = await getRun({ store, user, runId });
   return json(result.statusCode, result.body);
 }
 
 export async function listRunsHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
+  const user = userFromEvent(event);
+  const productAccessError = requireProductAccess(user);
+  if (productAccessError) {
+    return productAccessError;
+  }
+
   const result = await listRuns({
     store,
-    user: userFromEvent(event),
+    user,
     workspaceId: event.queryStringParameters?.workspaceId,
     limit: parseOptionalInteger(event.queryStringParameters?.limit)
   });
@@ -89,10 +106,15 @@ export async function listRunEventsHandler(event: APIGatewayProxyEventV2WithJWTA
   if (!runId) {
     return json(400, { error: "BadRequest", message: "runId path parameter is required." });
   }
+  const user = userFromEvent(event);
+  const productAccessError = requireProductAccess(user);
+  if (productAccessError) {
+    return productAccessError;
+  }
 
   const result = await listRunEvents({
     store,
-    user: userFromEvent(event),
+    user,
     runId,
     afterSeq: parseOptionalInteger(event.queryStringParameters?.afterSeq),
     limit: parseOptionalInteger(event.queryStringParameters?.limit)
@@ -129,6 +151,10 @@ export async function listAdminRunEventsHandler(event: APIGatewayProxyEventV2Wit
 
 export async function runnerStateHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
   const user = userFromEvent(event);
+  const productAccessError = requireProductAccess(user);
+  if (productAccessError) {
+    return productAccessError;
+  }
   const adminEmails = parseAdminEmails(process.env.ADMIN_EMAILS);
   const routeKey = event.routeKey;
 
@@ -259,6 +285,10 @@ export async function runnerStateHandler(event: APIGatewayProxyEventV2WithJWTAut
 
 export async function workItemsHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
   const user = userFromEvent(event);
+  const productAccessError = requireProductAccess(user);
+  if (productAccessError) {
+    return productAccessError;
+  }
   const routeKey = event.routeKey;
 
   if (routeKey === "POST /work-items") {
@@ -360,6 +390,10 @@ export async function workItemsHandler(event: APIGatewayProxyEventV2WithJWTAutho
 
 export async function agentProfilesHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
   const user = userFromEvent(event);
+  const productAccessError = requireProductAccess(user);
+  if (productAccessError) {
+    return productAccessError;
+  }
   const routeKey = event.routeKey;
 
   if (routeKey === "POST /agent-profiles/drafts") {
@@ -424,6 +458,10 @@ export async function agentProfilesHandler(event: APIGatewayProxyEventV2WithJWTA
 
 export async function artifactsHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
   const user = userFromEvent(event);
+  const productAccessError = requireProductAccess(user);
+  if (productAccessError) {
+    return productAccessError;
+  }
   const routeKey = event.routeKey;
 
   if (routeKey === "GET /work-items/{workItemId}/artifacts") {
@@ -488,6 +526,10 @@ export async function artifactsHandler(event: APIGatewayProxyEventV2WithJWTAutho
 
 export async function dataSourceRefsHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
   const user = userFromEvent(event);
+  const productAccessError = requireProductAccess(user);
+  if (productAccessError) {
+    return productAccessError;
+  }
   const routeKey = event.routeKey;
 
   if (routeKey === "POST /data-source-refs") {
@@ -557,6 +599,10 @@ export async function dataSourceRefsHandler(event: APIGatewayProxyEventV2WithJWT
 
 export async function surfacesHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
   const user = userFromEvent(event);
+  const productAccessError = requireProductAccess(user);
+  if (productAccessError) {
+    return productAccessError;
+  }
   const routeKey = event.routeKey;
 
   if (routeKey === "POST /surfaces") {
@@ -666,6 +712,10 @@ export async function surfacesHandler(event: APIGatewayProxyEventV2WithJWTAuthor
 
 export async function approvalsHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
   const user = userFromEvent(event);
+  const productAccessError = requireProductAccess(user);
+  if (productAccessError) {
+    return productAccessError;
+  }
   const routeKey = event.routeKey;
 
   if (routeKey === "POST /approvals") {
@@ -744,43 +794,99 @@ export async function approvalsHandler(event: APIGatewayProxyEventV2WithJWTAutho
  *
  * Routes covered:
  *   POST /user-engagement/notify
+ *   POST /user-engagement/call
  */
 export async function userEngagementHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
   const routeKey = event.routeKey ?? "";
   const caller = userFromEvent(event);
+  const productAccessError = requireProductAccess(caller);
+  if (productAccessError) {
+    return productAccessError;
+  }
 
-  if (routeKey === "POST /user-engagement/notify") {
+  if (routeKey === "POST /user-engagement/notify" || routeKey === "POST /user-engagement/call") {
+    const isCall = routeKey === "POST /user-engagement/call";
     const body = parseJsonBody(event.body);
-    const targetUserId = stringField(body, "userId");
-    const title = optionalStringField(body, "title") ?? "AI Caller";
-    const messageBody = stringField(body, "body");
+    const runId = stringField(body, "runId");
+    const workspaceId = optionalStringField(body, "workspaceId");
+    const taskId = optionalStringField(body, "taskId");
+    const idempotencyKey = optionalStringField(body, "idempotencyKey");
+    const targetUserId = optionalStringField(body, "targetUserId") ?? optionalStringField(body, "userId") ?? caller.userId;
+    const title = optionalStringField(body, "title") ?? (isCall ? "Incoming call" : "AI update");
+    const messageBody = isCall ? optionalStringField(body, "summary") ?? stringField(body, "body") : stringField(body, "body");
     const deepLink = optionalStringField(body, "deepLink");
-
-    if (!messageBody.trim()) {
-      return json(400, { error: "BadRequest", message: "body must not be empty." });
+    const urgency = optionalStringField(body, "urgency") ?? "normal";
+    if (!workspaceId) {
+      return json(400, { error: "BadRequest", message: "workspaceId is required." });
+    }
+    if (!runId) {
+      return json(400, { error: "BadRequest", message: "runId is required." });
+    }
+    if (!targetUserId || targetUserId !== caller.userId) {
+      return json(403, { error: "Forbidden", message: "targetUserId can only target the authenticated user." });
+    }
+    const run = await store.getRunById(runId);
+    if (!run || run.userId !== caller.userId || run.workspaceId !== workspaceId) {
+      return json(404, { error: "NotFound", message: "Run not found." });
     }
 
-    // For now: log + return 202. Next steps (TODO):
-    //  1. Resolve targetUserId → APNS device tokens (USER_DEVICES table).
-    //  2. Send the banner via APNS HTTP/2 (or SNS Mobile Push topic).
-    //  3. Optionally write a user_engagement event to the events table so
-    //     the existing realtime relay surfaces it on the user's open
-    //     WebSocket session for in-app delivery.
-    console.log(JSON.stringify({
-      kind: "user_engagement.notify",
-      caller: caller.userId,
-      targetUserId,
-      title,
-      bodyChars: messageBody.length,
-      deepLink: deepLink ?? null,
-      receivedAt: new Date().toISOString()
-    }));
+    if (urgency !== "low" && urgency !== "normal" && urgency !== "high") {
+      return json(400, { error: "BadRequest", message: "urgency must be one of low, normal, high." });
+    }
+    if (!messageBody.trim()) {
+      return json(400, { error: "BadRequest", message: isCall ? "summary is required." : "body is required." });
+    }
+
+    const nextSeq = (await nextEventSeq(store, runId)) + 1;
+    const eventId = userEventId(runId, nextSeq);
+    const eventType = isCall ? "user.call.requested" : "user.notification.requested";
+    const event = buildCanonicalEvent({
+      id: eventId,
+      seq: nextSeq,
+      createdAt: new Date().toISOString(),
+      userId: run.userId,
+        workspaceId: run.workspaceId,
+      runId,
+      taskId,
+      idempotencyKey,
+      source: {
+        kind: "control-api",
+        name: "control-api.user-engagement"
+      },
+      type: eventType,
+      payload: compactRecord({
+        kind: isCall ? "call" : "notify",
+        targetUserId,
+        title,
+        body: isCall ? undefined : messageBody,
+        summary: isCall ? messageBody : undefined,
+        urgency,
+        deepLink,
+        deliveryStatus: "requested"
+      })
+    });
+    await store.putEvent(event);
+    void emitUserEngagementNotification({
+      type: event.type,
+        targetUserId,
+        runId,
+        workspaceId: run.workspaceId,
+        eventId,
+        title,
+      message: messageBody,
+      deepLink,
+      urgency
+    });
 
     return json(202, {
       accepted: true,
-      method: "notify",
+      type: eventType,
+      eventId,
       targetUserId,
-      note: "Banner delivery wiring is pending APNS configuration."
+      runId,
+      taskId,
+      seq: nextSeq,
+      deliveryStatus: "event_recorded"
     });
   }
 
@@ -788,17 +894,7 @@ export async function userEngagementHandler(event: APIGatewayProxyEventV2WithJWT
 }
 
 function userFromEvent(event: APIGatewayProxyEventV2WithJWTAuthorizer): AuthenticatedUser {
-  const claims = event.requestContext.authorizer.jwt.claims;
-  const userId = String(claims.sub ?? "");
-  if (!userId) {
-    throw new Error("Authenticated request is missing Cognito subject claim.");
-  }
-
-  const emailClaim = claims.email;
-  return {
-    userId,
-    email: typeof emailClaim === "string" ? emailClaim : undefined
-  };
+  return parseAuthenticatedUser(event.requestContext.authorizer.jwt.claims);
 }
 
 function parseJsonBody(body: string | undefined): Record<string, unknown> {
@@ -879,6 +975,94 @@ function json(statusCode: number, body: Record<string, unknown>): APIGatewayProx
     },
     body: JSON.stringify(body)
   };
+}
+
+async function nextEventSeq(inputStore: { readonly listEvents: (runId: string, options?: { readonly afterSeq?: number; readonly limit?: number }) => Promise<readonly { readonly seq: number }[]> }, runId: string): Promise<number> {
+  let latest = 0;
+  let afterSeq: number | undefined;
+
+  while (true) {
+    const events = await inputStore.listEvents(runId, {
+      afterSeq,
+      limit: 100
+    });
+    if (events.length === 0) {
+      break;
+    }
+    latest = events[events.length - 1]?.seq ?? latest;
+    afterSeq = latest;
+    if (events.length < 100) {
+      break;
+    }
+  }
+  return latest;
+}
+
+function userEventId(runId: string, seq: number): string {
+  return `evt-${runId}-${String(seq).padStart(6, "0")}`;
+}
+
+async function emitUserEngagementNotification(input: {
+  readonly type: string;
+  readonly targetUserId: string;
+  readonly runId: string;
+  readonly workspaceId: string;
+  readonly eventId: string;
+  readonly title?: string;
+  readonly message: string;
+  readonly deepLink?: string;
+  readonly urgency: string;
+}): Promise<void> {
+  const webhookUrl = process.env.USER_ENGAGEMENT_WEBHOOK_URL;
+  if (!webhookUrl) {
+    return;
+  }
+  const headers: Record<string, string> = {
+    "content-type": "application/json"
+  };
+  const webhookToken = process.env.USER_ENGAGEMENT_WEBHOOK_TOKEN;
+  if (webhookToken) {
+    headers.authorization = `Bearer ${webhookToken}`;
+  }
+  const controller = new AbortController();
+  const timeoutMs = Number.parseInt(process.env.USER_ENGAGEMENT_WEBHOOK_TIMEOUT_MS ?? "1500", 10);
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 1500);
+
+  try {
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(input),
+      signal: controller.signal
+    });
+  } catch (error) {
+    console.warn(JSON.stringify({
+      kind: "user_engagement_webhook_error",
+      workspaceId: input.workspaceId,
+      runId: input.runId,
+      targetUserId: input.targetUserId,
+      type: input.type,
+      error: String(error)
+    }));
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function compactRecord<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
+}
+
+function requireProductAccess(user: AuthenticatedUser): APIGatewayProxyStructuredResultV2 | undefined {
+  if (!hasProductAccessGroup(user)) {
+    return json(403, {
+      error: "Forbidden",
+      message: "Active Agents Cloud user access is required."
+    });
+  }
+  return undefined;
 }
 
 function notImplemented(message: string): APIGatewayProxyStructuredResultV2 {

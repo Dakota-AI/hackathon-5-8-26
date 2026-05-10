@@ -5,13 +5,30 @@ import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-const agentsCloudRegion = 'us-east-1';
-const agentsCloudUserPoolId = 'us-east-1_1UeU1hTME';
-const agentsCloudUserPoolClientId = '3kq79rodc3ofjkulh0b31sfpos';
-const agentsCloudIdentityPoolId =
-    'us-east-1:5562c7da-9181-4b1e-9a5c-5d93a00bb442';
-const agentsCloudControlApiUrl =
-    'https://ajmonuqk61.execute-api.us-east-1.amazonaws.com';
+const agentsCloudRegion = String.fromEnvironment(
+  'AGENTS_CLOUD_AWS_REGION',
+  defaultValue: 'us-east-1',
+);
+const agentsCloudUserPoolId = String.fromEnvironment(
+  'AGENTS_CLOUD_COGNITO_USER_POOL_ID',
+  defaultValue: 'us-east-1_1UeU1hTME',
+);
+const agentsCloudUserPoolClientId = String.fromEnvironment(
+  'AGENTS_CLOUD_COGNITO_USER_POOL_CLIENT_ID',
+  defaultValue: '3kq79rodc3ofjkulh0b31sfpos',
+);
+const agentsCloudIdentityPoolId = String.fromEnvironment(
+  'AGENTS_CLOUD_COGNITO_IDENTITY_POOL_ID',
+  defaultValue: 'us-east-1:5562c7da-9181-4b1e-9a5c-5d93a00bb442',
+);
+const agentsCloudControlApiUrl = String.fromEnvironment(
+  'AGENTS_CLOUD_CONTROL_API_URL',
+  defaultValue: 'https://ajmonuqk61.execute-api.us-east-1.amazonaws.com',
+);
+const agentsCloudRealtimeUrl = String.fromEnvironment(
+  'AGENTS_CLOUD_REALTIME_URL',
+  defaultValue: 'wss://3ooyj7whoh.execute-api.us-east-1.amazonaws.com/dev',
+);
 
 const agentsCloudAmplifyConfig =
     '''{

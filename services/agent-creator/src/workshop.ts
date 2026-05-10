@@ -12,6 +12,17 @@ const DEFAULT_PHASES = [
   "promotion_or_revision",
 ];
 
+const PREVIEW_SITE_TOOL: CandidateTool = {
+  id: "preview.expose_dynamic_site",
+  name: "Expose Dynamic Preview Site",
+  category: "preview",
+  risk: "medium",
+  description:
+    "Expose a local web server from the resident runner through the Agents Cloud preview tunnel and emit a clickable preview artifact.",
+  source: "platform",
+  catalogHash: "sha256:agents-cloud-preview-expose-dynamic-site-v1",
+};
+
 export function createWorkshopPlan(request: AgentWorkshopRequest): WorkshopPlan {
   return {
     status: "needs_discovery",
@@ -39,8 +50,9 @@ export function createWorkshopPlan(request: AgentWorkshopRequest): WorkshopPlan 
 }
 
 export function renderDraftProfile(request: AgentWorkshopRequest): AgentProfileVersion {
-  const allowedTools = request.candidateTools.filter((tool) => tool.risk === "low").map(toToolPolicyEntry);
-  const approvalRequiredTools = request.candidateTools
+  const candidateTools = withRecommendedPlatformTools(request);
+  const allowedTools = candidateTools.filter((tool) => tool.risk === "low").map(toToolPolicyEntry);
+  const approvalRequiredTools = candidateTools
     .filter((tool) => tool.risk === "medium" || tool.risk === "high")
     .map((tool) => ({ ...toToolPolicyEntry(tool), requiresApproval: true }));
 
@@ -80,7 +92,7 @@ export function renderDraftProfile(request: AgentWorkshopRequest): AgentProfileV
       allowedTools,
       approvalRequiredTools,
       deniedTools: [],
-      notes: buildToolPolicyNotes(request.candidateTools),
+      notes: buildToolPolicyNotes(candidateTools),
     },
     mcpPolicy: {
       allowDynamicServers: false,
@@ -256,6 +268,26 @@ function stableProfileId(role: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "") || "agent-profile";
+}
+
+function withRecommendedPlatformTools(request: AgentWorkshopRequest): CandidateTool[] {
+  const tools = [...request.candidateTools];
+  const hasPreviewTool = tools.some((tool) => tool.id === PREVIEW_SITE_TOOL.id);
+  if (!hasPreviewTool && shouldOfferPreviewTool(request)) {
+    tools.push(PREVIEW_SITE_TOOL);
+  }
+  return tools;
+}
+
+function shouldOfferPreviewTool(request: AgentWorkshopRequest): boolean {
+  const text = [
+    request.requestedRole,
+    request.projectContext.name,
+    ...request.projectContext.goals,
+    ...request.projectContext.constraints,
+    ...request.feedback.map((item) => item.message)
+  ].join(" ").toLowerCase();
+  return /\b(site|website|web app|app|frontend|dashboard|landing page|preview|prototype|ui|browser)\b/.test(text);
 }
 
 function buildMission(request: AgentWorkshopRequest): string {

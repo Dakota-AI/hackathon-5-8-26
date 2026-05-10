@@ -484,13 +484,22 @@ export class ControlApiStack extends AgentsCloudStack {
       });
     }
 
-    // Hermes calls POST /user-engagement/notify via the `phone_user` tool
-    // when the agent wants to ping the user proactively (banner / inline reply).
+    // Hermes calls POST /user-engagement/notify and /user-engagement/call via the
+    // `phone_user` tool when the agent wants to ping or request a call.
     this.api.addRoutes({
       path: "/user-engagement/notify",
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration(
         "UserEngagementNotifyIntegration",
+        userEngagementFunction
+      ),
+      authorizer
+    });
+    this.api.addRoutes({
+      path: "/user-engagement/call",
+      methods: [HttpMethod.POST],
+      integration: new HttpLambdaIntegration(
+        "UserEngagementCallIntegration",
         userEngagementFunction
       ),
       authorizer

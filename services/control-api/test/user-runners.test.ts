@@ -61,6 +61,8 @@ class MemoryStore implements RunnerStateStore {
 }
 
 const admin: AuthenticatedUser = { userId: "admin-user", email: "seb4594@gmail.com" };
+const adminByGroup: AuthenticatedUser = { userId: "admin-group", email: "admin-group@example.com", groups: ["agents-cloud-admin"] };
+const suspendedAdmin: AuthenticatedUser = { userId: "admin-suspended", email: "seb4594@gmail.com", groups: ["agents-cloud-suspended"] };
 const user: AuthenticatedUser = { userId: "user-123", email: "owner@example.com" };
 const otherUser: AuthenticatedUser = { userId: "other-user", email: "other@example.com" };
 
@@ -180,6 +182,31 @@ describe("user runner control plane", () => {
     assert.deepEqual((result.body.hosts as HostNodeRecord[]).map((host) => host.hostId).sort(), ["host-failed", "host-online"]);
     assert.deepEqual((result.body.runners as UserRunnerRecord[]).map((runner) => runner.runnerId).sort(), ["runner-a", "runner-b"]);
     assert.deepEqual(result.body.totals, { hosts: 2, runners: 2, failedHosts: 1, failedRunners: 1, staleRunners: 0 });
+  });
+
+  it("allows admin access by Cognito group without allowlist fallback", async () => {
+    const store = new MemoryStore();
+
+    const result = await listAdminRunnerState({
+      store: store,
+      user: adminByGroup,
+      adminEmails: ["seb4594@gmail.com"],
+      limit: 10
+    });
+
+    assert.equal(result.statusCode, 200);
+  });
+
+  it("rejects suspended users from admin routes even if allowlist matches", async () => {
+    const store = new MemoryStore();
+    const result = await listAdminRunnerState({
+      store: store,
+      user: suspendedAdmin,
+      adminEmails: ["seb4594@gmail.com"],
+      limit: 10
+    });
+
+    assert.equal(result.statusCode, 403);
   });
 });
 

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { AuthenticatedUser, HostNodeRecord, RunnerStateStore, UserRunnerRecord } from "./ports.js";
+import { isAdminUser } from "./access-control.js";
 
 const ADMIN_RUNNER_STATUSES = ["online", "starting", "stale", "failed", "offline", "draining", "restoring"];
 
@@ -12,7 +13,7 @@ export async function registerHostNode(input: {
   readonly now: () => string;
   readonly request: { readonly hostId: string; readonly placementTarget: string; readonly status?: string; readonly capacity?: Record<string, unknown>; readonly health?: Record<string, unknown> };
 }): Promise<Result> {
-  if (!isAdmin(input.user, input.adminEmails)) {
+  if (!isAdminUser(input.user, input.adminEmails)) {
     return forbidden();
   }
   const hostId = input.request.hostId.trim();
@@ -49,7 +50,7 @@ export async function heartbeatHostNode(input: {
   readonly hostId: string;
   readonly request: { readonly status?: string; readonly capacity?: Record<string, unknown>; readonly health?: Record<string, unknown> };
 }): Promise<Result> {
-  if (!isAdmin(input.user, input.adminEmails)) {
+  if (!isAdminUser(input.user, input.adminEmails)) {
     return forbidden();
   }
   const existing = await input.store.getHostNode(input.hostId);
@@ -199,7 +200,7 @@ export async function listAdminRunnerState(input: {
   readonly adminEmails: readonly string[];
   readonly limit?: number;
 }): Promise<Result> {
-  if (!isAdmin(input.user, input.adminEmails)) {
+  if (!isAdminUser(input.user, input.adminEmails)) {
     return forbidden();
   }
   const limit = clampLimit(input.limit, 100);
@@ -221,11 +222,6 @@ export async function listAdminRunnerState(input: {
       }
     }
   };
-}
-
-function isAdmin(user: AuthenticatedUser, adminEmails: readonly string[]): boolean {
-  const email = user.email?.toLowerCase();
-  return Boolean(email && adminEmails.map((item) => item.toLowerCase()).includes(email));
 }
 
 function clean(value: string | undefined): string | undefined {

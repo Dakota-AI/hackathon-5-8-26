@@ -74,29 +74,41 @@ class ControlApi {
     return _asList(_decode(response), keys: const ['items', 'workItems']);
   }
 
-  Future<Map<String, dynamic>> getWorkItem(String id) async {
+  Future<Map<String, dynamic>> getWorkItem(String id, {String? workspaceId}) async {
+    final query = <String, String>{};
+    if (workspaceId != null && workspaceId.trim().isNotEmpty) {
+      query['workspaceId'] = workspaceId.trim();
+    }
     final response = await _http.get(
-      _uri('/work-items/$id'),
+      _uri('/work-items/$id', query),
       headers: await _headers(),
     );
     final decoded = _decode(response);
-    return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+    if (decoded is Map<String, dynamic>) {
+      final workItem = decoded['workItem'];
+      if (workItem is Map<String, dynamic>) return workItem;
+      return decoded;
+    }
+    return <String, dynamic>{};
   }
 
   Future<Map<String, dynamic>> createWorkItem({
-    required String workspaceId,
+    String? workspaceId,
     required String title,
     String? objective,
   }) async {
+    final body = <String, dynamic>{
+      'title': title,
+      'objective': objective,
+      'idempotencyKey': 'desktop-${DateTime.now().millisecondsSinceEpoch}',
+    };
+    if (workspaceId != null && workspaceId.trim().isNotEmpty) {
+      body['workspaceId'] = workspaceId.trim();
+    }
     final response = await _http.post(
       _uri('/work-items'),
       headers: await _headers(),
-      body: jsonEncode({
-        'workspaceId': workspaceId,
-        'title': title,
-        'objective': ?objective,
-        'idempotencyKey': 'desktop-${DateTime.now().millisecondsSinceEpoch}',
-      }),
+      body: jsonEncode(body),
     );
     final decoded = _decode(response);
     return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
@@ -117,17 +129,20 @@ class ControlApi {
 
   Future<Map<String, dynamic>> startRun({
     required String workItemId,
-    required String workspaceId,
+    String? workspaceId,
     required String objective,
   }) async {
+    final body = <String, dynamic>{
+      'objective': objective,
+      'idempotencyKey': 'desktop-${DateTime.now().millisecondsSinceEpoch}',
+    };
+    if (workspaceId != null && workspaceId.trim().isNotEmpty) {
+      body['workspaceId'] = workspaceId.trim();
+    }
     final response = await _http.post(
       _uri('/work-items/$workItemId/runs'),
       headers: await _headers(),
-      body: jsonEncode({
-        'workspaceId': workspaceId,
-        'objective': objective,
-        'idempotencyKey': 'desktop-${DateTime.now().millisecondsSinceEpoch}',
-      }),
+      body: jsonEncode(body),
     );
     final decoded = _decode(response);
     return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
@@ -147,25 +162,46 @@ class ControlApi {
     return _asList(_decode(response), keys: const ['items', 'runs', 'userRunners']);
   }
 
-  Future<List<Map<String, dynamic>>> listRuns(String workItemId) async {
+  Future<List<Map<String, dynamic>>> listRuns(
+    String workItemId, {
+    String? workspaceId,
+  }) async {
+    final query = <String, String>{};
+    if (workspaceId != null && workspaceId.trim().isNotEmpty) {
+      query['workspaceId'] = workspaceId.trim();
+    }
     final response = await _http.get(
-      _uri('/work-items/$workItemId/runs'),
+      _uri('/work-items/$workItemId/runs', query),
       headers: await _headers(),
     );
     return _asList(_decode(response), keys: const ['items', 'runs']);
   }
 
-  Future<List<Map<String, dynamic>>> listEvents(String workItemId) async {
+  Future<List<Map<String, dynamic>>> listEvents(
+    String workItemId, {
+    String? workspaceId,
+  }) async {
+    final query = <String, String>{};
+    if (workspaceId != null && workspaceId.trim().isNotEmpty) {
+      query['workspaceId'] = workspaceId.trim();
+    }
     final response = await _http.get(
-      _uri('/work-items/$workItemId/events'),
+      _uri('/work-items/$workItemId/events', query),
       headers: await _headers(),
     );
     return _asList(_decode(response), keys: const ['items', 'events']);
   }
 
-  Future<List<Map<String, dynamic>>> listArtifacts(String workItemId) async {
+  Future<List<Map<String, dynamic>>> listArtifacts(
+    String workItemId, {
+    String? workspaceId,
+  }) async {
+    final query = <String, String>{};
+    if (workspaceId != null && workspaceId.trim().isNotEmpty) {
+      query['workspaceId'] = workspaceId.trim();
+    }
     final response = await _http.get(
-      _uri('/work-items/$workItemId/artifacts'),
+      _uri('/work-items/$workItemId/artifacts', query),
       headers: await _headers(),
     );
     return _asList(_decode(response), keys: const ['items', 'artifacts']);

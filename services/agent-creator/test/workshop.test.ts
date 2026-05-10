@@ -87,6 +87,26 @@ test("draft profile converts user preferences and feedback into tunable behavior
   assert.ok(draft.evalPack.scenarios.some((scenario) => scenario.name.includes("source quality")));
 });
 
+test("agent builder offers the dynamic preview tool for custom site-building agents behind approval", () => {
+  const draft = renderDraftProfile({
+    ...request,
+    requestedRole: "Frontend App Builder",
+    projectContext: {
+      name: "Investor dashboard prototype",
+      goals: ["Build a working web app", "Publish a clickable preview URL"],
+      constraints: ["Keep preview publishing gated by approval"],
+    },
+    candidateTools: [],
+  });
+
+  const previewTool = draft.toolPolicy.approvalRequiredTools.find((tool) => tool.toolId === "preview.expose_dynamic_site");
+  assert.ok(previewTool);
+  assert.equal(previewTool.source, "platform");
+  assert.equal(previewTool.risk, "medium");
+  assert.equal(previewTool.requiresApproval, true);
+  assert.ok(draft.toolPolicy.notes.some((note) => note.includes("preview.expose_dynamic_site")));
+});
+
 test("scorecard blocks promotion until profile has evals, approval gates, and change evidence", () => {
   const draft = renderDraftProfile(request);
   const scorecard = evaluateProfileDraft(draft);

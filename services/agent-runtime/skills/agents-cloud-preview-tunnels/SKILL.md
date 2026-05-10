@@ -16,20 +16,25 @@ agents-cloud-preview expose --port 3000 --label my-app
 
 The command:
 1. creates a short-lived preview tunnel,
-2. prints JSON containing `previewUrl`,
-3. keeps running and proxies public HTTPS traffic to `http://127.0.0.1:<port>`.
+2. prints redacted JSON containing `previewUrl`,
+3. prints a fenced `agents-cloud-event` `artifact.created` block that the resident runner turns into a durable preview artifact,
+4. keeps running and proxies public HTTPS traffic to `http://127.0.0.1:<port>`.
 
 ## Workflow
 
-1. Start the app server bound to localhost, for example:
+1. Start the app server bound to localhost in the background, for example:
    ```bash
-   npm run dev -- --host 127.0.0.1 --port 3000
+   npm run dev -- --host 127.0.0.1 --port 3000 &
    ```
-2. In another process, expose it:
+2. Expose it in the background so the agent run can finish after the preview URL is printed:
    ```bash
-   agents-cloud-preview expose --port 3000 --label app
+   agents-cloud-preview expose --port 3000 --label app &
    ```
-3. Copy the printed `previewUrl` into the user-facing response and/or emit an `artifact.created` event.
+3. Use the printed `previewUrl` in the user-facing response. The fenced event is automatically captured as a durable preview artifact.
+
+## Tool policy
+
+Agent Builder should represent this as tool id `preview.expose_dynamic_site` with medium risk and approval required. It is a platform tool that starts a public-by-URL tunnel to a local runner port; it does not need raw Cloudflare or AWS secrets in profile artifacts.
 
 ## Rules
 

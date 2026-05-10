@@ -47,20 +47,23 @@ describe("ResidentRunner", () => {
     assert.equal(state.runner.status, "ready");
     assert.equal(state.metrics.totalHeartbeats, 2);
     assert.equal(state.metrics.totalArtifacts, 2);
-    assert.equal(state.metrics.durableEvents, 6);
+    assert.equal(state.metrics.durableEvents, 8);
     assert.equal(state.agents.find((agent) => agent.agentId === "agent-coder")?.sessionId, "session-agent-coder");
     assert.equal(state.agents.find((agent) => agent.agentId === "agent-researcher")?.sessionId, "session-agent-researcher");
 
     const events = await runner.getEvents();
-    assert.deepEqual(events.map((event) => event.seq), [2, 3, 4, 5, 6, 7]);
+    assert.deepEqual(events.map((event) => event.seq), [2, 3, 4, 5, 6, 7, 8, 9]);
     assert.deepEqual(events.map((event) => event.type), [
       "run.status",
       "run.status",
       "artifact.created",
+      "assistant.response.final",
       "run.status",
       "artifact.created",
+      "assistant.response.final",
       "run.status"
     ]);
+    assert.equal(events.some((event) => event.type === "assistant.response.final" && String(event.payload.content).includes("session_id:")), false);
     assert.equal(events.some((event) => event.type === "tool.call"), false);
 
     const report = await readFile(result.artifacts[0]?.path ?? "", "utf8");
@@ -99,8 +102,10 @@ describe("ResidentRunner", () => {
       [2, "run.status"],
       [3, "run.status"],
       [4, "artifact.created"],
-      [5, "run.status"]
+      [5, "assistant.response.final"],
+      [6, "run.status"]
     ]);
+    assert.equal(eventSink.events.find((event) => event.type === "assistant.response.final")?.payload.workItemId, "workitem-durable");
     assert.deepEqual(eventSink.runStatuses, ["planning", "running", "succeeded"]);
     assert.deepEqual(eventSink.taskStatuses, ["planning", "running", "succeeded"]);
     assert.equal(result.artifacts[0].uri, "s3://demo-bucket/workspaces/workspace-test/runs/run-durable/artifacts/artifact-task-durable-agent-coder-heartbeat/heartbeat-report.md");
@@ -121,6 +126,16 @@ describe("ResidentRunner", () => {
           delegatedAgentId: "agent-ui-polish",
           delegatedAgentRole: "UI Polish Agent",
           workItemId: "workitem-ui-polish",
+          objective: "Polish the review walkthrough controls"
+        }
+      }),
+      "```",
+      "```agents-cloud-event",
+      JSON.stringify({
+        type: "work_item.created",
+        payload: {
+          workItemId: "workitem-ui-polish",
+          title: "UI polish",
           objective: "Polish the review walkthrough controls"
         }
       }),
@@ -189,6 +204,10 @@ describe("ResidentRunner", () => {
     assert.equal(delegated.payload.agentId, "agent-delegator");
     assert.equal(delegated.payload.delegatedAgentId, "agent-ui-polish");
     assert.equal(delegated.payload.workItemId, "workitem-ui-polish");
+    const workItem = result.events.find((event) => event.type === "work.item.created");
+    assert.ok(workItem);
+    assert.equal(workItem.payload.legacyEventType, "work_item.created");
+    assert.equal(workItem.payload.workItemId, "workitem-ui-polish");
     const clientControl = result.events.find((event) => event.type === "client.control.requested");
     const browserControl = result.events.find((event) => event.type === "browser.control.requested");
     assert.ok(clientControl);
@@ -196,6 +215,59 @@ describe("ResidentRunner", () => {
     assert.equal(clientControl.payload.surface, "browser");
     assert.equal(browserControl.payload.kind, "snapshot");
     assert.equal(result.events.some((event) => event.payload.commandId === "cmd-unsafe-client"), false);
+  });
+
+  it("persists preview artifact events emitted by the dynamic preview tool", async () => {
+    const rootDir = await tempRoot();
+    const hermesCommand = await writeFakeHermesCommandWithOutput(rootDir, [
+      "Preview tool output:",
+      "```agents-cloud-event",
+      JSON.stringify({
+        type: "artifact.created",
+        payload: {
+          artifactId: "preview-task-preview",
+          kind: "website",
+          name: "dashboard live preview",
+          uri: "https://preview-dashboard.solo-ceo.ai/",
+          contentType: "text/html; charset=utf-8",
+          previewUrl: "https://preview-dashboard.solo-ceo.ai/",
+          metadata: {
+            tunnelId: "tunnel-dashboard",
+            mode: "dynamic-port-tunnel",
+            toolId: "preview.expose_dynamic_site"
+          }
+        }
+      }),
+      "```",
+      "session_id: session-preview-artifact"
+    ].join("\n"));
+    const artifactSink = new MemoryArtifactSink();
+    const runner = new ResidentRunner(residentRunnerConfigFromPartial({
+      rootDir,
+      orgId: "org-test",
+      userId: "user-test",
+      workspaceId: "workspace-test",
+      runnerId: "runner-test",
+      runnerSessionId: "runner-session-test",
+      adapterKind: "hermes-cli",
+      hermesCommand,
+      now: fixedNow,
+      artifactSink
+    }));
+
+    await runner.initialize([agentProfile("agent-builder", "Builder Agent")]);
+    const result = await runner.wake({
+      objective: "Build and publish a dashboard preview.",
+      runId: "run-preview-artifact",
+      taskId: "task-preview-artifact",
+      workItemId: "workitem-preview"
+    });
+
+    const previewEvent = result.events.find((event) => event.type === "artifact.created" && event.payload.artifactId === "preview-task-preview");
+    assert.ok(previewEvent);
+    assert.equal(previewEvent.payload.kind, "website");
+    assert.equal(previewEvent.payload.previewUrl, "https://preview-dashboard.solo-ceo.ai/");
+    assert.equal(artifactSink.records.some((record) => record.artifactId === "preview-task-preview" && record.previewUrl === "https://preview-dashboard.solo-ceo.ai/"), true);
   });
 
   it("records agent-requested user notification and call events durably", async () => {
@@ -388,6 +460,9 @@ describe("ResidentRunner", () => {
       "  runnerToken: process.env.RUNNER_API_TOKEN ?? null,",
       "  engagementToken: process.env.AGENTS_USER_ENGAGEMENT_TOKEN ? 'present' : null,",
       "  engagementUrl: process.env.AGENTS_USER_ENGAGEMENT_URL ?? null,",
+      "  previewTool: process.env.AGENTS_CLOUD_PREVIEW_TOOL ?? null,",
+      "  previewApiUrl: process.env.AGENTS_CLOUD_PREVIEW_TUNNEL_API_URL ?? null,",
+      "  previewToken: process.env.AGENTS_CLOUD_PREVIEW_TUNNEL_API_TOKEN ? 'present' : null,",
       "  runId: process.env.RUN_ID ?? null,",
       "  providerKey: process.env.OPENROUTER_API_KEY ?? null,",
       "  hermesHome: process.env.HERMES_HOME ?? null",
@@ -403,13 +478,17 @@ describe("ResidentRunner", () => {
       "OPENROUTER_API_KEY",
       "HERMES_HOME",
       "AGENTS_ALLOW_RAW_PROVIDER_KEYS_TO_AGENT",
-      "AGENTS_USER_ENGAGEMENT_TOKEN"
+      "AGENTS_USER_ENGAGEMENT_TOKEN",
+      "AGENTS_CLOUD_PREVIEW_TUNNEL_API_URL",
+      "AGENTS_CLOUD_PREVIEW_TUNNEL_API_TOKEN"
     ]);
     process.env.AWS_SECRET_ACCESS_KEY = "aws-secret-should-not-leak";
     process.env.RUNNER_API_TOKEN = "runner-token-should-not-leak";
     process.env.AGENTS_USER_ENGAGEMENT_TOKEN = ["engagement", "token", "allowed"].join("-");
     process.env.OPENROUTER_API_KEY = "provider-key-should-not-leak";
     process.env.HERMES_HOME = join(rootDir, "hermes");
+    process.env.AGENTS_CLOUD_PREVIEW_TUNNEL_API_URL = "https://preview-api.solo-ceo.ai";
+    process.env.AGENTS_CLOUD_PREVIEW_TUNNEL_API_TOKEN = "preview-token-should-not-be-printed";
     delete process.env.AGENTS_ALLOW_RAW_PROVIDER_KEYS_TO_AGENT;
 
     try {
@@ -439,12 +518,16 @@ describe("ResidentRunner", () => {
       assert.match(report, /"engagementToken":"present"/);
       assert.doesNotMatch(report, /engagement-token-allowed/);
       assert.match(report, /"engagementUrl":"http:\/\/127\.0\.0\.1:8787\/engagement"/);
+      assert.match(report, /"previewTool":"agents-cloud-preview"/);
+      assert.match(report, /"previewApiUrl":"https:\/\/preview-api\.solo-ceo\.ai"/);
+      assert.match(report, /"previewToken":"present"/);
       assert.match(report, /"runId":"run-secure"/);
       assert.match(report, /"providerKey":null/);
       assert.match(report, /session_id: session-sandboxed-env/);
       assert.doesNotMatch(report, /aws-secret-should-not-leak/);
       assert.doesNotMatch(report, /runner-token-should-not-leak/);
       assert.doesNotMatch(report, /provider-key-should-not-leak/);
+      assert.doesNotMatch(report, /preview-token-should-not-be-printed/);
     } finally {
       restoreEnv(previousEnv);
     }
@@ -525,6 +608,7 @@ describe("resident runner HTTP API", () => {
         "run.status",
         "run.status",
         "artifact.created",
+        "assistant.response.final",
         "run.status"
       ]);
 

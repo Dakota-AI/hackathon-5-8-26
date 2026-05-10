@@ -1,4 +1,5 @@
 import type { RealtimeSubscriptionStore } from "./ports.js";
+import { DynamoRunStore, type RunStore } from "./run-store.js";
 import { DynamoRealtimeStore } from "./subscriptions.js";
 export { authorizerHandler } from "./auth.js";
 
@@ -53,7 +54,11 @@ export async function handleDisconnect(event: WebSocketEvent, store: RealtimeSub
   return json(200, { ok: true });
 }
 
-export async function handleDefault(event: WebSocketEvent, store: RealtimeSubscriptionStore): Promise<WebSocketResponse> {
+export async function handleDefault(
+  event: WebSocketEvent,
+  store: RealtimeSubscriptionStore,
+  runStore: RunStore = DynamoRunStore.fromEnvironment()
+): Promise<WebSocketResponse> {
   const connectionId = event.requestContext.connectionId;
   const userId = stringContext(event, "userId");
   if (!connectionId || !userId) {
@@ -77,6 +82,13 @@ export async function handleDefault(event: WebSocketEvent, store: RealtimeSubscr
     const runId = requiredString(message.runId);
     if (!workspaceId || !runId) {
       return json(400, { error: "workspaceId_and_runId_required" });
+    }
+    const run = await runStore.getRunById(runId);
+    if (!run || run.workspaceId !== workspaceId) {
+      return json(404, { error: "run_not_found" });
+    }
+    if (run.userId !== userId) {
+      return json(403, { error: "forbidden" });
     }
     await store.subscribeRun({ connectionId, workspaceId, runId, userId });
     return json(200, { ok: true, subscribed: { workspaceId, runId } });

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:desktop_mobile/src/data/fixture_work_repository.dart';
 import 'package:fl_chart/fl_chart.dart' as fl;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,7 +21,6 @@ import 'src/auth/sign_in_page.dart';
 import 'src/browser/agent_browser_control.dart';
 import 'src/browser/agent_browser_protocol.dart';
 import 'src/browser/agent_browser_websocket_bridge.dart';
-import 'src/data/fixture_work_repository.dart';
 import 'src/data/http_work_repository.dart';
 import 'src/domain/work_item_models.dart';
 import 'src/realtime/realtime_client.dart';
@@ -72,7 +72,7 @@ const _agentBrowserBridgeAutoOpen = bool.fromEnvironment(
   'AGENTS_CLOUD_BROWSER_BRIDGE_AUTO_OPEN_BROWSER',
 );
 
-const _defaultWorkspaceId = 'workspace-web';
+final selectedWorkspaceIdProvider = StateProvider<String?>((ref) => null);
 
 final selectedPageProvider = StateProvider<ConsolePage>(
   (ref) => _agentBrowserBridgeAutoOpen ? ConsolePage.browser : ConsolePage.work,
@@ -82,6 +82,60 @@ final selectedAgentIdProvider = StateProvider<String?>((ref) => null);
 
 final sidebarCollapsedProvider = StateProvider<bool>((ref) => true);
 final workItemsRefreshCounterProvider = StateProvider<int>((ref) => 0);
+
+final allWorkItemsProvider = FutureProvider.autoDispose<List<WorkItem>>((
+  ref,
+) async {
+  ref.watch(workItemsRefreshCounterProvider);
+  final repository = ref.watch(workRepositoryProvider);
+  return repository.listWorkItems();
+});
+
+final workspaceIdsProvider = FutureProvider.autoDispose<List<String>>((
+  ref,
+) async {
+  final items = await ref.watch(allWorkItemsProvider.future);
+  final ids = <String>{};
+  for (final item in items) {
+    final workspaceId = item.workspaceId?.trim();
+    if (workspaceId != null && workspaceId.isNotEmpty) {
+      ids.add(workspaceId);
+    }
+  }
+  final sorted = ids.toList()..sort();
+  return sorted;
+});
+
+final workItemsByWorkspaceProvider = FutureProvider.autoDispose
+    .family<List<WorkItem>, String?>((ref, workspaceId) async {
+      final items = await ref.watch(allWorkItemsProvider.future);
+      if (workspaceId == null || workspaceId.trim().isEmpty) {
+        return items;
+      }
+      return items
+          .where((item) => item.workspaceId == workspaceId)
+          .toList(growable: false);
+    });
+
+final workspaceAgentsProvider = FutureProvider.autoDispose
+    .family<List<_AgentDescriptor>, String?>((ref, workspaceId) async {
+      final items = await ref.watch(
+        workItemsByWorkspaceProvider(workspaceId).future,
+      );
+      return items.map(_agentDescriptorFromWorkItem).toList(growable: false);
+    });
+
+String? _resolveWorkspaceId(
+  List<String> workspaceIds,
+  String? selectedWorkspaceId,
+) {
+  if (selectedWorkspaceId != null &&
+      selectedWorkspaceId.trim().isNotEmpty &&
+      workspaceIds.contains(selectedWorkspaceId)) {
+    return selectedWorkspaceId;
+  }
+  return workspaceIds.isEmpty ? null : workspaceIds.first;
+}
 
 class AgentsCloudConsoleApp extends StatelessWidget {
   const AgentsCloudConsoleApp({super.key});
@@ -631,57 +685,6 @@ class _AgentDescriptor {
   final String workItemId;
 }
 
-const List<_AgentDescriptor> _fixtureAgents = [
-  _AgentDescriptor(
-    id: 'agent-exec',
-    name: 'Executive',
-    role: 'Plans and delegates',
-    status: 'running',
-    unread: 2,
-    workItemId: 'work-track-pricing',
-  ),
-  _AgentDescriptor(
-    id: 'agent-research',
-    name: 'Research',
-    role: 'Gathers signal',
-    status: 'waiting',
-    unread: 1,
-    workItemId: 'work-track-pricing',
-  ),
-  _AgentDescriptor(
-    id: 'agent-builder',
-    name: 'Builder',
-    role: 'Ships code & sites',
-    status: 'running',
-    unread: 0,
-    workItemId: 'work-launch-preview',
-  ),
-  _AgentDescriptor(
-    id: 'agent-reviewer',
-    name: 'Reviewer',
-    role: 'Inbox & QA',
-    status: 'idle',
-    unread: 3,
-    workItemId: 'work-launch-preview',
-  ),
-  _AgentDescriptor(
-    id: 'agent-comms',
-    name: 'Comms',
-    role: 'Reports & briefs',
-    status: 'idle',
-    unread: 0,
-    workItemId: 'work-miro',
-  ),
-  _AgentDescriptor(
-    id: 'agent-ops',
-    name: 'Ops',
-    role: 'Infra & secrets',
-    status: 'offline',
-    unread: 0,
-    workItemId: 'work-miro',
-  ),
-];
-
 Color _statusColor(String status) {
   switch (status) {
     case 'running':
@@ -708,51 +711,185 @@ String _statusLabel(String status) {
   }
 }
 
+String? _coerceSelectedAgentId(
+  List<_AgentDescriptor> agents,
+  String? selectedAgentId,
+) {
+  if (selectedAgentId != null &&
+      agents.any((agent) => agent.id == selectedAgentId)) {
+    return selectedAgentId;
+  }
+  return agents.isEmpty ? null : agents.first.id;
+}
+
+String _deriveAgentName(WorkItem workItem) {
+  final owner = workItem.owner.trim();
+  if (owner.isNotEmpty) {
+    return owner;
+  }
+  final title = workItem.title.trim();
+  if (title.isNotEmpty) {
+    return title.split(' ').first;
+  }
+  return 'Agent';
+}
+
+_AgentDescriptor _agentDescriptorFromWorkItem(WorkItem workItem) {
+  final unreadApprovals = workItem.approvals
+      .where((approval) => approval.isPending)
+      .length;
+  return _AgentDescriptor(
+    id: workItem.id,
+    name: _deriveAgentName(workItem),
+    role:
+        '${workItem.summary.statusLabel} · ${workItem.summary.priorityLabel.toLowerCase()}',
+    status: _agentStatusFromWorkItemStatus(workItem.status),
+    unread: unreadApprovals,
+    workItemId: workItem.id,
+  );
+}
+
+String _agentStatusFromWorkItemStatus(WorkItemStatus status) {
+  return switch (status) {
+    WorkItemStatus.running => 'running',
+    WorkItemStatus.needsReview => 'waiting',
+    WorkItemStatus.blocked => 'waiting',
+    WorkItemStatus.planning => 'idle',
+    WorkItemStatus.intake => 'idle',
+    WorkItemStatus.done => 'offline',
+  };
+}
+
 class _AgentsWorkspacePage extends ConsumerWidget {
   const _AgentsWorkspacePage();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedId = ref.watch(selectedAgentIdProvider);
+    final selectedAgentId = ref.watch(selectedAgentIdProvider);
     final compact = MediaQuery.sizeOf(context).width < 980;
-    if (compact && selectedId == null) return const _AgentListPage();
+    final workspaceIds = ref.watch(workspaceIdsProvider);
 
-    final selected = _fixtureAgents.firstWhere(
-      (agent) => agent.id == (selectedId ?? _fixtureAgents.first.id),
-      orElse: () => _fixtureAgents.first,
-    );
-    if (compact) {
-      return _AgentDetailPage(agent: selected, compact: true);
-    }
-    return Row(
-      children: [
-        SizedBox(width: 310, child: _AgentRail(selectedId: selected.id)),
-        const VerticalDivider(width: 1, color: _Palette.border),
-        Expanded(child: _AgentDetailPage(agent: selected)),
-      ],
+    return workspaceIds.when(
+      loading: () => const _Panel(
+        child: Text(
+          'Loading workspace context…',
+          style: TextStyle(color: _Palette.muted),
+        ),
+      ),
+      error: (error, _) => _Panel(
+        child: Text(
+          'Unable to load workspace context: $error',
+          style: const TextStyle(color: _Palette.muted),
+        ),
+      ),
+      data: (workspaceIds) {
+        final resolvedWorkspaceId = _resolveWorkspaceId(
+          workspaceIds,
+          ref.watch(selectedWorkspaceIdProvider),
+        );
+        if (ref.watch(selectedWorkspaceIdProvider) != resolvedWorkspaceId) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ref.read(selectedWorkspaceIdProvider.notifier).state =
+                resolvedWorkspaceId;
+          });
+        }
+
+        final agents = ref.watch(workspaceAgentsProvider(resolvedWorkspaceId));
+
+        return agents.when(
+          loading: () => const _Panel(
+            child: Text(
+              'Loading agents…',
+              style: TextStyle(color: _Palette.muted),
+            ),
+          ),
+          error: (error, _) => _Panel(
+            child: Text(
+              'Unable to load agents: $error',
+              style: const TextStyle(color: _Palette.muted),
+            ),
+          ),
+          data: (allAgents) {
+            if (allAgents.isEmpty) {
+              return const _Panel(
+                child: Text(
+                  'No agents in this workspace yet.',
+                  style: TextStyle(color: _Palette.muted),
+                ),
+              );
+            }
+
+            final resolvedAgentId = _coerceSelectedAgentId(
+              allAgents,
+              selectedAgentId,
+            );
+            if (selectedAgentId != resolvedAgentId) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                ref.read(selectedAgentIdProvider.notifier).state =
+                    resolvedAgentId;
+              });
+            }
+
+            if (compact) {
+              if (selectedAgentId == null || resolvedAgentId == null) {
+                return _AgentListPage(agents: allAgents, selectedAgentId: null);
+              }
+              final resolvedAgent = allAgents.firstWhere(
+                (agent) => agent.id == resolvedAgentId,
+              );
+              return _AgentDetailPage(agent: resolvedAgent, compact: true);
+            }
+
+            return Row(
+              children: [
+                SizedBox(
+                  width: 310,
+                  child: _AgentRail(
+                    agents: allAgents,
+                    selectedId: resolvedAgentId,
+                  ),
+                ),
+                const VerticalDivider(width: 1, color: _Palette.border),
+                Expanded(
+                  child: _AgentDetailPage(
+                    agent: allAgents.firstWhere(
+                      (agent) => agent.id == resolvedAgentId,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
 
 class _AgentListPage extends ConsumerWidget {
-  const _AgentListPage();
+  const _AgentListPage({required this.agents, required this.selectedAgentId});
+  final List<_AgentDescriptor> agents;
+  final String? selectedAgentId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return ListView.separated(
       padding: const EdgeInsets.all(10),
-      itemBuilder: (context, index) =>
-          _AgentListItem(agent: _fixtureAgents[index], selected: false),
+      itemBuilder: (context, index) => _AgentListItem(
+        agent: agents[index],
+        selected: agents[index].id == selectedAgentId,
+      ),
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemCount: _fixtureAgents.length,
+      itemCount: agents.length,
     );
   }
 }
 
 class _AgentRail extends ConsumerWidget {
-  const _AgentRail({required this.selectedId});
+  const _AgentRail({required this.agents, required this.selectedId});
 
-  final String selectedId;
+  final List<_AgentDescriptor> agents;
+  final String? selectedId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -776,11 +913,11 @@ class _AgentRail extends ConsumerWidget {
         child: ListView.separated(
           padding: const EdgeInsets.all(8),
           itemBuilder: (context, index) => _AgentListItem(
-            agent: _fixtureAgents[index],
-            selected: _fixtureAgents[index].id == selectedId,
+            agent: agents[index],
+            selected: agents[index].id == selectedId,
           ),
           separatorBuilder: (_, _) => const SizedBox(height: 6),
-          itemCount: _fixtureAgents.length,
+          itemCount: agents.length,
         ),
       ),
     ];
@@ -1472,30 +1609,21 @@ class _WorkDashboard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final refreshCounter = ref.watch(workItemsRefreshCounterProvider);
-    final repository = ref.watch(workRepositoryProvider);
-    return FutureBuilder<List<WorkItem>>(
-      key: ValueKey('work-dashboard-$refreshCounter'),
-      future: repository.listWorkItems(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const _Panel(
-            child: Text(
-              'Loading work items…',
-              style: TextStyle(color: _Palette.muted),
-            ),
-          );
-        }
-        if (snapshot.hasError) {
-          return const _Panel(
-            child: Text(
-              'Work board unavailable; fixture fallback failed.',
-              style: TextStyle(color: _Palette.muted),
-            ),
-          );
-        }
-
-        final items = snapshot.data ?? const <WorkItem>[];
+    final workItems = ref.watch(allWorkItemsProvider);
+    return workItems.when(
+      loading: () => const _Panel(
+        child: Text(
+          'Loading work items…',
+          style: TextStyle(color: _Palette.muted),
+        ),
+      ),
+      error: (error, _) => _Panel(
+        child: Text(
+          'Work board unavailable: $error',
+          style: const TextStyle(color: _Palette.muted),
+        ),
+      ),
+      data: (items) {
         if (items.isEmpty) {
           return const _Panel(
             child: Text(
@@ -2018,7 +2146,18 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
 
     final auth = ref.read(authControllerProvider);
     if (auth.status != AuthStatus.signedIn) {
-      setState(() => _error = 'Sign in first to run live Control API workflows.');
+      setState(
+        () => _error = 'Sign in first to run live Control API workflows.',
+      );
+      return;
+    }
+
+    final workspaceId = _resolveActiveWorkspaceId();
+    if (workspaceId == null) {
+      setState(() {
+        _isSubmitting = false;
+        _error = 'No workspace context yet. Create a workspace from web first.';
+      });
       return;
     }
 
@@ -2031,7 +2170,7 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
     try {
       final api = ref.read(controlApiProvider);
       final workItem = await api.createWorkItem(
-        workspaceId: _defaultWorkspaceId,
+        workspaceId: workspaceId,
         title: objective.length > 80 ? objective.substring(0, 80) : objective,
         objective: objective,
       );
@@ -2041,7 +2180,7 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
       }
       await api.startRun(
         workItemId: workItemId,
-        workspaceId: _defaultWorkspaceId,
+        workspaceId: workspaceId,
         objective: objective,
       );
 
@@ -2054,8 +2193,9 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
       if (!mounted) return;
       setState(() => _error = error.toString());
     } finally {
-      if (!mounted) return;
-      setState(() => _isSubmitting = false);
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
     }
   }
 
@@ -2065,7 +2205,8 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
 
     final nested = body['workItem'];
     if (nested is Map<String, dynamic>) {
-      final nestedId = nested['id'] ?? nested['workItemId'] ?? nested['work_item_id'];
+      final nestedId =
+          nested['id'] ?? nested['workItemId'] ?? nested['work_item_id'];
       if (nestedId is String && nestedId.isNotEmpty) {
         return nestedId;
       }
@@ -2073,11 +2214,31 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
     return null;
   }
 
+  String? _resolveActiveWorkspaceId() {
+    final idsState = ref.read(workspaceIdsProvider);
+    final selectedWorkspaceId = ref.read(selectedWorkspaceIdProvider);
+    return idsState.when(
+      data: (workspaceIds) =>
+          _resolveWorkspaceId(workspaceIds, selectedWorkspaceId),
+      error: (_, _) => null,
+      loading: () => null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isCompact = MediaQuery.sizeOf(context).width < 760;
     final auth = ref.watch(authControllerProvider);
     final canRun = auth.status == AuthStatus.signedIn;
+    final workspaceIds = ref.watch(workspaceIdsProvider);
+    final selectedWorkspaceId = ref.watch(selectedWorkspaceIdProvider);
+    final activeWorkspaceId = workspaceIds.maybeWhen(
+      data: (ids) => _resolveWorkspaceId(ids, selectedWorkspaceId),
+      orElse: () => null,
+    );
+    final workspaceLabel = activeWorkspaceId == null
+        ? 'Workspace: detecting'
+        : 'Workspace: $activeWorkspaceId';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2100,7 +2261,9 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
               enabled: canRun && !_isSubmitting,
               onPressed: _isSubmitting ? null : _createAndRun,
               leading: const Icon(RadixIcons.play, size: 14),
-              child: Text(_isSubmitting ? 'Starting...' : 'Create WorkItem + Start Run'),
+              child: Text(
+                _isSubmitting ? 'Starting...' : 'Create WorkItem + Start Run',
+              ),
             ),
             Button.outline(
               enabled: false,
@@ -2113,9 +2276,7 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
               child: const Text('Preview site'),
             ),
             _StatusPill(
-              label: canRun
-                  ? 'live Control API'
-                  : 'sign in for live Control API',
+              label: canRun ? workspaceLabel : 'sign in for live Control API',
               color: canRun ? _Palette.success : _Palette.warning,
             ),
           ],
@@ -2131,7 +2292,7 @@ class _CommandComposerState extends ConsumerState<_CommandComposerMock> {
           const SizedBox(height: 8),
           Text(
             _error!,
-            style: const TextStyle(color: _Palette.danger, fontSize: 11),
+            style: const TextStyle(color: _Palette.warning, fontSize: 11),
           ),
         ],
       ],

@@ -3,7 +3,7 @@
 Workstream: Access Control
 Owner: Access Control Workstream
 Updated: 2026-05-10
-Status: planned; next implementation priority
+Status: in progress; critical hardening slice
 
 ## Current Scope
 
@@ -24,7 +24,10 @@ Own the next platform-critical slice:
 - API Gateway HTTP API routes use a Cognito JWT authorizer.
 - AWS-native realtime `$connect` validates a Cognito token.
 - Control API has owner checks for run reads and WorkItem first-pass behavior.
-- Admin behavior still relies on an email allowlist.
+- Admin behavior now accepts `agents-cloud-admin` group in Cognito tokens and
+  falls back to allowlist for compatibility.
+- Product routes now fail fast with a Cognito group gate (`agents-cloud-user` or
+  `agents-cloud-admin`) before handler business logic executes.
 - No durable workspace membership or access-code gate exists yet.
 
 ## Gaps
@@ -32,15 +35,11 @@ Own the next platform-critical slice:
 P0:
 
 - `POST /runs` accepts a client-provided `workspaceId` without membership proof.
-- Realtime `subscribeRun` does not load the run and authorize the stored
-  workspace.
-- `cognito:groups` is not read or enforced in Control API.
 - Access-code signup is not implemented.
 - Users/orgs/workspaces/memberships tables are not present.
 
 P1:
 
-- Admin routes should move from email allowlist to group/capability policy.
 - Realtime should move from ID token in query string to short-lived scoped
   tickets.
 - Workers need scoped runner context after route authorization exists.
@@ -143,6 +142,10 @@ Add tests for:
 - 2026-05-10: Read-only audit confirmed P0 gaps in run creation, realtime
   subscription authorization, Cognito groups, durable membership state, and
   access-code onboarding.
+- 2026-05-10: Implemented global product-route group gating across Control API
+  handlers, admin `cognito:groups` parsing, and run-scoped realtime subscribe
+  authorization. Remaining work is workspace membership and access-code
+  enforcement.
 
 ## Completion Criteria
 

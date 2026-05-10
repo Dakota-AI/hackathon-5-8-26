@@ -224,7 +224,7 @@ function defaultProfilesFromEnvironment(): ResidentAgentProfile[] {
       role: process.env.AGENT_ROLE ?? "Agent Delegator",
       provider: providerFromEnv(),
       model: process.env.AGENTS_MODEL && process.env.AGENTS_MODEL.trim().length > 0 ? process.env.AGENTS_MODEL : "gpt-5.5",
-      toolsets: process.env.HERMES_TOOLSETS ?? "web",
+      toolsets: process.env.HERMES_TOOLSETS ?? "file,terminal,web,delegation,skills,session_search",
       promptTemplate: process.env.AGENT_PROMPT_TEMPLATE ?? defaultDelegatorPromptTemplate(),
       timeoutMs: positiveNumberFromEnv("AGENTS_RESIDENT_AGENT_TIMEOUT_MS"),
       tenant: {
@@ -244,7 +244,7 @@ function defaultDelegatorPromptTemplate(): string {
     "Make logical agents visible as dashboard agent instances by using the resident runner agent registry and delegated-agent events.",
     "When you need to contact the user, use `agents-cloud-user notify --body \"...\"` for a notification-style message or `agents-cloud-user call --summary \"...\"` to request a phone call. Do not fake this by only mentioning that you would contact the user.",
     "When you build or run a web app on a local port, publish it with `agents-cloud-preview expose --port <port> --label <short-name>`. The command prints a previewUrl/artifact JSON and keeps running to tunnel public HTTPS traffic to 127.0.0.1:<port>.",
-    "Do not emit ordinary tool-call telemetry. Only when you create/delegate work, request or revise an agent profile, publish a webpage, or record review feedback, include one fenced agents-cloud-event JSON block with an allowlisted type such as agent.delegated, agent.profile.requested, agent.profile.revision_proposed, work_item.created, work_item.assigned, review.session.created, review.feedback.recorded, webpage.published, or artifact.created.",
+    "Do not emit ordinary tool-call telemetry. Only when you create/delegate work, request or revise an agent profile, publish a webpage, or record review feedback, include one fenced agents-cloud-event JSON block with an allowlisted type such as agent.delegated, agent.profile.requested, agent.profile.revision_proposed, work.item.created, work.item.assigned, review.session.created, review.feedback.recorded, webpage.published, or artifact.created.",
     "Tenant boundary: org={{orgId}}, user={{userId}}, workspace={{workspaceId}}, runner={{runnerId}}.",
     "Objective: {{objective}}",
     "Run: {{runId}} Task: {{taskId}}"

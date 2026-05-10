@@ -46,6 +46,8 @@ class MemoryStore implements ControlApiStore {
 }
 
 const admin: AuthenticatedUser = { userId: "admin-user", email: "seb4594@gmail.com" };
+const adminByGroup: AuthenticatedUser = { userId: "admin-group-user", email: "group@example.com", groups: ["agents-cloud-admin"] };
+const suspendedAdmin: AuthenticatedUser = { userId: "admin-suspended", email: "seb4594@gmail.com", groups: ["agents-cloud-suspended"] };
 const nonAdmin: AuthenticatedUser = { userId: "normal-user", email: "person@example.com" };
 
 const runs: RunRecord[] = [
@@ -170,6 +172,29 @@ describe("admin runs", () => {
         retryable: true
       }
     });
+  });
+
+  it("allows admin access by Cognito group regardless of allowlist", async () => {
+    const result = await listAdminRuns({
+      store: new MemoryStore(runs),
+      user: adminByGroup,
+      adminEmails: ["seb4594@gmail.com"],
+      limit: 20
+    });
+
+    assert.equal(result.statusCode, 200);
+    assert.equal((result.body as { runs: unknown[] }).runs.length, 2);
+  });
+
+  it("rejects suspended users even when matching an admin allowlist email", async () => {
+    const result = await listAdminRuns({
+      store: new MemoryStore(runs),
+      user: suspendedAdmin,
+      adminEmails: ["seb4594@gmail.com"],
+      limit: 20
+    });
+
+    assert.equal(result.statusCode, 403);
   });
 
   it("returns a cross-user event lineage for an admin-selected run", async () => {

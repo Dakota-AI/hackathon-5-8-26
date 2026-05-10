@@ -18,6 +18,7 @@ class HttpWorkRepository implements WorkRepository {
   HttpWorkRepository({required ControlApi api}) : _api = api;
 
   final ControlApi _api;
+  final Map<String, String> _workspaceByWorkItemId = <String, String>{};
 
   @override
   Future<List<WorkItem>> listWorkItems() async {
@@ -25,7 +26,11 @@ class HttpWorkRepository implements WorkRepository {
       final raw = await _api.listWorkItems();
       final items = <WorkItem>[];
       for (final json in raw) {
-        items.add(_decodeWorkItem(json));
+        final item = _decodeWorkItem(json);
+        if (item.workspaceId != null && item.workspaceId!.trim().isNotEmpty) {
+          _workspaceByWorkItemId[item.id] = item.workspaceId!.trim();
+        }
+        items.add(item);
       }
       return List.unmodifiable(items);
     } on StateError catch (e, st) {
@@ -50,8 +55,9 @@ class HttpWorkRepository implements WorkRepository {
   @override
   Future<WorkItem?> getWorkItem(String id) async {
     final Map<String, dynamic> json;
+    final workspaceId = _workspaceByWorkItemId[id];
     try {
-      json = await _api.getWorkItem(id);
+      json = await _api.getWorkItem(id, workspaceId: workspaceId);
     } on StateError catch (e, st) {
       developer.log(
         'HttpWorkRepository.getWorkItem($id) failed before HTTP request',
@@ -74,25 +80,29 @@ class HttpWorkRepository implements WorkRepository {
     final runs = await _safeSideCall(
       label: 'listRuns',
       id: id,
-      call: () => _api.listRuns(id),
+      call: () => _api.listRuns(id, workspaceId: workspaceId),
     );
     final events = await _safeSideCall(
       label: 'listEvents',
       id: id,
-      call: () => _api.listEvents(id),
+      call: () => _api.listEvents(id, workspaceId: workspaceId),
     );
     final artifacts = await _safeSideCall(
       label: 'listArtifacts',
       id: id,
-      call: () => _api.listArtifacts(id),
+      call: () => _api.listArtifacts(id, workspaceId: workspaceId),
     );
 
-    return _decodeWorkItem(
+    final item = _decodeWorkItem(
       json,
       runsOverride: runs,
       eventsOverride: events,
       artifactsOverride: artifacts,
     );
+    if (item.workspaceId != null && item.workspaceId!.trim().isNotEmpty) {
+      _workspaceByWorkItemId[item.id] = item.workspaceId!.trim();
+    }
+    return item;
   }
 
   static Future<List<Map<String, dynamic>>> _safeSideCall({
@@ -124,22 +134,30 @@ class HttpWorkRepository implements WorkRepository {
     List<Map<String, dynamic>>? eventsOverride,
     List<Map<String, dynamic>>? artifactsOverride,
   }) {
-    final runs = runsOverride ?? _asListOf(json, 'runs');
-    final events = eventsOverride ?? _asListOf(json, 'events');
-    final artifacts = artifactsOverride ?? _asListOf(json, 'artifacts');
-    final approvals = _asListOf(json, 'approvals');
-    final surfaces = _asListOf(json, 'surfaces');
+    final wrapped = json['workItem'];
+    final source = wrapped is Map<String, dynamic> ? wrapped : json;
+    final runs = runsOverride ?? _asListOf(source, 'runs');
+    final events = eventsOverride ?? _asListOf(source, 'events');
+    final artifacts = artifactsOverride ?? _asListOf(source, 'artifacts');
+    final approvals = _asListOf(source, 'approvals');
+    final surfaces = _asListOf(source, 'surfaces');
 
     return WorkItem(
-      id: _str(json['id'] ?? json['workItemId']) ?? 'unknown',
-      title: _str(json['title']) ?? 'Untitled work item',
-      objective: _str(json['objective']) ?? '',
-      status: _decodeStatus(_str(json['status'])),
-      priority: _decodePriority(_str(json['priority'])),
-      owner: _str(json['owner']) ?? _str(json['assignee']) ?? 'Unassigned',
+      id: _str(source['id'] ?? source['workItemId']) ?? 'unknown',
+      workspaceId: _str(
+        source['workspaceId'] ??
+            source['workspace_id'] ??
+            source['workspace'] ??
+            source['workspaceSlug'],
+      ),
+      title: _str(source['title']) ?? 'Untitled work item',
+      objective: _str(source['objective']) ?? '',
+      status: _decodeStatus(_str(source['status'])),
+      priority: _decodePriority(_str(source['priority'])),
+      owner: _str(source['owner']) ?? _str(source['assignee']) ?? 'Unassigned',
       updatedAtLabel:
-          _str(json['updatedAtLabel']) ?? _str(json['updatedAt']) ?? '',
-      nextAction: _str(json['nextAction']) ?? '',
+          _str(source['updatedAtLabel']) ?? _str(source['updatedAt']) ?? '',
+      nextAction: _str(source['nextAction']) ?? '',
       runs: runs.map(_decodeRun).toList(growable: false),
       events: events.map(_decodeEvent).toList(growable: false),
       artifacts: artifacts.map(_decodeArtifact).toList(growable: false),

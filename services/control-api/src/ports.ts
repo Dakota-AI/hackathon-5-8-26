@@ -82,6 +82,65 @@ export interface RunRecord {
   readonly executionArn?: string;
 }
 
+export interface DataSourceRefRecord {
+  readonly workspaceId: string;
+  readonly dataSourceId: string;
+  readonly userId: string;
+  readonly ownerEmail?: string;
+  readonly runId?: string;
+  readonly workItemId?: string;
+  readonly artifactId?: string;
+  readonly sourceKind: string;
+  readonly source: string;
+  readonly displayName?: string;
+  readonly metadata?: Record<string, unknown>;
+  readonly status: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface SurfaceRecord {
+  readonly workspaceId: string;
+  readonly surfaceId: string;
+  readonly runId?: string;
+  readonly workItemId?: string;
+  readonly userId: string;
+  readonly ownerEmail?: string;
+  readonly surfaceType: string;
+  readonly name: string;
+  readonly status: string;
+  readonly definition: Record<string, unknown>;
+  readonly workspaceStatus: string;
+  readonly publishedUrl?: string;
+  readonly publishedAt?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface ApprovalRecord {
+  readonly workspaceId: string;
+  readonly approvalId: string;
+  readonly runId: string;
+  readonly workItemId?: string;
+  readonly taskId?: string;
+  readonly userId: string;
+  readonly ownerEmail?: string;
+  readonly toolName: string;
+  readonly risk: string;
+  readonly requestedAction: string;
+  readonly status: string;
+  readonly requestedBy: string;
+  readonly requestedAt: string;
+  readonly decision?: string;
+  readonly decidedBy?: string;
+  readonly decidedAt?: string;
+  readonly reason?: string;
+  readonly argumentsPreview?: Record<string, unknown>;
+  readonly expiresAt?: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
 export interface TaskRecord {
   readonly runId: string;
   readonly taskId: string;
@@ -157,6 +216,10 @@ export interface ArtifactRecord {
   readonly metadata?: Record<string, unknown>;
 }
 
+export interface ArtifactPresigner {
+  presignDownload(input: { readonly bucket: string; readonly key: string; readonly expiresInSeconds: number; readonly contentType?: string; readonly fileName?: string }): Promise<{ readonly url: string; readonly expiresAt: string }>;
+}
+
 export interface ArtifactStore {
   listArtifactsForRun(input: { readonly runId: string; readonly limit?: number }): Promise<ArtifactRecord[]>;
   listArtifactsForWorkItem(input: { readonly workItemId: string; readonly limit?: number }): Promise<ArtifactRecord[]>;
@@ -177,8 +240,31 @@ export interface ControlApiStore {
   getRunById(runId: string): Promise<RunRecord | undefined>;
   getRunByIdempotencyScope(idempotencyScope: string): Promise<RunRecord | undefined>;
   listRecentRuns(limit?: number): Promise<RunRecord[]>;
+  listRunsForUser(input: { readonly userId: string; readonly workspaceId?: string; readonly limit?: number }): Promise<RunRecord[]>;
   listRunsForWorkItem(input: { readonly workItemId: string; readonly limit?: number }): Promise<RunRecord[]>;
   listEvents(runId: string, options?: { readonly afterSeq?: number; readonly limit?: number }): Promise<EventRecord[]>;
+}
+
+export interface DataSourceRefStore {
+  putDataSourceRef(item: DataSourceRefRecord): Promise<void>;
+  getDataSourceRef(workspaceId: string, dataSourceId: string): Promise<DataSourceRefRecord | undefined>;
+  listDataSourceRefsForWorkItem(input: { readonly workItemId: string; readonly limit?: number }): Promise<DataSourceRefRecord[]>;
+  listDataSourceRefsForRun(input: { readonly runId: string; readonly limit?: number }): Promise<DataSourceRefRecord[]>;
+}
+
+export interface SurfaceStore {
+  putSurface(item: SurfaceRecord): Promise<void>;
+  getSurface(workspaceId: string, surfaceId: string): Promise<SurfaceRecord | undefined>;
+  updateSurface(input: { readonly workspaceId: string; readonly surfaceId: string; readonly updates: Partial<SurfaceRecord> }): Promise<SurfaceRecord | undefined>;
+  listSurfacesForWorkItem(input: { readonly workItemId: string; readonly limit?: number }): Promise<SurfaceRecord[]>;
+  listSurfacesForRun(input: { readonly runId: string; readonly limit?: number }): Promise<SurfaceRecord[]>;
+}
+
+export interface ApprovalStore {
+  putApproval(item: ApprovalRecord): Promise<void>;
+  getApproval(workspaceId: string, approvalId: string): Promise<ApprovalRecord | undefined>;
+  listApprovalsForRun(input: { readonly runId: string; readonly limit?: number }): Promise<ApprovalRecord[]>;
+  updateApproval(input: { readonly workspaceId: string; readonly approvalId: string; readonly updates: Partial<ApprovalRecord> }): Promise<ApprovalRecord | undefined>;
 }
 
 export interface RunnerStateStore {

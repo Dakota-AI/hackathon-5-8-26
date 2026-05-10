@@ -1,18 +1,23 @@
 import crypto from "node:crypto";
 import type { APIGatewayProxyStructuredResultV2, APIGatewayProxyEventV2WithJWTAuthorizer } from "aws-lambda";
-import { getRunArtifact, listRunArtifacts, listWorkItemArtifacts } from "./artifacts.js";
+import { getArtifactDownloadUrl, getRunArtifact, listRunArtifacts, listWorkItemArtifacts } from "./artifacts.js";
+import { S3ArtifactPresigner } from "./s3-presigner.js";
 import { approveAgentProfileVersion, createAgentProfileDraft, getAgentProfileVersion, listAgentProfiles, S3AgentProfileBundleStore } from "./agent-profiles.js";
 import { createRun } from "./create-run.js";
 import { DynamoControlApiStore } from "./dynamo-store.js";
-import { getRun, listAdminRunEvents, listAdminRuns, listRunEvents } from "./query-runs.js";
+import { getRun, listAdminRunEvents, listAdminRuns, listRunEvents, listRuns } from "./query-runs.js";
+import { createDataSourceRef, getDataSourceRef, listDataSourceRefsForRun, listDataSourceRefsForWorkItem } from "./data-source-refs.js";
 import { StepFunctionsExecutionStarter } from "./step-functions.js";
 import { createWorkItem, createWorkItemRun, getWorkItem, listWorkItemEvents, listWorkItemRuns, listWorkItems, updateWorkItemStatus } from "./work-items.js";
 import { createUserRunner, getUserRunner, heartbeatHostNode, heartbeatUserRunner, listAdminRunnerState, registerHostNode, updateUserRunnerDesiredState } from "./user-runners.js";
+import { createApproval, decideApproval, getApproval, listApprovalsForRun } from "./approvals.js";
+import { createSurface, getSurface, listSurfacesForRun, listSurfacesForWorkItem, publishSurface, updateSurface } from "./surfaces.js";
 import type { AuthenticatedUser } from "./ports.js";
 
 const store = DynamoControlApiStore.fromEnvironment();
 const executions = StepFunctionsExecutionStarter.fromEnvironment();
 const profileBundles = S3AgentProfileBundleStore.fromEnvironment();
+const artifactPresigner = S3ArtifactPresigner.fromEnvironment();
 
 export async function createRunHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
   const user = userFromEvent(event);
@@ -39,6 +44,16 @@ export async function getRunHandler(event: APIGatewayProxyEventV2WithJWTAuthoriz
   }
 
   const result = await getRun({ store, user: userFromEvent(event), runId });
+  return json(result.statusCode, result.body);
+}
+
+export async function listRunsHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
+  const result = await listRuns({
+    store,
+    user: userFromEvent(event),
+    workspaceId: event.queryStringParameters?.workspaceId,
+    limit: parseOptionalInteger(event.queryStringParameters?.limit)
+  });
   return json(result.statusCode, result.body);
 }
 
@@ -411,6 +426,23 @@ export async function artifactsHandler(event: APIGatewayProxyEventV2WithJWTAutho
     return json(result.statusCode, result.body);
   }
 
+  if (routeKey === "GET /runs/{runId}/artifacts/{artifactId}/download") {
+    const runId = event.pathParameters?.runId;
+    const artifactId = event.pathParameters?.artifactId;
+    if (!runId || !artifactId) {
+      return json(400, { error: "BadRequest", message: "runId and artifactId path parameters are required." });
+    }
+    const result = await getArtifactDownloadUrl({
+      store,
+      presigner: artifactPresigner,
+      user,
+      runId,
+      artifactId,
+      expiresInSeconds: parseOptionalInteger(event.queryStringParameters?.expiresIn)
+    });
+    return json(result.statusCode, result.body);
+  }
+
   if (routeKey === "GET /runs/{runId}/artifacts/{artifactId}") {
     const runId = event.pathParameters?.runId;
     const artifactId = event.pathParameters?.artifactId;
@@ -424,12 +456,254 @@ export async function artifactsHandler(event: APIGatewayProxyEventV2WithJWTAutho
   return notImplemented("This Artifact route is provisioned in infrastructure but does not yet have a handler implementation.");
 }
 
-export async function notImplementedDataSourceRefsHandler(): Promise<APIGatewayProxyStructuredResultV2> {
+export async function dataSourceRefsHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
+  const user = userFromEvent(event);
+  const routeKey = event.routeKey;
+
+  if (routeKey === "POST /data-source-refs") {
+    const body = parseJsonBody(event.body);
+    const result = await createDataSourceRef({
+      store,
+      user,
+      now: () => new Date().toISOString(),
+      newId: () => crypto.randomUUID(),
+      request: {
+        workspaceId: stringField(body, "workspaceId"),
+        runId: optionalStringField(body, "runId"),
+        workItemId: optionalStringField(body, "workItemId"),
+        artifactId: optionalStringField(body, "artifactId"),
+        sourceKind: stringField(body, "sourceKind"),
+        source: stringField(body, "source"),
+        displayName: optionalStringField(body, "displayName"),
+        status: optionalStringField(body, "status"),
+        metadata: optionalRecordField(body, "metadata")
+      }
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /data-source-refs/{dataSourceId}") {
+    const dataSourceId = event.pathParameters?.dataSourceId;
+    const workspaceId = event.queryStringParameters?.workspaceId;
+    if (!dataSourceId || !workspaceId) {
+      return json(400, { error: "BadRequest", message: "workspaceId query parameter and dataSourceId path parameter are required." });
+    }
+    const result = await getDataSourceRef({ store, user, workspaceId, dataSourceId });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /work-items/{workItemId}/data-source-refs") {
+    const workItemId = event.pathParameters?.workItemId;
+    const workspaceId = event.queryStringParameters?.workspaceId;
+    if (!workItemId || !workspaceId) {
+      return json(400, { error: "BadRequest", message: "workspaceId query parameter and workItemId path parameter are required." });
+    }
+    const result = await listDataSourceRefsForWorkItem({
+      store,
+      user,
+      workspaceId,
+      workItemId,
+      limit: parseOptionalInteger(event.queryStringParameters?.limit)
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /runs/{runId}/data-source-refs") {
+    const runId = event.pathParameters?.runId;
+    if (!runId) {
+      return json(400, { error: "BadRequest", message: "runId path parameter is required." });
+    }
+    const result = await listDataSourceRefsForRun({
+      store,
+      user,
+      runId,
+      limit: parseOptionalInteger(event.queryStringParameters?.limit)
+    });
+    return json(result.statusCode, result.body);
+  }
+
   return notImplemented("DataSourceRef API is provisioned in infrastructure and will be implemented in the Control API phase.");
 }
 
-export async function notImplementedSurfacesHandler(): Promise<APIGatewayProxyStructuredResultV2> {
+export async function surfacesHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
+  const user = userFromEvent(event);
+  const routeKey = event.routeKey;
+
+  if (routeKey === "POST /surfaces") {
+    const body = parseJsonBody(event.body);
+    const workspaceId = stringField(body, "workspaceId");
+    const result = await createSurface({
+      store,
+      user,
+      now: () => new Date().toISOString(),
+      newId: () => crypto.randomUUID(),
+      request: {
+        workspaceId,
+        runId: optionalStringField(body, "runId"),
+        workItemId: optionalStringField(body, "workItemId"),
+        surfaceType: stringField(body, "surfaceType"),
+        name: stringField(body, "name"),
+        definition: optionalRecordField(body, "definition") ?? {},
+        status: optionalStringField(body, "status"),
+        publishedUrl: optionalStringField(body, "publishedUrl")
+      }
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /surfaces/{surfaceId}") {
+    const surfaceId = event.pathParameters?.surfaceId;
+    const workspaceId = event.queryStringParameters?.workspaceId;
+    if (!surfaceId || !workspaceId) {
+      return json(400, { error: "BadRequest", message: "workspaceId query parameter and surfaceId path parameter are required." });
+    }
+    const result = await getSurface({ store, user, workspaceId, surfaceId });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "PATCH /surfaces/{surfaceId}") {
+    const surfaceId = event.pathParameters?.surfaceId;
+    const body = parseJsonBody(event.body);
+    const workspaceId = optionalStringField(body, "workspaceId") ?? event.queryStringParameters?.workspaceId;
+    if (!surfaceId || !workspaceId) {
+      return json(400, { error: "BadRequest", message: "workspaceId and surfaceId are required." });
+    }
+    const result = await updateSurface({
+      store,
+      user,
+      now: () => new Date().toISOString(),
+      workspaceId,
+      surfaceId,
+      updates: {
+        name: optionalStringField(body, "name"),
+        status: optionalStringField(body, "status"),
+        definition: optionalRecordField(body, "definition")
+      }
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "POST /surfaces/{surfaceId}/publish") {
+    const surfaceId = event.pathParameters?.surfaceId;
+    const body = parseJsonBody(event.body);
+    const workspaceId = optionalStringField(body, "workspaceId") ?? event.queryStringParameters?.workspaceId;
+    if (!surfaceId || !workspaceId) {
+      return json(400, { error: "BadRequest", message: "workspaceId and surfaceId are required." });
+    }
+    const result = await publishSurface({
+      store,
+      user,
+      now: () => new Date().toISOString(),
+      workspaceId,
+      surfaceId,
+      publishedUrl: optionalStringField(body, "publishedUrl")
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /work-items/{workItemId}/surfaces") {
+    const workItemId = event.pathParameters?.workItemId;
+    const workspaceId = event.queryStringParameters?.workspaceId;
+    if (!workItemId || !workspaceId) {
+      return json(400, { error: "BadRequest", message: "workspaceId query parameter and workItemId path parameter are required." });
+    }
+    const result = await listSurfacesForWorkItem({
+      store,
+      user,
+      workspaceId,
+      workItemId,
+      limit: parseOptionalInteger(event.queryStringParameters?.limit)
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /runs/{runId}/surfaces") {
+    const runId = event.pathParameters?.runId;
+    if (!runId) {
+      return json(400, { error: "BadRequest", message: "runId path parameter is required." });
+    }
+    const result = await listSurfacesForRun({
+      store,
+      user,
+      runId,
+      limit: parseOptionalInteger(event.queryStringParameters?.limit)
+    });
+    return json(result.statusCode, result.body);
+  }
+
   return notImplemented("Surface API is provisioned in infrastructure and will be implemented in the Control API phase.");
+}
+
+export async function approvalsHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
+  const user = userFromEvent(event);
+  const routeKey = event.routeKey;
+
+  if (routeKey === "POST /approvals") {
+    const body = parseJsonBody(event.body);
+    const result = await createApproval({
+      store,
+      user,
+      now: () => new Date().toISOString(),
+      newId: () => crypto.randomUUID(),
+      request: {
+        workspaceId: stringField(body, "workspaceId"),
+        runId: stringField(body, "runId"),
+        taskId: optionalStringField(body, "taskId"),
+        workItemId: optionalStringField(body, "workItemId"),
+        toolName: stringField(body, "toolName"),
+        risk: stringField(body, "risk"),
+        requestedAction: stringField(body, "requestedAction"),
+        argumentsPreview: optionalRecordField(body, "argumentsPreview"),
+        expiresAt: optionalStringField(body, "expiresAt")
+      }
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /approvals/{approvalId}") {
+    const approvalId = event.pathParameters?.approvalId;
+    const workspaceId = event.queryStringParameters?.workspaceId;
+    if (!approvalId || !workspaceId) {
+      return json(400, { error: "BadRequest", message: "workspaceId query parameter and approvalId path parameter are required." });
+    }
+    const result = await getApproval({ store, user, workspaceId, approvalId });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "GET /runs/{runId}/approvals") {
+    const runId = event.pathParameters?.runId;
+    if (!runId) {
+      return json(400, { error: "BadRequest", message: "runId path parameter is required." });
+    }
+    const result = await listApprovalsForRun({
+      store,
+      user,
+      runId,
+      limit: parseOptionalInteger(event.queryStringParameters?.limit)
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  if (routeKey === "POST /approvals/{approvalId}/decision") {
+    const approvalId = event.pathParameters?.approvalId;
+    const body = parseJsonBody(event.body);
+    const workspaceId = optionalStringField(body, "workspaceId") ?? event.queryStringParameters?.workspaceId;
+    if (!approvalId || !workspaceId) {
+      return json(400, { error: "BadRequest", message: "workspaceId and approvalId are required." });
+    }
+    const result = await decideApproval({
+      store,
+      user,
+      now: () => new Date().toISOString(),
+      workspaceId,
+      approvalId,
+      decision: stringField(body, "decision"),
+      reason: optionalStringField(body, "reason")
+    });
+    return json(result.statusCode, result.body);
+  }
+
+  return notImplemented("Approvals API is provisioned in infrastructure and will be implemented in the Control API phase.");
 }
 
 function userFromEvent(event: APIGatewayProxyEventV2WithJWTAuthorizer): AuthenticatedUser {

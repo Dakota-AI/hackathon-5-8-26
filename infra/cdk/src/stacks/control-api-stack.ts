@@ -55,6 +55,7 @@ export class ControlApiStack extends AgentsCloudStack {
       ARTIFACTS_TABLE_NAME: props.state.artifactsTable.tableName,
       DATA_SOURCES_TABLE_NAME: props.state.dataSourcesTable.tableName,
       SURFACES_TABLE_NAME: props.state.surfacesTable.tableName,
+      APPROVALS_TABLE_NAME: props.state.approvalsTable.tableName,
       HOST_NODES_TABLE_NAME: props.state.hostNodesTable.tableName,
       USER_RUNNERS_TABLE_NAME: props.state.userRunnersTable.tableName,
       AGENT_PROFILES_TABLE_NAME: props.state.agentProfilesTable.tableName,
@@ -85,6 +86,15 @@ export class ControlApiStack extends AgentsCloudStack {
       runtime: Runtime.NODEJS_22_X,
       entry: controlApiEntry,
       handler: "listRunEventsHandler",
+      timeout: Duration.seconds(10),
+      memorySize: 256,
+      environment: commonEnvironment
+    });
+
+    const listRunsFunction = new NodejsFunction(this, "ListRunsFunction", {
+      runtime: Runtime.NODEJS_22_X,
+      entry: controlApiEntry,
+      handler: "listRunsHandler",
       timeout: Duration.seconds(10),
       memorySize: 256,
       environment: commonEnvironment
@@ -147,7 +157,7 @@ export class ControlApiStack extends AgentsCloudStack {
     const dataSourceRefsFunction = new NodejsFunction(this, "DataSourceRefsFunction", {
       runtime: Runtime.NODEJS_22_X,
       entry: controlApiEntry,
-      handler: "notImplementedDataSourceRefsHandler",
+      handler: "dataSourceRefsHandler",
       timeout: Duration.seconds(10),
       memorySize: 256,
       environment: commonEnvironment
@@ -156,7 +166,16 @@ export class ControlApiStack extends AgentsCloudStack {
     const surfacesFunction = new NodejsFunction(this, "SurfacesFunction", {
       runtime: Runtime.NODEJS_22_X,
       entry: controlApiEntry,
-      handler: "notImplementedSurfacesHandler",
+      handler: "surfacesHandler",
+      timeout: Duration.seconds(10),
+      memorySize: 256,
+      environment: commonEnvironment
+    });
+
+    const approvalsFunction = new NodejsFunction(this, "ApprovalsFunction", {
+      runtime: Runtime.NODEJS_22_X,
+      entry: controlApiEntry,
+      handler: "approvalsHandler",
       timeout: Duration.seconds(10),
       memorySize: 256,
       environment: commonEnvironment
@@ -171,6 +190,7 @@ export class ControlApiStack extends AgentsCloudStack {
     props.state.runsTable.grantReadData(getRunFunction);
     props.state.runsTable.grantReadData(listRunEventsFunction);
     props.state.eventsTable.grantReadData(listRunEventsFunction);
+    props.state.runsTable.grantReadData(listRunsFunction);
     props.state.runsTable.grantReadData(listAdminRunsFunction);
     props.state.eventsTable.grantReadData(listAdminRunsFunction);
     props.state.runsTable.grantReadData(listAdminRunEventsFunction);
@@ -192,21 +212,30 @@ export class ControlApiStack extends AgentsCloudStack {
     props.state.workItemsTable.grantReadData(artifactsFunction);
     props.state.runsTable.grantReadData(artifactsFunction);
     props.state.artifactsTable.grantReadData(artifactsFunction);
+    props.storage.workspaceLiveArtifactsBucket.grantRead(artifactsFunction);
 
     props.state.workItemsTable.grantReadData(dataSourceRefsFunction);
     props.state.runsTable.grantReadData(dataSourceRefsFunction);
-    props.state.artifactsTable.grantReadData(dataSourceRefsFunction);
     props.state.dataSourcesTable.grantReadWriteData(dataSourceRefsFunction);
 
     props.state.workItemsTable.grantReadData(surfacesFunction);
     props.state.runsTable.grantReadData(surfacesFunction);
-    props.state.dataSourcesTable.grantReadData(surfacesFunction);
+    props.state.artifactsTable.grantReadData(surfacesFunction);
     props.state.surfacesTable.grantReadWriteData(surfacesFunction);
+
+    props.state.runsTable.grantReadData(approvalsFunction);
+    props.state.approvalsTable.grantReadWriteData(approvalsFunction);
 
     this.api.addRoutes({
       path: "/runs",
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration("CreateRunIntegration", createRunFunction),
+      authorizer
+    });
+    this.api.addRoutes({
+      path: "/runs",
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration("ListRunsIntegration", listRunsFunction),
       authorizer
     });
     this.api.addRoutes({
@@ -282,7 +311,8 @@ export class ControlApiStack extends AgentsCloudStack {
     for (const route of [
       { path: "/work-items/{workItemId}/artifacts", methods: [HttpMethod.GET] },
       { path: "/runs/{runId}/artifacts", methods: [HttpMethod.GET] },
-      { path: "/runs/{runId}/artifacts/{artifactId}", methods: [HttpMethod.GET] }
+      { path: "/runs/{runId}/artifacts/{artifactId}", methods: [HttpMethod.GET] },
+      { path: "/runs/{runId}/artifacts/{artifactId}/download", methods: [HttpMethod.GET] }
     ]) {
       this.api.addRoutes({
         path: route.path,
@@ -317,6 +347,20 @@ export class ControlApiStack extends AgentsCloudStack {
         path: route.path,
         methods: route.methods,
         integration: new HttpLambdaIntegration(`SurfacesIntegration${route.path.replace(/[^A-Za-z0-9]/g, "")}${route.methods.join("")}`, surfacesFunction),
+        authorizer
+      });
+    }
+
+    for (const route of [
+      { path: "/approvals", methods: [HttpMethod.POST] },
+      { path: "/approvals/{approvalId}", methods: [HttpMethod.GET] },
+      { path: "/runs/{runId}/approvals", methods: [HttpMethod.GET] },
+      { path: "/approvals/{approvalId}/decision", methods: [HttpMethod.POST] }
+    ]) {
+      this.api.addRoutes({
+        path: route.path,
+        methods: route.methods,
+        integration: new HttpLambdaIntegration(`ApprovalsIntegration${route.path.replace(/[^A-Za-z0-9]/g, "")}${route.methods.join("")}`, approvalsFunction),
         authorizer
       });
     }

@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getRunArtifact, listRunArtifacts, listWorkItemArtifacts } from "../src/artifacts.js";
-import type { ArtifactRecord, ArtifactStore, AuthenticatedUser, ControlApiStore, EventRecord, RunRecord, TaskRecord, WorkItemRecord } from "../src/ports.js";
+import { getArtifactDownloadUrl, getRunArtifact, listRunArtifacts, listWorkItemArtifacts } from "../src/artifacts.js";
+import type { ArtifactPresigner, ArtifactRecord, ArtifactStore, AuthenticatedUser, ControlApiStore, EventRecord, RunRecord, TaskRecord, WorkItemRecord } from "../src/ports.js";
+
+class FakePresigner implements ArtifactPresigner {
+  public calls: Array<{ bucket: string; key: string; expiresInSeconds: number; contentType?: string; fileName?: string }> = [];
+  async presignDownload(input: { bucket: string; key: string; expiresInSeconds: number; contentType?: string; fileName?: string }): Promise<{ url: string; expiresAt: string }> {
+    this.calls.push(input);
+    return {
+      url: `https://example.s3/${input.bucket}/${encodeURIComponent(input.key)}?X-Amz-Expires=${input.expiresInSeconds}`,
+      expiresAt: new Date(Date.UTC(2026, 4, 10, 0, 0, input.expiresInSeconds)).toISOString()
+    };
+  }
+}
 
 class MemoryStore implements ControlApiStore, ArtifactStore {
   public workItems: WorkItemRecord[] = [];
@@ -25,6 +36,7 @@ class MemoryStore implements ControlApiStore, ArtifactStore {
   async listRunsForWorkItem(input: { workItemId: string; limit?: number }): Promise<RunRecord[]> {
     return this.runs.filter((run) => run.workItemId === input.workItemId).slice(0, input.limit ?? 50);
   }
+  async listRunsForUser(): Promise<[]> { return []; }
   async listEvents(runId: string): Promise<EventRecord[]> { return this.events.filter((event) => event.runId === runId); }
 
   async putWorkItem(item: WorkItemRecord): Promise<void> { this.workItems.push(item); }
@@ -198,5 +210,63 @@ describe("artifact API", () => {
     seed(store);
     const bad = await listRunArtifacts({ store, user: owner, runId: "" });
     assert.equal(bad.statusCode, 400);
+  });
+
+  it("returns a presigned download url for an owned artifact with default expiry", async () => {
+    const store = new MemoryStore();
+    seed(store);
+    const presigner = new FakePresigner();
+    const result = await getArtifactDownloadUrl({ store, presigner, user: owner, runId: "run-1", artifactId: "artifact-a" });
+    assert.equal(result.statusCode, 200);
+    assert.equal(presigner.calls.length, 1);
+    assert.equal(presigner.calls[0].bucket, "bucket");
+    assert.equal(presigner.calls[0].key, "workspaces/workspace-1/runs/run-1/artifacts/artifact-a/report.md");
+    assert.equal(presigner.calls[0].expiresInSeconds, 300);
+    assert.equal(presigner.calls[0].fileName, "report.md");
+    assert.equal(typeof (result.body as { url: string }).url, "string");
+    assert.equal((result.body as { expiresInSeconds: number }).expiresInSeconds, 300);
+  });
+
+  it("clamps presign expiry to allowed range", async () => {
+    const store = new MemoryStore();
+    seed(store);
+    const presigner = new FakePresigner();
+    const lo = await getArtifactDownloadUrl({ store, presigner, user: owner, runId: "run-1", artifactId: "artifact-a", expiresInSeconds: 5 });
+    const hi = await getArtifactDownloadUrl({ store, presigner, user: owner, runId: "run-1", artifactId: "artifact-a", expiresInSeconds: 99999 });
+    assert.equal((lo.body as { expiresInSeconds: number }).expiresInSeconds, 30);
+    assert.equal((hi.body as { expiresInSeconds: number }).expiresInSeconds, 900);
+  });
+
+  it("does not presign artifacts owned by another user", async () => {
+    const store = new MemoryStore();
+    seed(store);
+    const presigner = new FakePresigner();
+    const result = await getArtifactDownloadUrl({ store, presigner, user: stranger, runId: "run-1", artifactId: "artifact-a" });
+    assert.equal(result.statusCode, 404);
+    assert.equal(presigner.calls.length, 0);
+  });
+
+  it("returns 422 when artifact has no S3 location", async () => {
+    const store = new MemoryStore();
+    seed(store);
+    store.artifacts.push({
+      runId: "run-1",
+      artifactId: "artifact-no-s3",
+      workspaceId: "workspace-1",
+      workItemId: "work-1",
+      userId: owner.userId,
+      taskId: "task-1",
+      kind: "report",
+      name: "no s3",
+      bucket: "",
+      key: "",
+      uri: "",
+      contentType: "text/plain",
+      createdAt: "2026-05-10T00:02:00.000Z"
+    });
+    const presigner = new FakePresigner();
+    const result = await getArtifactDownloadUrl({ store, presigner, user: owner, runId: "run-1", artifactId: "artifact-no-s3" });
+    assert.equal(result.statusCode, 422);
+    assert.equal(presigner.calls.length, 0);
   });
 });

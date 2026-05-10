@@ -2,9 +2,7 @@
 
 Status:
 
-- [x] `App-Store-Connect-CLI` cloned into `tools/App-Store-Connect-CLI`.
-- [x] Local `asc` binary built from source.
-- [x] Repo-local symlink created at `tools/bin/asc`.
+- [x] Local `asc` command available for App Store Connect workflows.
 - [x] Desktop/mobile iOS bundle identifier normalized to `com.agentscloud.desktopmobile`.
 - [x] Desktop/mobile display name set to `Agents Cloud`.
 - [x] Draft TestFlight workflow added at `apps/desktop_mobile/.asc/workflow.json`.
@@ -18,14 +16,8 @@ Status:
 From the repo root:
 
 ```bash
-./tools/bin/asc version
-ASC_BYPASS_KEYCHAIN=1 ./tools/bin/asc auth status --output json --pretty
-```
-
-The CLI is built from:
-
-```text
-tools/App-Store-Connect-CLI
+asc version
+ASC_BYPASS_KEYCHAIN=1 asc auth status --output json --pretty
 ```
 
 ## Required Apple/App Store Connect inputs
@@ -49,7 +41,7 @@ Recommended local/repo setup from the desktop/mobile app directory:
 
 ```bash
 cd apps/desktop_mobile
-../../tools/bin/asc auth login \
+asc auth login \
   --local \
   --bypass-keychain \
   --name "AgentsCloud" \
@@ -57,7 +49,7 @@ cd apps/desktop_mobile
   --issuer-id "YOUR_ISSUER_ID" \
   --private-key /absolute/path/to/AuthKey_XXXX.p8
 
-ASC_BYPASS_KEYCHAIN=1 ../../tools/bin/asc auth status --validate --output table
+ASC_BYPASS_KEYCHAIN=1 asc auth status --validate --output table
 ```
 
 ## Configure export options
@@ -102,8 +94,8 @@ Dry-run/checks first:
 
 ```bash
 cd apps/desktop_mobile
-../../tools/bin/asc workflow validate --file .asc/workflow.json --pretty
-../../tools/bin/asc workflow run --dry-run testflight_beta VERSION:1.0.0 APP_ID:1234567890
+asc workflow validate --file .asc/workflow.json --pretty
+asc workflow run --dry-run testflight_beta VERSION:1.0.0 APP_ID:1234567890
 ```
 
 Real run:

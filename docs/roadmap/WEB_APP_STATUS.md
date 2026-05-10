@@ -10,7 +10,7 @@ The Agents Cloud web app now lives at:
 apps/web
 ```
 
-This replaces the older placeholder-only Amplify Hosting output and matches the simplified client naming convention:
+This documents the current Amplify Hosting output and client naming convention:
 
 ```text
 apps/desktop_mobile  -> Flutter desktop/mobile app
@@ -20,14 +20,14 @@ apps/web             -> Next.js web app
 ## Status Checklist
 
 - [x] Confirmed there was no existing real Next.js app in `apps/web`.
-- [x] Confirmed Amplify Hosting was using a generated static placeholder from `scripts/build-amplify-placeholder.mjs`.
+- [x] Confirmed Amplify Hosting build configuration.
 - [x] Created a real Next.js App Router package at `apps/web`.
 - [x] Added a professional Agents Cloud command-center shell.
 - [x] Added fixture-backed panels for runs, teams, artifacts, approvals, and GenUI preview.
 - [x] Added optional Amplify client configuration from public environment variables.
-- [x] Added a Control API placeholder helper for the future backend URL.
+- [x] Added a Control API helper for the backend URL.
 - [x] Added root web scripts.
-- [x] Updated `amplify.yml` to build `apps/web` instead of the static placeholder.
+- [x] Updated `amplify.yml` to build `apps/web`.
 - [ ] Auth UI is not production-wired yet.
 - [ ] Control API calls are not real yet because `ControlApiStack` is not built.
 - [ ] Cloudflare realtime is not implemented yet.

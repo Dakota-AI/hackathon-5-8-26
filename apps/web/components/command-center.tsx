@@ -55,11 +55,11 @@ export function CommandCenter() {
 
             <section id="command" className="hero-card">
               <div>
-                <p className="eyebrow">Paperclip-style orchestration</p>
+                <p className="eyebrow">Agent-team orchestration</p>
                 <h2>Give the system an objective; watch managers delegate work to specialist agents.</h2>
                 <p>
                   The web client now signs in with Amplify Auth and creates durable Control API runs with the Cognito
-                  JWT. The current ECS worker is still the placeholder runtime, so the first returned event is queued.
+                  JWT. The current ECS worker writes the smoke runtime event path while the product loop is hardened.
                 </p>
               </div>
               <CreateRunPanel apiConfigured={api.configured} />

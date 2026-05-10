@@ -17,8 +17,8 @@ Build a real AWS CDK TypeScript workspace under `infra/cdk` with:
 4. A network stack suitable for later ECS/Fargate workers.
 5. A storage stack with S3 buckets for live artifacts, immutable audit logs, preview static assets, and research datasets.
 6. A state stack with DynamoDB tables for runs, tasks, events, artifacts, and approvals.
-7. An ECS cluster and placeholder agent-runtime Fargate task definition.
-8. A first Step Functions state machine that can run the placeholder task.
+7. An ECS cluster and agent-runtime Fargate task definition.
+8. A first Step Functions state machine that can run the agent-runtime task.
 9. Root pnpm scripts for infra build/synth.
 10. Documentation showing how to synthesize and what inputs are still needed before deployment.
 

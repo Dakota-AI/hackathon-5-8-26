@@ -1,4 +1,7 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { CfnOutput } from "aws-cdk-lib";
+import { DockerImageAsset, Platform } from "aws-cdk-lib/aws-ecr-assets";
 import { AwsLogDriver, ContainerDefinition, ContainerImage, FargateTaskDefinition } from "aws-cdk-lib/aws-ecs";
 import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
 import type { Construct } from "constructs";
@@ -8,6 +11,10 @@ import type { AgentsCloudStackProps } from "./agents-cloud-stack.js";
 import type { ClusterStack } from "./cluster-stack.js";
 import type { StateStack } from "./state-stack.js";
 import type { StorageStack } from "./storage-stack.js";
+
+const thisFile = fileURLToPath(import.meta.url);
+const cdkSrcDir = path.dirname(thisFile);
+const repoRoot = path.resolve(cdkSrcDir, "../../../../");
 
 export interface RuntimeStackProps extends AgentsCloudStackProps {
   readonly cluster: ClusterStack;
@@ -28,21 +35,42 @@ export class RuntimeStack extends AgentsCloudStack {
       family: logicalName(props.config, "agent-runtime")
     });
 
+    const agentRuntimeImage = new DockerImageAsset(this, "AgentRuntimeImage", {
+      directory: repoRoot,
+      file: "services/agent-runtime/Dockerfile",
+      platform: Platform.LINUX_AMD64,
+      exclude: [
+        ".git",
+        "AGENTS.md",
+        "README.md",
+        "apps",
+        "docs",
+        "infra",
+        "packages",
+        "services/control-api",
+        "services/agent-runtime/README.md",
+        "services/agent-runtime/dist",
+        "services/agent-runtime/test",
+        "tools"
+      ]
+    });
+
     this.agentRuntimeContainer = this.agentRuntimeTaskDefinition.addContainer("agent-runtime", {
-      image: ContainerImage.fromRegistry("public.ecr.aws/docker/library/alpine:3.20"),
+      image: ContainerImage.fromDockerImageAsset(agentRuntimeImage),
       logging: new AwsLogDriver({
         streamPrefix: "agent-runtime",
         logGroup: props.cluster.agentRuntimeLogGroup
       }),
       environment: {
         AGENTS_CLOUD_ENV: props.config.envName,
-        AGENTS_CLOUD_WORKER_KIND: "agent-runtime-placeholder"
-      },
-      command: [
-        "sh",
-        "-c",
-        "echo agents-cloud placeholder worker started; echo RUN_ID=$RUN_ID TASK_ID=$TASK_ID WORKSPACE_ID=$WORKSPACE_ID; echo placeholder worker complete"
-      ]
+        AGENTS_CLOUD_WORKER_KIND: "agent-runtime-hermes",
+        HERMES_RUNNER_MODE: process.env.AGENTS_CLOUD_HERMES_RUNNER_MODE ?? "smoke",
+        RUNS_TABLE_NAME: props.state.runsTable.tableName,
+        TASKS_TABLE_NAME: props.state.tasksTable.tableName,
+        EVENTS_TABLE_NAME: props.state.eventsTable.tableName,
+        ARTIFACTS_TABLE_NAME: props.state.artifactsTable.tableName,
+        ARTIFACTS_BUCKET_NAME: props.storage.workspaceLiveArtifactsBucket.bucketName
+      }
     });
 
     props.storage.workspaceLiveArtifactsBucket.grantReadWrite(this.agentRuntimeTaskDefinition.taskRole);

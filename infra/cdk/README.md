@@ -38,13 +38,13 @@ Implemented, deployed, and synthesizing:
   - Agent runtime CloudWatch log group.
 
 - `RuntimeStack`
-  - Placeholder Fargate `agent-runtime` task definition.
-  - Placeholder Alpine container that accepts `RUN_ID`, `TASK_ID`, and `WORKSPACE_ID`.
+  - Fargate `agent-runtime` task definition built from `services/agent-runtime/Dockerfile` as a CDK ECR asset.
+  - Hermes-boundary worker container that accepts `RUN_ID`, `TASK_ID`, `WORKSPACE_ID`, `USER_ID`, and `OBJECTIVE`.
   - Task role grants for the current S3 buckets and DynamoDB tables.
 
 - `OrchestrationStack`
   - First Step Functions state machine.
-  - Runs the placeholder Fargate task with Step Functions `RUN_JOB` integration.
+  - Runs the Hermes/smoke Fargate task with the optimized ECS `runTask.sync` integration and per-run environment overrides.
 
 - `ControlApiStack`
   - API Gateway HTTP API for durable run lifecycle endpoints.
@@ -56,7 +56,7 @@ Implemented, deployed, and synthesizing:
 
 - Optional `PreviewIngressStack`
   - Gated by `AGENTS_CLOUD_PREVIEW_INGRESS_ENABLED=true`.
-  - Creates the public HTTPS ALB and placeholder ECS `preview-router` service.
+  - Creates the public HTTPS ALB and temporary ECS `preview-router` service.
   - Supports Route 53-owned domains by creating the ACM certificate and alias
     records in CDK.
   - Supports Cloudflare/external-DNS domains by importing an already-issued ACM
@@ -65,7 +65,7 @@ Implemented, deployed, and synthesizing:
 
 Not complete yet:
 
-- Real worker application image.
+- Real Hermes CLI/model execution with scoped provider secrets.
 - EventBridge/SQS event relay.
 - Cloudflare realtime stack.
 - The Cognito user pool/client defaults point at the current Amplify sandbox and
@@ -76,8 +76,8 @@ Related implementation that lives outside this package:
 
 - `infra/amplify` has a deployed Amplify Gen 2 Auth sandbox with Cognito email
   login.
-- The repo root has an `amplify.yml` placeholder Hosting build that currently
-  deploys successfully.
+- The repo root has an `amplify.yml` web Hosting build that currently deploys
+  successfully.
 
 ## Commands
 
@@ -212,7 +212,7 @@ aws acm describe-certificate \
 4. After ACM status is `ISSUED`, deploy the preview ingress stack:
 
 ```bash
-cd /Users/sebastian/Developer/agents-cloud/infra/cdk
+cd infra/cdk
 
 AWS_PROFILE=agents-cloud-source \
 AWS_REGION=us-east-1 \

@@ -32,7 +32,7 @@ agent run
 
 ### AWS Credentials
 
-- [x] Access-key CSV imported from `/Users/sebastian/Downloads/Sebsatian_accessKeys.csv` into named AWS CLI profile `agents-cloud-source`.
+- [x] Access-key CSV imported into named AWS CLI profile `agents-cloud-source`.
 - [x] Secrets were not printed to terminal output.
 - [x] Profile identity verified with STS.
   - Account: `625250616301`
@@ -49,7 +49,7 @@ agent run
 - [x] Preview static S3 bucket exists:
   - `agents-cloud-dev-storage-previewstaticbucket42b307-oyrfiakvhnf8`
 - [x] Agent runtime task role has read/write access to the preview static bucket.
-- [x] Placeholder Step Functions -> ECS task path was previously smoke-tested successfully.
+- [x] Step Functions -> ECS task path was smoke-tested successfully.
 
 ### Preview Registry
 
@@ -74,7 +74,7 @@ agents-cloud-dev-state-PreviewDeploymentsTable37B54DE6-WEG6QR56NMCX
 ### Wildcard Ingress CDK Wiring
 
 - [x] CDK now has optional preview ingress config in `loadConfig()`.
-- [x] CDK now has a `PreviewIngressStack` scaffold.
+- [x] CDK now has a `PreviewIngressStack`.
 - [x] `PreviewIngressStack` synthesizes when the required domain env vars are provided.
 - [x] `PreviewIngressStack` now supports Cloudflare/external-DNS domains by importing an existing ACM certificate ARN instead of requiring a Route 53 hosted zone.
 - [x] `PreviewIngressStack` includes:
@@ -92,32 +92,18 @@ agents-cloud-dev-state-PreviewDeploymentsTable37B54DE6-WEG6QR56NMCX
 - [ ] No live wildcard DNS record currently points to the preview-router ALB.
 - [x] ACM wildcard certificate has been requested for the final preview domain.
 - [ ] ACM wildcard certificate has not been issued yet.
-- [ ] The preview-router container is currently a placeholder nginx image, not the final host-header-aware router implementation.
+- [ ] The preview-router container currently uses a temporary nginx image, not the final host-header-aware router implementation.
 
-### Available Route 53 Hosted Zones Seen In Account
+### Preview Domain Policy
 
-The account currently has these public hosted zones:
-
-- [ ] `signel.vc.`
-- [ ] `maledger.com.`
-- [ ] `vibe-coder.com.`
-- [ ] `astoic.app.`
-- [ ] `upnextai.app.`
-- [ ] `allegiancelockanddoor.com.`
-
-No domain was chosen automatically. Recommended pattern is to use an isolated preview subdomain, for example:
+The selected preview base domain is:
 
 ```text
-*.preview.vibe-coder.com
+*.preview.solo-ceo.ai
 ```
 
-or:
-
-```text
-*.preview.upnextai.app
-```
-
-instead of using `*.vibe-coder.com` or `*.upnextai.app` directly.
+Use an isolated preview subdomain rather than placing generated previews at the
+root of a product domain.
 
 ## Files Changed
 
@@ -273,8 +259,6 @@ Proxy: DNS only
 
 The same ACM CNAME validates both `preview.solo-ceo.ai` and `*.preview.solo-ceo.ai`.
 
-Earlier recommended hosted-zone-backed options were `preview.vibe-coder.com` and
-`preview.upnextai.app`, but the selected domain is now `preview.solo-ceo.ai`.
 Because `solo-ceo.ai` is Cloudflare-managed, the active path is external DNS
 mode with an imported ACM certificate rather than Route 53 mode.
 
@@ -364,7 +348,7 @@ aws acm wait certificate-validated \
 #### Phase 2: Deploy the AWS ingress using the issued certificate
 
 ```bash
-cd /Users/sebastian/Developer/agents-cloud/infra/cdk
+cd infra/cdk
 
 AWS_PROFILE=agents-cloud-source \
 AWS_REGION=us-east-1 \
@@ -403,7 +387,7 @@ Proxy: DNS only to start, then test Cloudflare proxy mode separately if desired.
 
 ### Implement Real Preview Router
 
-- [ ] Replace placeholder nginx image with an app that:
+- [ ] Replace the temporary nginx image with an app that:
   - reads the `Host` header;
   - looks up `previewHost` in `PreviewDeploymentsTable`;
   - serves static S3 deployments;
@@ -430,7 +414,7 @@ Minimum write to `PreviewDeploymentsTable`:
 
 ```json
 {
-  "previewHost": "demo.preview.vibe-coder.com",
+  "previewHost": "demo.preview.solo-ceo.ai",
   "deploymentId": "dep_...",
   "workspaceId": "ws_...",
   "projectId": "proj_...",

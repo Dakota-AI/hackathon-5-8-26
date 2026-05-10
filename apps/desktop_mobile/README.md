@@ -1,6 +1,6 @@
 # Agents Cloud Desktop/Mobile Console
 
-Flutter scaffold for the native Agents Cloud command center.
+Flutter app for the native Agents Cloud command center.
 
 Current status:
 

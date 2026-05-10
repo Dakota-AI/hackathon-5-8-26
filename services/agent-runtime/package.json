@@ -1,0 +1,21 @@
+{
+  "name": "@agents-cloud/agent-runtime",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Hermes-backed ECS agent runtime worker for Agents Cloud runs.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "pnpm build && node --test dist/test/**/*.test.js",
+    "start": "node dist/src/index.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.821.0",
+    "@aws-sdk/client-s3": "^3.821.0",
+    "@aws-sdk/lib-dynamodb": "^3.821.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "typescript": "^5.7.3"
+  }
+}

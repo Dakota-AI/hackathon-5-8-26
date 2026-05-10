@@ -1,0 +1,17 @@
+node_modules
+.git
+.gitignore
+README.md
+AGENTS.md
+docs
+infra
+apps
+packages
+tools
+services/control-api
+services/agent-runtime/README.md
+services/agent-runtime/dist
+services/agent-runtime/test
+**/dist
+**/.next
+**/.dart_tool

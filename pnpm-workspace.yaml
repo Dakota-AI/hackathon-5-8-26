@@ -1,5 +1,6 @@
 packages:
   - "apps/*"
   - "infra/*"
+  - "infra/cloudflare/*"
   - "packages/*"
   - "services/*"

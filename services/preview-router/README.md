@@ -1,6 +1,6 @@
 # Preview Router
 
-Wildcard website/artifact preview router placeholder.
+Wildcard website/artifact preview router package boundary.
 
 Routing model:
 

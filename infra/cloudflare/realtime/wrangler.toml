@@ -1,0 +1,54 @@
+#:schema node_modules/wrangler/config-schema.json
+
+name = "agents-cloud-realtime"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Agents Cloud realtime edge plane.
+# Durable execution truth remains in AWS DynamoDB/S3/Step Functions/ECS.
+# This Worker only handles low-latency WebSocket fanout and hot presence.
+
+routes = [
+  { pattern = "realtime.solo-ceo.ai/*", zone_name = "solo-ceo.ai" }
+]
+
+[[durable_objects.bindings]]
+name = "USER_HUBS"
+class_name = "UserHubDO"
+
+[[durable_objects.bindings]]
+name = "WORKSPACE_HUBS"
+class_name = "WorkspaceHubDO"
+
+[[durable_objects.bindings]]
+name = "SESSION_HUBS"
+class_name = "SessionHubDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["UserHubDO", "WorkspaceHubDO", "SessionHubDO"]
+
+[vars]
+COGNITO_ISS = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_1UeU1hTME"
+COGNITO_AUD = "3kq79rodc3ofjkulh0b31sfpos"
+COGNITO_JWKS_URL = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_1UeU1hTME/.well-known/jwks.json"
+LOG_LEVEL = "INFO"
+
+# Set before deploy:
+#   pnpm --filter @agents-cloud/cloudflare-realtime exec wrangler secret put RELAY_SHARED_SECRET
+# The AWS event relay will send this value in x-agents-cloud-relay-secret.
+
+[env.staging]
+name = "agents-cloud-realtime-staging"
+
+[env.staging.vars]
+COGNITO_ISS = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_1UeU1hTME"
+COGNITO_AUD = "3kq79rodc3ofjkulh0b31sfpos"
+COGNITO_JWKS_URL = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_1UeU1hTME/.well-known/jwks.json"
+LOG_LEVEL = "DEBUG"
+
+# Optional staging route after DNS exists:
+# routes = [
+#   { pattern = "realtime-staging.solo-ceo.ai/*", zone_name = "solo-ceo.ai" }
+# ]

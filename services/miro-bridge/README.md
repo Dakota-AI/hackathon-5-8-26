@@ -1,6 +1,6 @@
 # Miro Bridge
 
-Miro integration placeholder.
+Miro integration package boundary.
 
 Responsibilities:
 

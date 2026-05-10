@@ -1,6 +1,6 @@
 # Event Relay
 
-AWS-to-Cloudflare event relay placeholder.
+AWS-to-Cloudflare event relay package boundary.
 
 Responsibilities:
 

@@ -3,6 +3,9 @@
 Read first:
 
 - [Master Scope And Progress](roadmap/MASTER_SCOPE_AND_PROGRESS.md)
+- [Project Structure Guide](PROJECT_STRUCTURE.md)
+- [Implementation Readiness Audit](IMPLEMENTATION_READINESS_AUDIT.md)
+- [AI Agent Engineering Quality Gates](AI_AGENT_ENGINEERING_QUALITY_GATES.md)
 - [Current Project Status](roadmap/PROJECT_STATUS.md)
 - [Repository Agent Instructions](../AGENTS.md)
 
@@ -14,6 +17,8 @@ Main sections:
 
 Core planning and audit docs:
 
+- [Implementation Readiness Audit](IMPLEMENTATION_READINESS_AUDIT.md)
+- [AI Agent Engineering Quality Gates](AI_AGENT_ENGINEERING_QUALITY_GATES.md)
 - [Autonomous Agent Platform Roadmap](roadmap/AUTONOMOUS_AGENT_PLATFORM_IMPLEMENTATION_ROADMAP.md)
 - [Exa MCP Audit Addendum](roadmap/AUTONOMOUS_AGENT_PLATFORM_EXA_AUDIT_ADDENDUM.md)
 - [Foundation Next Steps](roadmap/FOUNDATION_NEXT_STEPS.md)

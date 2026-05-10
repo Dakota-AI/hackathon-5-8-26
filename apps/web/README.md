@@ -19,8 +19,8 @@ apps/desktop_mobile
 - Product shell exists.
 - Desktop/mobile naming is mirrored by a simple web app path.
 - Amplify Auth client configuration hook exists but is optional until real outputs are wired.
-- Control API helper is a placeholder until `ControlApiStack` exists.
-- Run, agent, artifact, approval, and GenUI panels are fixture-backed.
+- Control API helper calls the CDK-owned run lifecycle API when configured.
+- Run, agent, artifact, approval, and GenUI panels still need full backend data integration.
 
 ## Local development
 

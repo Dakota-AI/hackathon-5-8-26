@@ -1,4 +1,4 @@
-# Paperclip-Style Autonomous Agent Platform Architecture
+# Autonomous Agent Company Architecture
 
 _Last updated: 2026-05-09_
 
@@ -10,7 +10,7 @@ ledger.
 
 ## Executive intent
 
-Agents Cloud should become a Paperclip-style autonomous AI company platform, not only a job runner.
+Agents Cloud should become an autonomous AI company platform, not only a job runner.
 
 The product philosophy is CEO-command driven:
 
@@ -36,32 +36,16 @@ The system should support 24/7 autonomous teams that can:
 - emit live GenUI surfaces to every client,
 - synchronize messages, status, approvals, notifications, and artifacts across web, desktop, and mobile.
 
-## References researched
+## Architecture Inputs
 
-- Paperclip: `https://github.com/paperclipai/paperclip`
-  - Useful model: companies, org charts, roles, heartbeats, tickets, budgets, governance, audit, bring-your-own-agent adapters.
-- Hermes Paperclip adapter: `https://github.com/mattsegura/hermes-paperclip-adapter`
-  - Useful model: run Hermes as a managed Paperclip employee through an adapter; parse transcript/tool output; preserve sessions; report cost and work results.
-- Miro MCP: `https://developers.miro.com/docs/mcp-intro`
-  - Official remote MCP server: `https://mcp.miro.com/`
-  - Useful tools include board item listing, board context exploration, context retrieval, diagram creation, document updates, image fetch, table create/list/sync.
-- Miro REST API: `https://developers.miro.com/reference/overview`
-  - Requires OAuth 2.0 authorization code flow for REST API use.
-- Miro Flows / Sidekicks / Prototypes
-  - Useful product inspiration: canvas as prompt, reusable AI workflows, custom sidekicks, async `@mention` collaboration, prototypes and polished canvas deliverables.
-- Cloudflare Durable Objects / WebSockets
-  - Durable Objects are good for per-room/per-run/per-workspace coordination, persistent WebSocket connections, hibernation, and strongly consistent per-entity state.
-  - Use hibernatable WebSockets for cost-efficient realtime connections.
-- Codex authentication docs
-  - Codex CLI supports ChatGPT OAuth login and API-key login.
-  - ChatGPT login can use subscription/credit features; API key is recommended by OpenAI for programmatic CI/server automation.
-  - For headless environments, `codex login --device-auth` exists.
+This document is internal architecture guidance for Agents Cloud. The stable
+decisions live in ADRs; this file describes the target product shape.
 
 ## Current foundation already in this repo
 
 The current Agents Cloud foundation is directionally aligned, but it is still a platform skeleton.
 
-Already deployed or scaffolded:
+Already deployed or present:
 
 - CDK platform stacks:
   - foundation
@@ -83,10 +67,10 @@ Already deployed or scaffolded:
   - audit logs
   - preview static sites
   - research datasets
-- ECS cluster and placeholder Fargate worker task.
+- ECS cluster and agent-runtime Fargate worker task.
 - Step Functions state machine that can launch a Fargate task.
-- Amplify Auth sandbox and green Amplify Hosting placeholder.
-- Optional wildcard preview ingress stack scaffold.
+- Amplify Auth sandbox and working Amplify Hosting build.
+- Optional wildcard preview ingress stack.
 
 Big missing pieces:
 
@@ -105,7 +89,7 @@ Big missing pieces:
 
 ### Core entities
 
-The data model should be closer to Paperclip than to a simple queue.
+The data model should be closer to a durable company/org model than to a simple queue.
 
 Recommended entities:
 
@@ -294,7 +278,7 @@ Possible table approach:
 
 Purpose:
 
-- Replace the placeholder Alpine worker with real harness images.
+- Harden the agent-runtime worker image path.
 
 Resources:
 
@@ -303,7 +287,7 @@ Resources:
   - `agent-runtime-codex`
   - `agent-runtime-claude-code`
   - `agent-runtime-open-harness`
-  - `agent-runtime-paperclip-adapter`
+  - `agent-runtime-harness-adapter`
 - ECS task definitions per worker class.
 - Task roles scoped by worker capability.
 - CloudWatch log groups with structured JSON logs.
@@ -399,7 +383,7 @@ Do not use one global Durable Object. Shard by run/workspace.
 
 ### 7. PreviewIngressStack v2
 
-Current scaffold exists, but the router is placeholder nginx.
+Current stack exists; the router currently uses a temporary nginx image.
 
 Upgrade to:
 
@@ -408,10 +392,8 @@ Upgrade to:
 - support static S3 deployments.
 - support SPA fallback.
 - later support dynamic ECS target/proxy mode.
-- support multiple root domains via route table:
-  - `*.preview.vibe-coder.com`
-  - `*.preview.upnextai.app`
-  - later custom domains.
+- support `*.preview.solo-ceo.ai`
+- later support customer-owned custom domains.
 
 Preview modes:
 
@@ -479,17 +461,17 @@ Product pattern:
 
 ## Agent harness recommendation
 
-No single existing framework should own the whole platform. The platform should have a two-layer model:
+No single runtime framework should own the whole platform. The platform should have a two-layer model:
 
 ```text
-Paperclip-style company/org control plane
+internal company/org control plane
   -> harness adapter layer
-      -> Hermes / Codex / Claude Code / OpenCode / Open Harness / LangGraph / CrewAI as worker backends
+      -> isolated worker backends
 ```
 
 ### Best default platform pattern
 
-Use Paperclip-style orchestration concepts as the product/control-plane model:
+Use internal organization concepts as the product/control-plane model:
 
 - companies
 - goals
@@ -513,31 +495,31 @@ Use Hermes Agent as the first rich general-purpose runtime because it already pr
 - browser/web/terminal/file tools,
 - subagent delegation,
 - multi-provider support,
-- Paperclip adapter precedent.
+- runtime adapter precedent.
 
 Use Codex CLI as the first dedicated coding harness for OpenAI/Codex-account workflows.
 
-Use Open Harness as the abstraction target for swappable computer-operating coding agents, especially if we want deterministic replay/evals across Claude Code, Codex, OpenCode, etc.
+Use a narrow adapter interface for swappable worker implementations. The durable
+run ledger, tenant policy, approvals, and artifact model must remain owned by
+Agents Cloud even when individual workers change.
 
-Use LangGraph selectively inside long-lived deterministic workflows where checkpointing and explicit graph state are more important than Paperclip-style org modeling.
+### Why not only a runtime framework?
 
-Use CrewAI only as a fast prototyping layer for role-based teams, not the core durable runtime.
-
-### Why not only LangGraph/CrewAI/AutoGen?
-
-- LangGraph is excellent for deterministic graph workflows and checkpointing, but it does not directly provide the company/org/governance/budget product model.
-- CrewAI is good for quick role-based teams, but weaker for durable production state and complex resumability.
-- AutoGen is useful for conversational/iterative multi-agent debate but has more overhead and less deterministic production control.
-- OpenAI Agents SDK / Codex SDK are strong for OpenAI-native flows but would create more provider lock-in if used as the only platform abstraction.
+- Runtime frameworks are useful for task execution, but they should not own the
+  company/org/governance/budget product model.
+- Durable production state and resumability must stay in the platform control
+  plane.
+- Provider-specific SDKs are useful behind adapters, but should not define the
+  whole platform boundary.
 
 ### Recommended harness stack
 
 ```text
 Control plane / product model:
-  Agents Cloud, Paperclip-inspired
+  Agents Cloud control plane
 
 Primary general agent runtime:
-  Hermes Agent via Paperclip-style adapter
+  Hermes Agent via runtime adapter
 
 Primary coding runtime:
   Codex CLI container, authenticated with Codex/ChatGPT where appropriate
@@ -808,7 +790,7 @@ Build:
 
 Goal:
 
-Replace placeholder Alpine worker with real `agent-runtime-hermes` image.
+Harden the `agent-runtime-hermes` image.
 
 Build:
 
@@ -819,7 +801,7 @@ Build:
 - event/artifact writer SDK.
 - simple smoke run that creates a markdown report artifact.
 
-### Milestone 3: Paperclip-style org model
+### Milestone 3: internal org model
 
 Goal:
 
@@ -837,7 +819,7 @@ Build:
 
 Goal:
 
-Replace Amplify placeholder with real dashboard.
+Expand the web dashboard.
 
 Build:
 
@@ -926,10 +908,10 @@ Do this next:
 
 1. Build `ControlApiStack` and first run endpoints.
 2. Build a minimal real worker that writes events/artifacts.
-3. Add a Paperclip-inspired `AgentProfile` and `AgentTeam` schema, but do not overbuild the full org UI yet.
+3. Add a internal `AgentProfile` and `AgentTeam` schema, but do not overbuild the full org UI yet.
 4. Add the Next.js command center shell.
 5. Add Cloudflare Durable Object realtime after polling works.
 
 Reason:
 
-The platform needs a real end-to-end loop before more UI or advanced agent-team abstractions. Once the loop exists, Paperclip-style teams, Miro, previews, GenUI, and Codex containers can plug into it cleanly.
+The platform needs a real end-to-end loop before more UI or advanced agent-team abstractions. Once the loop exists, agent teams, Miro, previews, GenUI, and Codex containers can plug into it cleanly.

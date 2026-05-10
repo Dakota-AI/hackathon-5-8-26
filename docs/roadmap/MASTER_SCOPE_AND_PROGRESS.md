@@ -35,7 +35,7 @@ The CEO-style user issues a strategic command:
 Create a new product for X market.
 Hire/build a marketing team for this workspace.
 Research competitors and tell me the best next moves.
-Build a prototype website and publish it.
+Build a preview website and publish it.
 Summarize this Miro board and turn it into an execution plan.
 ```
 
@@ -90,10 +90,12 @@ Verified on 2026-05-09:
 - `pnpm infra:synth` passed.
 - `pnpm --filter @agents-cloud/infra-amplify run typecheck` passed.
 - `pnpm amplify:hosting:build` passed.
-- `flutter analyze` passed for the local Flutter console scaffold.
-- `flutter test` passed for the local Flutter console scaffold.
+- `flutter analyze` passed for the Flutter console.
+- `flutter test` passed for the Flutter console.
 - Step Functions launched ECS Fargate and the smoke execution succeeded.
 - `agents-cloud-dev-control-api` deployed successfully.
+- Cloudflare realtime Worker/Durable Object package created under
+  `infra/cloudflare/realtime`; `pnpm cloudflare:test` and Wrangler dry-run pass.
 - Control API smoke: unauthenticated `POST /runs` returned `401`; deployed
   Lambda-created smoke run `run-362d8866-ac8e-4b00-82d2-6b7eddaca43e` wrote a
   DynamoDB run/event, started Step Functions execution
@@ -118,7 +120,7 @@ Use these docs in this order:
 3. `docs/adr/README.md`
 4. `docs/roadmap/AUTONOMOUS_AGENT_PLATFORM_EXA_AUDIT_ADDENDUM.md`
 5. `docs/roadmap/AUTONOMOUS_AGENT_PLATFORM_IMPLEMENTATION_ROADMAP.md`
-6. `docs/roadmap/PAPERCLIP_STYLE_AUTONOMOUS_AGENT_PLATFORM_ARCHITECTURE.md`
+6. `docs/roadmap/AUTONOMOUS_AGENT_COMPANY_ARCHITECTURE.md`
 7. `docs/roadmap/WILDCARD_PREVIEW_HOSTING_STATUS.md`
 8. `docs/roadmap/AMPLIFY_NEXT_FRONTEND_PLAN.md`
 9. `docs/roadmap/DESKTOP_MOBILE_BOILERPLATE_STATUS.md`
@@ -127,9 +129,8 @@ Use these docs in this order:
 12. `docs/roadmap/WEB_APP_STATUS.md`
 13. `docs/roadmap/SHADCN_FLUTTER_UI_SYSTEM.md`
 
-The long roadmap and paperclip architecture docs are still useful, but this
-master document and `PROJECT_STATUS.md` reflect the current implementation
-position.
+The long roadmap and architecture docs are still useful, but this master
+document and `PROJECT_STATUS.md` reflect the current implementation position.
 
 ## External Source References
 
@@ -151,7 +152,6 @@ The architecture has been shaped around the following public product/docs areas:
   https://developers.cloudflare.com/durable-objects/best-practices/websockets/
 - Cloudflare Durable Objects limits:
   https://developers.cloudflare.com/durable-objects/platform/limits/
-- Cloudflare Agents repository: https://github.com/cloudflare/agents
 - OpenAI Codex CLI and ChatGPT sign-in help:
   https://help.openai.com/en/articles/11381614
 - OpenAI Codex plan usage help:
@@ -183,20 +183,20 @@ validated for the exact deployment mode.
 - [x] `StateStack` implemented with run, task, event, artifact, approval, and
   preview deployment tables.
 - [x] `ClusterStack` implemented with ECS cluster and log group.
-- [x] `RuntimeStack` implemented with placeholder Fargate task definition and
+- [x] `RuntimeStack` implemented with agent-runtime Fargate task definition and
   IAM grants.
 - [x] `OrchestrationStack` implemented with Step Functions launching Fargate.
 - [x] Step Functions to ECS smoke path verified.
 - [x] Preview deployment registry table added.
-- [x] Optional preview ingress CDK stack scaffolded and synth-validated with
+- [x] Optional preview ingress CDK stack created and synth-validated with
   dummy domain inputs.
 - [x] Amplify Gen 2 Auth sandbox deployed with Cognito email login.
-- [x] Amplify Hosting app created and connected to the private GitHub repo.
-- [x] Amplify Hosting placeholder build made green with explicit `amplify.yml`.
+- [x] Amplify Hosting app created and connected to the repository.
+- [x] Amplify Hosting web build made green with explicit `amplify.yml`.
 - [x] Amplify Next.js frontend plan documented.
-- [x] Local Flutter console scaffold exists under `apps/desktop_mobile`
+- [x] Flutter console exists under `apps/desktop_mobile`
   with a command-center shell, planning pages, and local GenUI/A2UI preview.
-- [x] Flutter scaffold widget tests pass locally.
+- [x] Flutter app widget tests pass locally.
 - [x] `ControlApiStack` deployed with API Gateway, Cognito JWT authorizer, and
   Lambda handlers for creating/querying runs.
 - [x] Deployed Control API smoke-tested for unauthorized rejection, durable run
@@ -208,17 +208,20 @@ validated for the exact deployment mode.
 - [x] Root `ControlApiStack` is built and deployed.
 - [x] API Gateway and Lambda endpoints exist for creating/querying runs.
 - [x] Cognito JWT authorizer is wired into the CDK platform backend.
-- [ ] The runtime container is still a placeholder and does not call models.
-- [ ] Workers do not write canonical events to DynamoDB yet.
-- [ ] Workers do not write real artifacts to S3 yet.
+- [ ] The runtime container has a smoke/Hermes path and does not yet call production models.
+- [ ] Worker events are not fully canonical or retry-safe yet.
+- [ ] Worker artifact writes are not fully canonical or retry-safe yet.
 - [ ] EventBridge/SQS event movement is not implemented.
-- [ ] Cloudflare Worker/Durable Object realtime plane is not implemented.
-- [ ] Next.js app shell is not implemented.
+- [ ] Cloudflare Worker/Durable Object realtime plane is not deployed or wired
+  to AWS event relay and clients yet.
+- [ ] Next.js app needs full backend and realtime product integration.
 - [ ] Production desktop/mobile app is not connected to Auth, Control
   API, Cloudflare realtime, notifications, or real A2UI event streams.
 - [ ] A2UI/GenUI renderers are not implemented in either client.
 - [ ] Codex CLI worker mode is not implemented.
-- [ ] Hermes worker mode is not implemented.
+- [x] Hermes worker mode first slice exists behind a `smoke` runner mode and
+  deployed Hermes-runner boundary; real CLI/model mode is implemented in code but
+  not enabled in ECS until scoped provider secrets are brokered.
 - [ ] Miro OAuth/MCP/REST bridge is not implemented.
 - [ ] GitHub App/OAuth integration for commits and PRs is not implemented.
 - [ ] Specialist-agent creation workflow is not implemented.
@@ -244,12 +247,13 @@ Current status:
 
 - [x] CDK app exists.
 - [x] Network/storage/state/cluster/runtime/orchestration stacks exist.
-- [x] Placeholder Step Functions to ECS path works.
-- [x] Control API CDK/Lambda scaffold exists, deploys, and has an unauthenticated
+- [x] Step Functions to ECS path works.
+- [x] Control API CDK/Lambda stack exists, deploys, and has an unauthenticated
   route smoke check returning `401` for `POST /runs` without a JWT.
 - [ ] Authenticated Control API smoke test is still pending.
 - [ ] Event bus/queues for canonical event fanout do not exist.
-- [ ] Real worker image pipeline does not exist.
+- [x] Real worker image pipeline first slice exists: CDK builds/pushes the
+  `services/agent-runtime` Docker image as an ECR asset for the Fargate task.
 
 Required next resources:
 
@@ -298,39 +302,39 @@ Target worker classes:
 Current status:
 
 - [x] ECS cluster exists.
-- [x] Placeholder Fargate task definition exists.
-- [x] Step Functions can launch the placeholder task.
+- [x] Real Fargate task definition first slice exists for `services/agent-runtime`.
+- [x] Step Functions can launch the Hermes/smoke worker task.
 - [ ] Separate worker classes are not defined.
-- [ ] Worker images are not built or pushed.
-- [ ] Worker runtime protocol is not implemented.
+- [x] Worker image is built/pushed through CDK ECR assets for the dev runtime.
+- [x] Worker runtime protocol first slice is implemented.
 - [ ] Workspaces are not materialized from S3/EFS.
-- [ ] No worker writes status, artifacts, approvals, or A2UI events.
+- [x] Worker writes status, artifact metadata, S3 artifact, and terminal events in the deployed smoke path.
 
 Required build items:
 
-- [ ] Define worker bootstrap contract: env vars, S3 pointers, run id, task id,
+- [x] Define worker bootstrap contract: env vars, S3 pointers, run id, task id,
   workspace id, event sink, artifact sink.
-- [ ] Add minimal runtime worker package.
-- [ ] Add status event writer.
-- [ ] Add artifact writer.
-- [ ] Add structured logs with run/task/workspace correlation.
+- [x] Add minimal runtime worker package.
+- [x] Add status event writer.
+- [x] Add artifact writer.
+- [x] Add structured logs with run/task/workspace correlation.
 - [ ] Add cancellation polling.
 - [ ] Add timeout handling.
 - [ ] Add retry semantics with idempotency.
 - [ ] Add worker role boundaries per worker class.
-- [ ] Add container image build/push workflow.
+- [x] Add container image build/push workflow for the dev runtime ECR asset.
 - [ ] Add basic egress policy and allowlist strategy for later.
 
 Acceptance criteria:
 
-- [ ] Worker receives a run request.
-- [ ] Worker writes `running` status.
-- [ ] Worker writes a small artifact to S3.
-- [ ] Worker writes an artifact event.
-- [ ] Worker writes `succeeded` or `failed`.
-- [ ] Step Functions execution reflects terminal status.
-- [ ] Logs can be located by run id.
-- [ ] A failed worker produces a durable error event.
+- [x] Worker receives a run request.
+- [x] Worker writes `running` status.
+- [x] Worker writes a small artifact to S3.
+- [x] Worker writes an artifact event.
+- [x] Worker writes `succeeded` or `failed`.
+- [x] Step Functions execution reflects terminal status.
+- [x] Logs can be located by run id.
+- [x] A failed worker produces a durable error event in unit tests; deployed failure smoke is still pending.
 
 ### Workspace And Artifact Storage
 
@@ -416,7 +420,7 @@ Target components:
 Current status:
 
 - [x] Architecture decision accepted.
-- [x] `infra/cloudflare` placeholder exists.
+- [x] `infra/cloudflare` realtime package exists.
 - [ ] Wrangler project does not exist.
 - [ ] Durable Objects do not exist.
 - [ ] WebSocket endpoints do not exist.
@@ -462,11 +466,11 @@ Client stack:
 
 Current status:
 
-- [x] Amplify Hosting placeholder is live.
+- [x] Amplify Hosting web build is live.
 - [x] Amplify Auth sandbox exists.
 - [x] Frontend plan exists.
-- [x] Local Flutter console scaffold exists under `apps/desktop_mobile`.
-- [x] Flutter scaffold currently has passing `flutter analyze` and
+- [x] Flutter console exists under `apps/desktop_mobile`.
+- [x] Flutter app currently has passing `flutter analyze` and
   `flutter test`.
 - [ ] `apps/web-next` is README-only.
 - [ ] `apps/flutter` is README-only.
@@ -535,7 +539,7 @@ Current status:
 Required next work:
 
 - [ ] Define the first component catalog: text, markdown, stat card, table,
-  chart placeholder, artifact link, approval form, status timeline.
+  chart surface, artifact link, approval form, status timeline.
 - [ ] Bind event `type` to payload schema.
 - [ ] Tighten A2UI schema validation.
 - [ ] Add negative fixtures and malformed payload tests.
@@ -681,7 +685,7 @@ Integration shape:
 Current status:
 
 - [x] Source docs identified.
-- [x] Service placeholder exists.
+- [x] Service package boundary exists.
 - [ ] OAuth app/callback is not implemented.
 - [ ] Miro token storage is not implemented.
 - [ ] MCP broker is not implemented.
@@ -728,11 +732,11 @@ Current status:
 
 - [x] Preview static S3 bucket exists.
 - [x] Preview deployments DynamoDB table exists.
-- [x] Optional preview ingress stack is scaffolded.
+- [x] Optional preview ingress stack is created.
 - [ ] Base domain is not selected.
 - [ ] Route53 hosted zone is not wired.
 - [ ] ACM wildcard certificate is not deployed.
-- [ ] Preview-router image is placeholder nginx.
+- [ ] Preview-router currently uses a temporary nginx image.
 - [ ] Control API endpoint to register previews does not exist.
 
 Required next work:
@@ -758,7 +762,7 @@ Acceptance criteria:
 
 ### Phase 0: Documentation And Repo Alignment
 
-Goal: keep the repo organized and remove stale guidance before implementation
+Goal: keep the repo organized and current before implementation
 continues.
 
 Status:
@@ -769,7 +773,7 @@ Status:
 - [x] Current status doc exists.
 - [x] Master scope/progress doc exists.
 - [x] Root `AGENTS.md` exists.
-- [ ] Stale docs remain to be audited continuously as implementation changes.
+- [ ] Docs remain to be audited continuously as implementation changes.
 
 Exit criteria:
 
@@ -806,13 +810,13 @@ Testing:
 Exit criteria:
 
 - [ ] A signed-in user can start a run from API tooling.
-- [ ] The placeholder ECS task runs.
+- [ ] The ECS worker runs.
 - [ ] Run reaches a terminal state.
 - [ ] Events can be queried durably.
 
-### Phase 2: Minimal Real Worker
+### Phase 2: Runtime Hardening
 
-Goal: replace the placeholder task with a small worker that proves the full
+Goal: harden the agent-runtime task with a small worker that proves the full
 runtime contract.
 
 Build:
@@ -882,7 +886,7 @@ Build:
 - [ ] Run detail timeline.
 - [ ] Artifact list.
 - [ ] WebSocket live updates.
-- [ ] Placeholder A2UI surface renderer.
+- [ ] A2UI surface renderer.
 
 Testing:
 
@@ -905,9 +909,7 @@ Goal: build the synchronized non-web clients.
 
 Build:
 
-- [x] Local Flutter app scaffold.
-- [ ] Decide whether `apps/desktop_mobile` replaces the older
-  `apps/flutter` placeholder or should be renamed.
+- [x] Flutter app under `apps/desktop_mobile`.
 - [ ] Amplify/Cognito auth integration.
 - [ ] Control API client.
 - [ ] WebSocket client.
@@ -1155,7 +1157,7 @@ Recommended task order:
 3. Add Lambda handlers and data access.
 4. Wire Cognito JWT validation.
 5. Add API smoke scripts or tests.
-6. Replace placeholder runtime with minimal worker.
+6. Harden agent-runtime worker path.
 7. Add event spine.
 8. Add Cloudflare realtime.
 9. Add Next.js dashboard.
@@ -1177,7 +1179,7 @@ These need explicit decisions before or during the next implementation phases:
 - [ ] Decide exact Codex linked-auth policy after official terms and operational
   behavior are validated.
 - [ ] Decide first supported GitHub mode: GitHub App is recommended for
-  multi-user, OAuth/PAT only for private early usage.
+  multi-user, OAuth/PAT only for private trusted-runner usage.
 - [ ] Decide EFS timing: defer until a worker truly needs mounted POSIX
   semantics.
 - [ ] Decide which A2UI component catalog is allowed in the first client release.

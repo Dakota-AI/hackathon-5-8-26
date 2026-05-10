@@ -1,6 +1,6 @@
 # Builder Runtime
 
-Heavy build/test/browser worker runtime placeholder.
+Heavy build/test/browser worker runtime package boundary.
 
 Use for:
 

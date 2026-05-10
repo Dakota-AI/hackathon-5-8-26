@@ -1,14 +1,13 @@
 # Autonomous Agent Cloud Platform Implementation Roadmap
 
 Date: 2026-05-09
-Status: High-level build plan after local repo audit, cloned reference audit, and current web research
+Status: Current long-form build plan
 
 Current implementation status is tracked in
 `docs/roadmap/MASTER_SCOPE_AND_PROGRESS.md` and
 `docs/roadmap/PROJECT_STATUS.md`. This document remains the long-form design
-roadmap and research baseline, but its early-phase sequencing predates the
-deployed CDK foundation, deployed Amplify Auth sandbox, and green Amplify
-Hosting placeholder.
+roadmap and architecture baseline. Current implementation state is always
+tracked in the master scope and project status docs.
 
 Second-pass audit: see `docs/roadmap/AUTONOMOUS_AGENT_PLATFORM_EXA_AUDIT_ADDENDUM.md` for Exa MCP research updates on OpenAI Agents SDK, Codex auth, Cloudflare Agents/Durable Objects, A2UI, ECS Managed Instances, Step Functions, S3 bucket split, and Miro.
 
@@ -31,7 +30,7 @@ The recommended stack is:
 - **Route 53 + ACM + ALB + preview-router service** for wildcard project websites.
 - **Flutter** for desktop and mobile.
 - **Next.js** for web.
-- **VibeACP-style canonical events** as the event protocol that every client renders from.
+- **canonical platform events** as the event protocol that every client renders from.
 
 The most important correction to the earlier plans is this:
 
@@ -39,27 +38,15 @@ Do **not** create one ALB listener rule or target group per project preview. Use
 
 ## 2. What Was Researched
 
-Local project inputs:
+Repository inputs:
 
 - `docs/research/compass_artifact_wf-db790d55-749c-4296-acdd-81451aeff6ec_text_markdown.md`
 - `docs/research/deep-research-report.md`
-- `/Users/sebastian/Developer/vibe-coder/`
-- `/Users/sebastian/Developer/vibe-coder/vibe_coder/`
+- current source under `apps/`, `packages/`, `services`, and `infra/`
+- accepted ADRs under `docs/adr/`
+- current status docs under `docs/roadmap/`
 
-Local cloned reference repos, stored under `.research/repos/` and ignored by git:
-
-- `NousResearch/hermes-agent`
-- `NousResearch/hermes-agent-self-evolution`
-- `cloudflare/agents`
-- `cloudflare/agents-starter`
-- `cloudflare/workers-chat-demo`
-- `openai/openai-agents-python`
-- `langchain-ai/langgraph`
-- `mastra-ai/mastra`
-- `aws-amplify/amplify-backend`
-- `aws-samples/amazon-ecs-fargate-cdk-v2-cicd`
-
-The cloned repos are useful for context only. The platform should not blindly copy them.
+Implementation guidance in this repository is self-contained.
 
 ## 3. Product Philosophy
 
@@ -84,7 +71,7 @@ These rules prevent the platform from becoming fragile:
 
 - **Backend run ledger beats socket state.** A WebSocket disconnect must never mean "the agent stopped."
 - **Server sequence beats client timestamps.** The server assigns ordered `seq` values.
-- **VibeACP canonical event log beats ad hoc UI events.** Provider-native events are normalized before clients see them.
+- **Canonical platform event log beats ad hoc UI events.** Provider-native events are normalized before clients see them.
 - **S3 is the durable ledger. EFS is the hot workspace.** Do not force S3 to behave like a POSIX filesystem.
 - **Hermes is a worker runtime, not the SaaS control plane.** Its own security model is personal/single-tenant.
 - **Real delegation means new platform tasks.** Hermes in-process subagents are useful, but true isolation requires new ECS tasks.
@@ -158,7 +145,7 @@ agents-cloud/
     web-next/                    # Next.js web app
     flutter/                     # shared desktop/mobile app or monorepo package
   packages/
-    protocol/                    # VibeACP/event schemas, GenUI schemas, TS types
+    protocol/                    # canonical platform events/event schemas, GenUI schemas, TS types
     flutter_protocol/            # generated Dart models if kept separate
     eval_schemas/                # eval pack schemas and fixtures
   services/
@@ -208,9 +195,9 @@ Use the second plan for infrastructure corrections:
 - Stronger Codex OAuth caution.
 - Explicit governance and GitHub workflow.
 
-## 8. What To Cherry-Pick From `vibe-coder`
+## 8. Internal Patterns To Preserve
 
-Useful patterns:
+Useful implementation patterns for this repository:
 
 - ECS `RunTask` lifecycle wrapper.
 - Task health wait, then `/execute` handoff.
@@ -222,7 +209,7 @@ Useful patterns:
 - S3 archive service pattern.
 - GitHub App account-linking flow.
 - Flutter cloud session status vocabulary.
-- VibeACP event reducer and audit replay idea.
+- canonical event reducer and audit replay.
 - Tool/action widget registry.
 - Permission request handling.
 - Live Activity token ACK/retry.
@@ -766,7 +753,7 @@ Cloudflare should become the realtime authority for clients, not just a device-t
 - Authenticates websocket connection handoff from Worker.
 - Tracks connected devices: mobile, desktop, web, browser tabs.
 - Handles presence and notifications.
-- Preserves compatibility with old `target_type` and `source_type` routing during migration.
+- Preserves compatibility with existing `target_type` and `source_type` routing during migration.
 
 `WorkspaceDO`
 
@@ -921,7 +908,7 @@ The Hermes wrapper should:
 3. Mount read-only promoted skills.
 4. Configure memory provider adapter.
 5. Start Hermes in non-interactive execution mode.
-6. Emit VibeACP events.
+6. Emit canonical platform events.
 7. Upload artifacts.
 8. Send final result and exit.
 
@@ -1149,7 +1136,7 @@ SessionRepository
   SQLite cache, lastAppliedSeq, messages, tool state, approvals
 
 EventReducer
-  VibeACP event -> UI state
+  canonical platform event -> UI state
 
 ActionRendererRegistry
   terminal, shell, edit, patch, grep, glob, ls, fetch, plan, MCP, unknown
@@ -1170,7 +1157,7 @@ Build:
 - App Router shell.
 - Workspace/project/session navigation.
 - WebSocket connection to Cloudflare.
-- React VibeACP reducer.
+- React canonical event reducer.
 - Action renderer registry matching Flutter.
 - GenUI component registry.
 - Artifact browser.
@@ -1445,14 +1432,15 @@ Every run should export:
 - Tool calls.
 - Approvals.
 - Provider events.
-- VibeACP canonical events.
+- canonical platform events canonical events.
 - Artifacts.
 - Test outputs.
 - Cost.
 - Final result.
 - Links to PRs, previews, Miro boards, reports.
 
-The VibeACP lineage lab from `vibe_coder` is a strong starting point. Extend it to full lineage:
+The platform lineage model should cover the full path from user command to
+rendered UI:
 
 ```text
 client input
@@ -1460,7 +1448,7 @@ client input
   -> provider request
   -> raw provider event
   -> adapter event
-  -> VibeACP event
+  -> canonical platform event
   -> client reducer
   -> rendered UI state
 ```
@@ -1518,12 +1506,12 @@ Build:
 - Monorepo structure.
 - `packages/protocol`.
 - Event envelope schema.
-- VibeACP schema subset.
+- canonical event schema subset.
 - GenUI descriptor schema.
 - Run spec schema.
 - Artifact schema.
 - Approval schema.
-- `.research/` ignored by git.
+- Research inputs remain documentation only.
 - Architecture ADRs.
 
 Exit criteria:
@@ -1540,7 +1528,7 @@ Build:
 - Workspace/project/session models.
 - Basic GraphQL or API routes.
 - User settings.
-- GitHub/Miro/Codex credential link placeholders.
+- GitHub/Miro/Codex credential links.
 
 Exit criteria:
 
@@ -1859,7 +1847,7 @@ These items need deeper validation before implementation decisions are locked.
 - Whether to use Hermes API server, CLI wrapper, or a custom Python adapter.
 - How to disable live skill mutation safely.
 - How to implement a platform `MemoryProvider`.
-- How to emit canonical VibeACP events from Hermes without brittle log parsing.
+- How to emit canonical canonical platform events from Hermes without brittle log parsing.
 
 ### ECS Managed Instances
 
@@ -1926,7 +1914,7 @@ These items need deeper validation before implementation decisions are locked.
 | S3 used as live filesystem | Medium | Use EFS for hot workspace |
 | EFS cost/performance surprises | Medium | Use S3 snapshots and lifecycle policies |
 | Prompt injection through web/Miro/GitHub | High | Structured extraction, tool policies, approvals |
-| Provider/event UI drift across clients | Medium | Canonical VibeACP reducer and replay tests |
+| Provider/event UI drift across clients | Medium | Canonical event reducer and replay tests |
 | Cost runaway | High | Budgets, quotas, kill switches |
 
 ## 28. Source Links
@@ -1935,8 +1923,6 @@ Official docs and references used:
 
 - Cloudflare Durable Objects WebSocket hibernation: https://developers.cloudflare.com/durable-objects/best-practices/websockets/
 - Cloudflare Durable Objects limits: https://developers.cloudflare.com/durable-objects/platform/limits/
-- Cloudflare Agents repo: https://github.com/cloudflare/agents
-- Cloudflare Workers chat demo: https://github.com/cloudflare/workers-chat-demo
 - AWS ALB listener rule docs: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-rules.html
 - AWS ALB quotas: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-limits.html
 - AWS Fargate task storage: https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-task-storage.html
@@ -1957,5 +1943,3 @@ Official docs and references used:
 - OpenAI safety in building agents: https://platform.openai.com/docs/guides/agent-builder-safety
 - OpenAI Codex CLI and ChatGPT sign-in help: https://help.openai.com/en/articles/11381614
 - Codex plan usage help: https://help.openai.com/en/articles/11369540
-- Hermes Agent repo: https://github.com/NousResearch/hermes-agent
-- Hermes Agent Self-Evolution repo: https://github.com/NousResearch/hermes-agent-self-evolution

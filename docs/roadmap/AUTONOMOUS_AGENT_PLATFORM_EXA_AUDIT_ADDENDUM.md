@@ -711,7 +711,7 @@ The main roadmap should be updated or interpreted as follows:
 
 1. Section 13 should mention Cloudflare Agents SDK as a candidate implementation layer over DOs.
 2. Section 14 should keep Hermes, but explicitly make OpenAI Agents SDK the manager harness.
-3. Section 17.4 should replace "custom GenUI descriptor schema" with "A2UI-first schema wrapped in VibeACP events."
+3. Section 17.4 should replace "custom GenUI descriptor schema" with "A2UI-first schema wrapped in canonical platform events."
 4. Section 21 should state API-key auth is the production default for Codex/OpenAI automation.
 5. Section 24 should move protocol contracts and ADRs before large infra implementation.
 6. Section 26 should add Cloudflare Agents SDK, A2UI, Codex auth, and ECS Managed Instances CDK maturity as priority research items.
@@ -751,10 +751,4 @@ Primary sources used in this Exa MCP audit:
 - OpenAI Responses API migration: https://platform.openai.com/docs/guides/migrate-to-responses
 - OpenAI tools with Responses API: https://platform.openai.com/docs/guides/tools
 - A2UI official site: https://a2ui.org/
-- A2UI GitHub repository: https://github.com/google/A2UI
-- LangGraph durable execution: https://docs.langchain.com/oss/python/langgraph/durable-execution
-- LangGraph persistence: https://docs.langchain.com/oss/python/langgraph/persistence
-- Mastra agents overview: https://mastra.ai/docs/agents/overview
-- Mastra MCP overview: https://mastra.ai/docs/mcp/overview
 - Hermes Agent docs: https://hermes-agent.nousresearch.com/docs/
-- Hermes Agent self-evolution repo: https://github.com/NousResearch/hermes-agent-self-evolution

@@ -1,7 +1,7 @@
 # Agents Cloud Codebase Orientation
 
 Date: 2026-05-09
-Status: Current repository orientation after CDK and Amplify foundation work
+Status: Current repository orientation
 
 ## What This Repository Is
 
@@ -12,9 +12,10 @@ runs isolated ECS workers, streams progress to every client, requests approvals,
 archives artifacts, and improves agent definitions through tested promotion
 workflows.
 
-This is not yet a finished product application. It is now more than a planning
-workspace: it contains a deployed AWS CDK foundation, a deployed Amplify Auth
-sandbox, a green Amplify Hosting placeholder, and protocol contracts.
+This is not yet a finished product application. It contains a deployed AWS CDK
+foundation, a deployed Amplify Auth sandbox, a working web build path, a first
+Control API slice, a first ECS agent-runtime package, a Cloudflare realtime
+package, and protocol contracts.
 
 Read these first:
 
@@ -32,25 +33,30 @@ Implemented:
 - AWS CDK app under `infra/cdk`.
 - Deployed CDK stacks for foundation, network, storage, state, cluster,
   runtime, and orchestration.
-- Placeholder Fargate runtime task.
+- Agent runtime Fargate task definition.
 - Step Functions state machine that launches ECS Fargate.
 - Successful Step Functions to ECS smoke execution.
+- Control API stack with create/query run endpoints and Cognito JWT authorizer.
+- Agent runtime package under `services/agent-runtime`.
 - Preview deployment registry table.
-- Optional preview ingress stack scaffold.
+- Optional preview ingress stack.
 - Amplify Gen 2 Auth backend under `infra/amplify`.
 - Deployed Amplify Auth sandbox with Cognito email login.
-- Amplify Hosting placeholder build through root `amplify.yml`.
-- Local Flutter console scaffold under `apps/desktop_mobile` with a
+- Amplify Hosting build through root `amplify.yml`.
+- Flutter console under `apps/desktop_mobile` with a
   command-center shell, planning pages, and local GenUI/A2UI preview.
-- Planning docs, ADRs, and service/app placeholders.
+- Next.js command center under `apps/web`.
+- Cloudflare Worker/Durable Object realtime package under
+  `infra/cloudflare/realtime` with health, WebSocket route, internal event relay
+  endpoint, Cognito JWT helpers, and run-scoped `SessionHubDO` fanout.
+- Planning docs and ADRs.
 
 Not implemented:
 
-- Control API.
-- Real agent runtime.
+- Production-grade run lifecycle hardening.
+- Production model/provider runtime policy.
 - Event relay.
-- Cloudflare Worker/Durable Object realtime plane.
-- Next.js product app.
+- Deployed Cloudflare realtime plane and client integration.
 - Production Flutter auth/API/realtime integration.
 - A2UI/GenUI renderers.
 - Codex/Hermes worker integrations.
@@ -82,7 +88,7 @@ agents-cloud/
     web-next/        planned Next.js web command center
     flutter/         planned desktop/mobile command center
     desktop_mobile/
-                     local Flutter command-center scaffold
+                     Flutter command-center app
   packages/
     protocol/        canonical event schemas and validator
   services/
@@ -181,7 +187,7 @@ single live environment unless an explicit migration/rename is planned.
 
 ```text
 Client command
-  -> Cloudflare Worker or direct Control API during early phases
+  -> Control API
   -> AWS Control API
   -> DynamoDB run/task records
   -> Step Functions run state machine
@@ -193,13 +199,15 @@ Client command
   -> Flutter and Next.js render canonical event stream and A2UI surfaces
 ```
 
-Early implementation may call the Control API directly from the web app before
-Cloudflare realtime exists. That is acceptable as long as AWS remains durable
-truth and the API shape is compatible with later realtime fanout.
+The web app can call the Control API directly while realtime fanout is being
+hardened. AWS remains durable truth and the API shape must stay compatible with
+later realtime fanout.
 
 ## What Is Next
 
-The highest-priority missing backend component is the Control API.
+The highest-priority backend work is hardening the durable run loop: canonical
+events, idempotent run creation, retry-safe worker sequencing, and workspace
+authorization.
 
 Recommended next implementation sequence:
 
@@ -209,7 +217,7 @@ Recommended next implementation sequence:
 4. Add `GET /runs/{runId}`.
 5. Add `GET /runs/{runId}/events`.
 6. Start the existing Step Functions state machine from the API.
-7. Replace the placeholder worker with a minimal real worker.
+7. Harden the agent-runtime worker path.
 8. Add event relay and Cloudflare realtime.
 9. Add Next.js command center.
 10. Add Flutter clients.

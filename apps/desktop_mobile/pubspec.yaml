@@ -42,6 +42,7 @@ dependencies:
   go_router: ^17.2.3
   amplify_flutter: ^2.11.0
   amplify_auth_cognito: ^2.11.0
+  amplify_api: ^2.11.0
   http: ^1.6.0
   markdown_widget: ^2.3.2+8
   url_launcher: ^6.3.2
@@ -50,6 +51,16 @@ dependencies:
   fl_chart: ^1.2.0
   webview_flutter_wkwebview: ^3.25.1
   web_socket_channel: ^3.0.3
+  # Voice + chat agent surfaces (migrated from clients/aicaller)
+  flutter_webrtc: ^0.12.0
+  flutter_callkit_incoming: ^3.0.0
+  flutter_tts: ^4.2.5
+  speech_to_text: ^7.3.0
+  audioplayers: ^6.1.0
+  flutter_local_notifications: ^19.4.4
+  path_provider: ^2.1.5
+  flutter_timezone: ^4.1.0
+  timezone: ^0.10.0
 
 dev_dependencies:
   flutter_test:

@@ -1,28 +1,45 @@
+import 'dart:async';
+
 import 'package:fl_chart/fl_chart.dart' as fl;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:genui/genui.dart' as genui;
 import 'package:markdown_widget/markdown_widget.dart' as md;
 import 'package:shadcn_flutter/shadcn_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import 'backend_config.dart';
+import 'src/api/control_api.dart';
 import 'src/auth/auth_controller.dart';
 import 'src/auth/sign_in_page.dart';
 import 'src/data/fixture_work_repository.dart';
+import 'src/data/http_work_repository.dart';
 import 'src/domain/work_item_models.dart';
+import 'src/realtime/realtime_client.dart';
+import 'src/screens/chat_screen.dart';
+import 'src/screens/voice_mode_screen.dart' show VoiceModeScreen;
+import 'src/conversation/agent_inbox.dart';
+import 'src/conversation/conversation_store.dart';
+import 'src/conversation/store_persistence.dart';
+import 'src/notifications/notification_service.dart';
 import 'src/widgets/kanban_board.dart';
 import 'src/widgets/squares_loader.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AgentsCloudBackend.configureAmplify();
+  // Notification permissions + iOS UN category for inline reply.
+  // Must run before any code path that may schedule a banner.
+  await NotificationService.instance.init();
   runApp(const AgentsCloudConsoleApp());
 }
 
 enum ConsolePage {
   work,
+  agentChat,
+  voiceCall,
   kanban,
   genuiLab,
   browser,
@@ -168,6 +185,20 @@ class _Sidebar extends ConsumerWidget {
             icon: RadixIcons.group,
             page: ConsolePage.work,
             selected: selectedPage == ConsolePage.work,
+            collapsed: collapsed,
+          ),
+          _NavButton(
+            label: 'Chat',
+            icon: RadixIcons.chatBubble,
+            page: ConsolePage.agentChat,
+            selected: selectedPage == ConsolePage.agentChat,
+            collapsed: collapsed,
+          ),
+          _NavButton(
+            label: 'Live Call',
+            icon: RadixIcons.speakerLoud,
+            page: ConsolePage.voiceCall,
+            selected: selectedPage == ConsolePage.voiceCall,
             collapsed: collapsed,
           ),
           _NavButton(
@@ -432,6 +463,20 @@ class _MobileNavBar extends ConsumerWidget {
       child: Row(
         children: [
           _MobileNavItem(
+            label: 'Chat',
+            icon: RadixIcons.chatBubble,
+            selected: selectedPage == ConsolePage.agentChat,
+            onTap: () => ref.read(selectedPageProvider.notifier).state =
+                ConsolePage.agentChat,
+          ),
+          _MobileNavItem(
+            label: 'Call',
+            icon: RadixIcons.speakerLoud,
+            selected: selectedPage == ConsolePage.voiceCall,
+            onTap: () => ref.read(selectedPageProvider.notifier).state =
+                ConsolePage.voiceCall,
+          ),
+          _MobileNavItem(
             label: 'Work',
             icon: RadixIcons.dashboard,
             selected: selectedPage == ConsolePage.work,
@@ -451,20 +496,6 @@ class _MobileNavBar extends ConsumerWidget {
             selected: selectedPage == ConsolePage.browser,
             onTap: () => ref.read(selectedPageProvider.notifier).state =
                 ConsolePage.browser,
-          ),
-          _MobileNavItem(
-            label: 'Kit',
-            icon: RadixIcons.tokens,
-            selected: selectedPage == ConsolePage.uiKit,
-            onTap: () => ref.read(selectedPageProvider.notifier).state =
-                ConsolePage.uiKit,
-          ),
-          _MobileNavItem(
-            label: 'Agents',
-            icon: RadixIcons.group,
-            selected: selectedPage == ConsolePage.agents,
-            onTap: () => ref.read(selectedPageProvider.notifier).state =
-                ConsolePage.agents,
           ),
         ],
       ),
@@ -537,6 +568,8 @@ class _PageBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (page) {
       ConsolePage.work => const _AgentsWorkspacePage(),
+      ConsolePage.agentChat => const ChatScreen(),
+      ConsolePage.voiceCall => const _ComingSoonPage(label: 'Voice mode'),
       ConsolePage.kanban => const _KanbanPage(),
       ConsolePage.genuiLab => const _GenUiLabPage(),
       ConsolePage.browser => const _BrowserPage(),
@@ -792,12 +825,13 @@ class _AgentDetailPage extends ConsumerStatefulWidget {
 
 class _AgentDetailPageState extends ConsumerState<_AgentDetailPage> {
   int _tabIndex = 0;
-  final FixtureWorkRepository _repo = FixtureWorkRepository();
+  late WorkRepository _repo;
   late Future<WorkItem?> _detailFuture;
 
   @override
   void initState() {
     super.initState();
+    _repo = ref.read(workRepositoryProvider);
     _detailFuture = _repo.getWorkItem(widget.agent.workItemId);
   }
 
@@ -805,6 +839,7 @@ class _AgentDetailPageState extends ConsumerState<_AgentDetailPage> {
   void didUpdateWidget(covariant _AgentDetailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.agent.workItemId != widget.agent.workItemId) {
+      _repo = ref.read(workRepositoryProvider);
       _detailFuture = _repo.getWorkItem(widget.agent.workItemId);
     }
   }
@@ -1104,12 +1139,86 @@ class _ArtifactsTab extends ConsumerWidget {
                     ),
                   ),
                 ),
+              _ArtifactDownloadAction(workItemId: detail?.id, artifact: a),
             ],
           ),
         );
       },
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemCount: artifacts.length,
+    );
+  }
+}
+
+/// Compact action that resolves a presigned download URL via the Control API
+/// and opens it in the system browser via url_launcher.
+class _ArtifactDownloadAction extends ConsumerStatefulWidget {
+  const _ArtifactDownloadAction({
+    required this.workItemId,
+    required this.artifact,
+  });
+
+  final String? workItemId;
+  final WorkItemArtifactSummary artifact;
+
+  @override
+  ConsumerState<_ArtifactDownloadAction> createState() =>
+      _ArtifactDownloadActionState();
+}
+
+class _ArtifactDownloadActionState
+    extends ConsumerState<_ArtifactDownloadAction> {
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _openDownload() async {
+    final runId = widget.artifact.runId ?? widget.workItemId;
+    if (runId == null) {
+      setState(() => _error = 'Missing run');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final api = ref.read(controlApiProvider);
+      final body = await api.getArtifactDownload(
+        runId: runId,
+        artifactId: widget.artifact.id,
+      );
+      final url = body['url'];
+      if (url is! String || url.isEmpty) {
+        throw StateError('No download URL.');
+      }
+      final uri = Uri.parse(url);
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) {
+        throw StateError('Could not open URL.');
+      }
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _busy ? 'Opening…' : (_error == null ? 'Download' : 'Retry');
+    return GestureDetector(
+      onTap: _busy ? null : _openDownload,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: _error == null ? _Palette.text : _Palette.muted,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1171,6 +1280,21 @@ class _KanbanPage extends StatelessWidget {
   }
 }
 
+class _ComingSoonPage extends StatelessWidget {
+  const _ComingSoonPage({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        '$label coming soon',
+        style: const TextStyle(color: _Palette.muted, fontSize: 14),
+      ),
+    );
+  }
+}
+
 // ignore: unused_element
 class _CommandCenterPage extends StatelessWidget {
   const _CommandCenterPage();
@@ -1209,15 +1333,14 @@ class _CommandCenterPage extends StatelessWidget {
   }
 }
 
-class _WorkDashboard extends StatelessWidget {
+class _WorkDashboard extends ConsumerWidget {
   const _WorkDashboard();
 
-  static final WorkRepository _repository = FixtureWorkRepository();
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repository = ref.watch(workRepositoryProvider);
     return FutureBuilder<List<WorkItem>>(
-      future: _repository.listWorkItems(),
+      future: repository.listWorkItems(),
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const _Panel(
@@ -2343,16 +2466,20 @@ fl.FlTitlesData _chartTitles({List<String>? bottomLabels}) {
   );
 }
 
-class _LiveGenUiSurfaceCard extends StatefulWidget {
+class _LiveGenUiSurfaceCard extends ConsumerStatefulWidget {
   const _LiveGenUiSurfaceCard();
 
   @override
-  State<_LiveGenUiSurfaceCard> createState() => _LiveGenUiSurfaceCardState();
+  ConsumerState<_LiveGenUiSurfaceCard> createState() =>
+      _LiveGenUiSurfaceCardState();
 }
 
-class _LiveGenUiSurfaceCardState extends State<_LiveGenUiSurfaceCard> {
+class _LiveGenUiSurfaceCardState extends ConsumerState<_LiveGenUiSurfaceCard> {
   static const _surfaceId = 'genui-lab-live-surface';
   late final genui.SurfaceController _controller;
+  StreamSubscription<Map<String, dynamic>>? _eventsSub;
+  final List<String> _eventLog = <String>[];
+  String _wsStatus = 'Disconnected';
 
   @override
   void initState() {
@@ -2361,6 +2488,42 @@ class _LiveGenUiSurfaceCardState extends State<_LiveGenUiSurfaceCard> {
       catalogs: [genui.BasicCatalogItems.asCatalog()],
     );
     _seedSurface();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _connectRealtime());
+  }
+
+  Future<void> _connectRealtime() async {
+    final auth = ref.read(authControllerProvider);
+    final bypass = ref.read(authBypassProvider);
+    if (bypass || auth.status != AuthStatus.signedIn) {
+      setState(() => _wsStatus = 'Local · sign in for live events');
+      return;
+    }
+    try {
+      final realtime = ref.read(realtimeClientProvider);
+      await realtime.connect();
+      setState(() => _wsStatus = 'Connected');
+      _eventsSub = realtime.events.listen(_onRealtimeEvent);
+    } catch (e) {
+      setState(() => _wsStatus = 'Realtime error: $e');
+    }
+  }
+
+  void _onRealtimeEvent(Map<String, dynamic> event) {
+    final type = event['type']?.toString() ?? 'event';
+    final status = event['payload'] is Map
+        ? (event['payload']['status']?.toString() ?? '')
+        : '';
+    final label = status.isEmpty ? type : '$type · $status';
+    setState(() {
+      _eventLog.insert(0, label);
+      if (_eventLog.length > 6) _eventLog.removeLast();
+    });
+  }
+
+  @override
+  void dispose() {
+    _eventsSub?.cancel();
+    super.dispose();
   }
 
   void _seedSurface() {
@@ -2391,7 +2554,7 @@ class _LiveGenUiSurfaceCardState extends State<_LiveGenUiSurfaceCard> {
             type: 'Text',
             properties: {
               'text':
-                  'This panel is rendered by genui.SurfaceController from A2UI component messages.',
+                  'Subscribes to wss realtime events when signed in. Click an agent to start a run and watch events stream in.',
             },
           ),
           genui.Component(
@@ -2399,7 +2562,7 @@ class _LiveGenUiSurfaceCardState extends State<_LiveGenUiSurfaceCard> {
             type: 'Text',
             properties: {
               'text':
-                  'Next: replace fixtures with persisted Surface records and server-validated catalogs.',
+                  'Next: render server-validated GenUI surfaces from event payloads.',
               'variant': 'caption',
             },
           ),
@@ -2414,10 +2577,22 @@ class _LiveGenUiSurfaceCardState extends State<_LiveGenUiSurfaceCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionHeader(
-            title: 'Live GenUI Surface',
-            subtitle:
-                'Actual genui.Surface widget seeded by local A2UI messages.',
+          Row(
+            children: [
+              const Expanded(
+                child: _SectionHeader(
+                  title: 'Live GenUI Surface',
+                  subtitle:
+                      'genui.Surface seeded by A2UI; realtime event tail under it.',
+                ),
+              ),
+              _StatusPill(
+                label: _wsStatus,
+                color: _wsStatus == 'Connected'
+                    ? const Color(0xFF22C55E)
+                    : _Palette.muted,
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           Card(
@@ -2434,6 +2609,47 @@ class _LiveGenUiSurfaceCardState extends State<_LiveGenUiSurfaceCard> {
                 defaultBuilder: (_) =>
                     const Center(child: Text('Waiting for generated surface…')),
               ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _Palette.panel,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: _Palette.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'REALTIME EVENT TAIL',
+                  style: TextStyle(
+                    fontSize: 10,
+                    letterSpacing: 0.6,
+                    color: _Palette.muted,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                if (_eventLog.isEmpty)
+                  const Text(
+                    'No events yet.',
+                    style: TextStyle(color: _Palette.muted, fontSize: 12),
+                  )
+                else
+                  for (final line in _eventLog)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        '· $line',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: _Palette.text,
+                        ),
+                      ),
+                    ),
+              ],
             ),
           ),
         ],
@@ -3704,4 +3920,100 @@ abstract final class _Palette {
   static const success = Color(0xFFD4D4D4);
   static const warning = Color(0xFFBDBDBD);
   static const info = Color(0xFFE5E5E5);
+}
+
+/// Landing tab for live voice calls. Hosts a fresh ConversationStore +
+/// AgentInbox per visit and a CTA that pushes [VoiceModeScreen] as a
+/// full-screen modal. The modal pops back here on hangup.
+class _VoiceCallEntryPage extends StatefulWidget {
+  const _VoiceCallEntryPage();
+
+  @override
+  State<_VoiceCallEntryPage> createState() => _VoiceCallEntryPageState();
+}
+
+class _VoiceCallEntryPageState extends State<_VoiceCallEntryPage> {
+  final ConversationStore _store = ConversationStore();
+  late final AgentInbox _inbox = AgentInbox(
+    store: _store,
+    notifications: NotificationService.instance,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_attachPersistence());
+  }
+
+  Future<void> _attachPersistence() async {
+    final persistence = await StorePersistence.open();
+    await _store.attachPersistence(persistence);
+  }
+
+  @override
+  void dispose() {
+    _inbox.dispose();
+    _store.dispose();
+    super.dispose();
+  }
+
+  Future<void> _open() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VoiceModeScreen(store: _store, inbox: _inbox),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Live conversation',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: _Palette.text,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const Gap(8),
+              const Text(
+                'Speak naturally. The agent listens, responds out loud, '
+                'and you can interrupt at any time.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: _Palette.muted,
+                  fontSize: 13,
+                  height: 1.45,
+                ),
+              ),
+              const Gap(20),
+              PrimaryButton(
+                onPressed: _open,
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(LucideIcons.audioLines, size: 16),
+                    Gap(8),
+                    Text('Start conversation'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

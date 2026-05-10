@@ -98,6 +98,7 @@ class WorkItemArtifactSummary {
     required this.kind,
     required this.state,
     required this.updatedAtLabel,
+    this.runId,
   });
 
   final String id;
@@ -105,6 +106,9 @@ class WorkItemArtifactSummary {
   final WorkItemArtifactKind kind;
   final WorkItemArtifactState state;
   final String updatedAtLabel;
+  // Optional: runId associated with the artifact, used to resolve a
+  // presigned download URL via GET /runs/{runId}/artifacts/{id}/download.
+  final String? runId;
 }
 
 class WorkItemApprovalSummary {

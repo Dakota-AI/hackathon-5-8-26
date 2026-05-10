@@ -1,9 +1,7 @@
 import 'package:desktop_mobile/main.dart';
 import 'package:desktop_mobile/src/auth/sign_in_page.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:flutter/material.dart' hide Tooltip;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
@@ -75,27 +73,29 @@ void main() {
     // Sidebar order: Agents(0), Kanban(1), Approvals(2), Browser(3),
     // GenUI Lab(4), UI Kit(5).
     final navItems = find.byType(NavigationItem);
-    expect(navItems, findsNWidgets(6));
+    expect(navItems, findsNWidgets(8));
 
-    await tester.tap(navItems.at(1));
+    // Agents(0) Chat(1) Live Call(2) Kanban(3) Approvals(4) Browser(5)
+    // GenUI Lab(6) UI Kit(7)
+    await tester.tap(navItems.at(3));
     await tester.pumpAndSettle(const Duration(milliseconds: 300));
     expect(find.text('TODO'), findsOneWidget);
     expect(find.text('IN PROGRESS'), findsOneWidget);
     expect(find.text('REVIEW'), findsOneWidget);
     expect(find.text('DONE'), findsOneWidget);
 
-    await tester.tap(navItems.at(3));
+    await tester.tap(navItems.at(5));
     await _settle(tester);
     expect(find.text('Embedded browser'), findsOneWidget);
     expect(find.text('Load URL'), findsOneWidget);
 
-    await tester.tap(navItems.at(4));
+    await tester.tap(navItems.at(6));
     await _settle(tester);
     expect(find.byType(LineChart), findsOneWidget);
     expect(find.byType(BarChart), findsOneWidget);
     expect(find.byType(PieChart), findsOneWidget);
 
-    await tester.tap(navItems.at(5));
+    await tester.tap(navItems.at(7));
     await _settle(tester);
     expect(find.text('UI testing suite'), findsOneWidget);
   });

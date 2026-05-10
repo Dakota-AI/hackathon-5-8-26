@@ -156,6 +156,21 @@ class ControlApi {
     );
     return _asList(_decode(response), keys: const ['items', 'artifacts']);
   }
+
+  /// Resolves a presigned download URL for the given artifact.
+  /// GET /runs/{runId}/artifacts/{artifactId}/download
+  /// Returns the decoded body: {url, expiresAt, expiresInSeconds, artifact:{...}}.
+  Future<Map<String, dynamic>> getArtifactDownload({
+    required String runId,
+    required String artifactId,
+  }) async {
+    final response = await _http.get(
+      _uri('/runs/$runId/artifacts/$artifactId/download'),
+      headers: await _headers(),
+    );
+    final decoded = _decode(response);
+    return decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+  }
 }
 
 final controlApiProvider = Provider<ControlApi>((ref) {

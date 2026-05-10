@@ -1,17 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
-import '../data/fixture_work_repository.dart';
+import '../data/http_work_repository.dart';
 import '../domain/work_item_models.dart';
 
-/// Provider exposing the fixture-backed [WorkRepository].
-final kanbanWorkRepositoryProvider = Provider<WorkRepository>((ref) {
-  return FixtureWorkRepository();
-});
-
-/// Async list of [WorkItem]s used by the Kanban board.
+/// Async list of [WorkItem]s used by the Kanban board. Uses the unified
+/// [workRepositoryProvider] which is live (Control API) when signed in and
+/// fixture-backed otherwise. Per-call failures inside HttpWorkRepository
+/// also fall back to fixtures.
 final kanbanWorkItemsProvider = FutureProvider<List<WorkItem>>((ref) async {
-  final repo = ref.watch(kanbanWorkRepositoryProvider);
+  final repo = ref.watch(workRepositoryProvider);
   return repo.listWorkItems();
 });
 

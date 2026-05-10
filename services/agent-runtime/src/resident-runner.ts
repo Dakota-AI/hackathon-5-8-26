@@ -66,6 +66,34 @@ export interface ResidentWakeRequest {
   readonly wakeReason?: "timer" | "assignment" | "on_demand" | "automation" | "api";
 }
 
+export type ResidentUserEngagementKind = "notify" | "call";
+
+export interface ResidentUserEngagementRequest {
+  readonly kind: ResidentUserEngagementKind;
+  readonly runId: string;
+  readonly taskId?: string;
+  readonly workspaceId?: string;
+  readonly targetUserId?: string;
+  readonly agentId?: string;
+  readonly title?: string;
+  readonly body?: string;
+  readonly summary?: string;
+  readonly urgency?: "low" | "normal" | "high";
+  readonly deepLink?: string;
+  readonly idempotencyKey?: string;
+}
+
+export interface ResidentUserEngagementResult {
+  readonly accepted: true;
+  readonly eventId: string;
+  readonly type: "user.notification.requested" | "user.call.requested";
+  readonly seq: number;
+  readonly runId: string;
+  readonly taskId?: string;
+  readonly targetUserId: string;
+  readonly deliveryStatus: "event_recorded";
+}
+
 export interface ResidentHeartbeatRecord {
   readonly heartbeatId: string;
   readonly runId: string;
@@ -235,6 +263,74 @@ export class ResidentRunner {
       .split(/\r?\n/)
       .filter((line) => line.trim().length > 0)
       .map((line) => JSON.parse(line) as CanonicalEventEnvelope);
+  }
+
+  public async recordUserEngagement(input: ResidentUserEngagementRequest): Promise<ResidentUserEngagementResult> {
+    if (!nonEmpty(input.runId)) {
+      throw new Error("runId is required.");
+    }
+    assertSafeId(input.runId, "runId");
+    if (input.taskId) {
+      assertSafeId(input.taskId, "taskId");
+    }
+    if (input.workspaceId && input.workspaceId !== this.config.workspaceId) {
+      throw new Error("workspaceId does not match resident runner workspace.");
+    }
+    const targetUserId = nonEmpty(input.targetUserId) ?? this.config.userId;
+    if (targetUserId !== this.config.userId) {
+      throw new Error("targetUserId does not match resident runner user.");
+    }
+    const agent = input.agentId ? this.state.agents.find((item) => item.agentId === input.agentId) : undefined;
+    if (input.agentId && !agent) {
+      throw new Error(`Unknown agentId: ${input.agentId}`);
+    }
+    const message = nonEmpty(input.body) ?? nonEmpty(input.summary);
+    if (!message) {
+      throw new Error(input.kind === "call" ? "summary or body is required." : "body is required.");
+    }
+
+    const urgency = input.urgency ?? "normal";
+    if (!["low", "normal", "high"].includes(urgency)) {
+      throw new Error("urgency must be low, normal, or high.");
+    }
+
+    const eventType = input.kind === "call" ? "user.call.requested" : "user.notification.requested";
+    const event = buildCanonicalEvent({
+      id: eventId(input.runId, this.nextSeq()),
+      seq: this.seq,
+      createdAt: this.config.now(),
+      orgId: this.config.orgId,
+      userId: this.config.userId,
+      workspaceId: this.config.workspaceId,
+      runId: input.runId,
+      taskId: input.taskId,
+      idempotencyKey: input.idempotencyKey,
+      source: SOURCE,
+      type: eventType,
+      payload: withoutUndefined({
+        kind: input.kind,
+        targetUserId,
+        agentId: agent?.agentId ?? input.agentId,
+        agentRole: agent?.role,
+        title: nonEmpty(input.title),
+        body: input.kind === "notify" ? message : undefined,
+        summary: input.kind === "call" ? message : undefined,
+        urgency,
+        deepLink: nonEmpty(input.deepLink),
+        deliveryStatus: "requested"
+      })
+    });
+    await this.persistEvent(event);
+    return {
+      accepted: true,
+      eventId: event.id,
+      type: eventType,
+      seq: event.seq,
+      runId: input.runId,
+      taskId: input.taskId,
+      targetUserId,
+      deliveryStatus: "event_recorded"
+    };
   }
 
   public async registerAgent(profile: ResidentAgentProfile): Promise<ResidentAgentRuntimeState> {
@@ -447,19 +543,41 @@ export class ResidentRunner {
       args.push("--yolo");
     }
 
-    const rawOutput = await runProcess(
-      this.config.hermesCommand,
-      args,
-      agent.timeoutMs ?? 1_800_000,
-      agent.cwd,
-      buildAdapterEnvironment()
-    );
-    return {
-      summary: firstNonEmptyLine(stripSessionLine(rawOutput)) ?? `${agent.role} completed heartbeat.`,
-      rawOutput,
-      sessionId: sessionIdFromOutput(rawOutput) ?? agent.sessionId,
-      exitCode: 0
-    };
+    const timeoutMs = agent.timeoutMs ?? positiveNumberFromEnv("AGENTS_RESIDENT_AGENT_TIMEOUT_MS") ?? 1_800_000;
+    try {
+      const rawOutput = await runProcess(
+        this.config.hermesCommand,
+        args,
+        timeoutMs,
+        agent.cwd,
+        buildAdapterEnvironment({
+          runId,
+          taskId,
+          workItemId: input.workItemId,
+          workspaceId: this.config.workspaceId,
+          userId: this.config.userId,
+          agentId: agent.agentId,
+          runnerId: this.config.runnerId
+        })
+      );
+      return {
+        summary: firstNonEmptyLine(stripSessionLine(rawOutput)) ?? `${agent.role} completed heartbeat.`,
+        rawOutput,
+        sessionId: sessionIdFromOutput(rawOutput) ?? agent.sessionId,
+        exitCode: 0
+      };
+    } catch (error) {
+      if (process.env.AGENTS_RESIDENT_TIMEOUT_FALLBACK === "1" && isProcessTimeout(error)) {
+        const summary = `${agent.role} reached the demo heartbeat timeout after ${timeoutMs}ms. The resident runner remained healthy and produced a durable fallback report.`;
+        return {
+          summary,
+          rawOutput: summary,
+          sessionId: agent.sessionId,
+          exitCode: 0
+        };
+      }
+      throw error;
+    }
   }
 
   private async emitActionableAgentEvents(
@@ -744,6 +862,7 @@ function renderPrompt(
     "Work autonomously inside the scoped workspace, but do not publish, spend, delete, contact users, change infrastructure, or write source control without platform approval.",
     "Keep durable progress visible through status, artifact, approval, question, or message events. Do not emit noisy internal tool calls.",
     "Only emit high-signal platform events when something actionable happens: delegated agent/work item created, agent profile requested/promoted, review feedback recorded, or webpage/artifact published.",
+    "When you need to contact the user, use the local CLI tool instead of inventing a channel: `agents-cloud-user notify --body \"...\"` for a notification-style message, or `agents-cloud-user call --summary \"...\"` to request a phone call. These commands record durable platform events for the current run.",
     "To emit one, include a fenced block exactly like ```agents-cloud-event followed by JSON with type and payload, then closing ```.",
     "",
     "Tenant:",
@@ -817,7 +936,26 @@ function runProcess(
   });
 }
 
-function buildAdapterEnvironment(): NodeJS.ProcessEnv {
+function isProcessTimeout(error: unknown): boolean {
+  return error instanceof Error && /timed out after \d+ms/.test(error.message);
+}
+
+function positiveNumberFromEnv(name: string): number | undefined {
+  const value = process.env[name];
+  if (!value || !value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function buildAdapterEnvironment(context: {
+  readonly runId: string;
+  readonly taskId: string;
+  readonly workItemId?: string;
+  readonly workspaceId: string;
+  readonly userId: string;
+  readonly agentId: string;
+  readonly runnerId: string;
+}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   copyEnv(env, "PATH");
   copyEnv(env, "HOME");
@@ -828,6 +966,28 @@ function buildAdapterEnvironment(): NodeJS.ProcessEnv {
   copyEnv(env, "HERMES_CONFIG_DIR");
   copyEnv(env, "AGENTS_MODEL_PROVIDER");
   copyEnv(env, "AGENTS_MODEL");
+
+  env.RUN_ID = context.runId;
+  env.TASK_ID = context.taskId;
+  env.WORK_ITEM_ID = context.workItemId ?? "";
+  env.WORKSPACE_ID = context.workspaceId;
+  env.USER_ID = context.userId;
+  env.AGENT_ID = context.agentId;
+  env.RUNNER_ID = context.runnerId;
+  env.AGENTS_CLOUD_RUN_ID = context.runId;
+  env.AGENTS_CLOUD_TASK_ID = context.taskId;
+  env.AGENTS_CLOUD_WORK_ITEM_ID = context.workItemId ?? "";
+  env.AGENTS_CLOUD_WORKSPACE_ID = context.workspaceId;
+  env.AGENTS_CLOUD_USER_ID = context.userId;
+  env.AGENTS_CLOUD_AGENT_ID = context.agentId;
+  env.AGENTS_CLOUD_RUNNER_ID = context.runnerId;
+  env.AGENTS_USER_ENGAGEMENT_URL =
+    process.env.AGENTS_USER_ENGAGEMENT_URL ?? `http://127.0.0.1:${process.env.PORT ?? "8787"}/engagement`;
+  const engagementToken = process.env.AGENTS_USER_ENGAGEMENT_TOKEN;
+  if (engagementToken) {
+    env.AGENTS_USER_ENGAGEMENT_TOKEN = engagementToken;
+  }
+  env.AGENTS_USER_TOOL = "agents-cloud-user";
 
   if (process.env.AGENTS_ALLOW_RAW_PROVIDER_KEYS_TO_AGENT === "1") {
     for (const key of [
@@ -853,7 +1013,9 @@ function copyEnv(target: NodeJS.ProcessEnv, key: string): void {
 
 let cachedDynamoDocumentClient: DynamoDBDocumentClient | undefined;
 function dynamoDocumentClient(): DynamoDBDocumentClient {
-  cachedDynamoDocumentClient ??= DynamoDBDocumentClient.from(new DynamoDBClient({}));
+  cachedDynamoDocumentClient ??= DynamoDBDocumentClient.from(new DynamoDBClient({}), {
+    marshallOptions: { removeUndefinedValues: true }
+  });
   return cachedDynamoDocumentClient;
 }
 
@@ -956,6 +1118,10 @@ function artifactSinkFromEnvironment(): ArtifactSink | undefined {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function nonEmpty(value: string | undefined): string | undefined {
+  return value && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function eventId(runId: string, seq: number): string {

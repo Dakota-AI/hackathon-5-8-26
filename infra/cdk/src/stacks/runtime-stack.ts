@@ -138,6 +138,8 @@ export class RuntimeStack extends AgentsCloudStack {
         HERMES_GATEWAY_BOOT_TIMEOUT_SECONDS: "60",
         HERMES_MODEL: process.env.AGENTS_CLOUD_WORKER_HERMES_MODEL ?? "hermes-agent",
         HERMES_TIMEOUT_MS: process.env.AGENTS_CLOUD_WORKER_HERMES_TIMEOUT_MS ?? "600000",
+        AGENTS_RESIDENT_AGENT_TIMEOUT_MS: process.env.AGENTS_CLOUD_RESIDENT_AGENT_TIMEOUT_MS ?? "600000",
+        AGENTS_RESIDENT_TIMEOUT_FALLBACK: process.env.AGENTS_CLOUD_RESIDENT_TIMEOUT_FALLBACK ?? "0",
         WORK_ITEMS_TABLE_NAME: props.state.workItemsTable.tableName,
         RUNS_TABLE_NAME: props.state.runsTable.tableName,
         TASKS_TABLE_NAME: props.state.tasksTable.tableName,
@@ -260,6 +262,7 @@ export class RuntimeStack extends AgentsCloudStack {
         AGENTS_MODEL: process.env.AGENTS_CLOUD_RESIDENT_MODEL ?? "gpt-5.5",
         HERMES_TOOLSETS: process.env.AGENTS_CLOUD_RESIDENT_TOOLSETS ?? "file,terminal,web,delegation,skills,session_search",
         AGENTS_HERMES_MAX_TURNS: process.env.AGENTS_CLOUD_RESIDENT_HERMES_MAX_TURNS ?? "8",
+        AGENTS_USER_ENGAGEMENT_URL: "http://127.0.0.1:8787/engagement",
         HERMES_COMMAND: "/opt/hermes/.venv/bin/hermes",
         HERMES_HOME: "/runner/hermes",
         PORT: "8787",
@@ -277,6 +280,8 @@ export class RuntimeStack extends AgentsCloudStack {
         RUNNER_SNAPSHOTS_TABLE_NAME: props.state.runnerSnapshotsTable.tableName,
         AGENT_INSTANCES_TABLE_NAME: props.state.agentInstancesTable.tableName,
         AGENT_PROFILES_TABLE_NAME: props.state.agentProfilesTable.tableName,
+        AGENTS_RESIDENT_AGENT_TIMEOUT_MS: process.env.AGENTS_CLOUD_RESIDENT_AGENT_TIMEOUT_MS ?? "600000",
+        AGENTS_RESIDENT_TIMEOUT_FALLBACK: process.env.AGENTS_CLOUD_RESIDENT_TIMEOUT_FALLBACK ?? "0",
         ARTIFACTS_BUCKET_NAME: props.storage.workspaceLiveArtifactsBucket.bucketName
       }
     });

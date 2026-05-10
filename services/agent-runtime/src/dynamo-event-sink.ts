@@ -14,7 +14,9 @@ export class DynamoEventSink implements EventSink {
   ) {}
 
   public static fromEnvironment(context: RuntimeContext): DynamoEventSink {
-    return new DynamoEventSink(DynamoDBDocumentClient.from(new DynamoDBClient({})), {
+    return new DynamoEventSink(DynamoDBDocumentClient.from(new DynamoDBClient({}), {
+      marshallOptions: { removeUndefinedValues: true }
+    }), {
       runsTableName: mustEnv("RUNS_TABLE_NAME"),
       tasksTableName: mustEnv("TASKS_TABLE_NAME"),
       eventsTableName: mustEnv("EVENTS_TABLE_NAME")

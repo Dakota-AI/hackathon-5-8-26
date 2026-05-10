@@ -12,18 +12,23 @@ import { createWorkItem, createWorkItemRun, getWorkItem, listWorkItemEvents, lis
 import { createUserRunner, getUserRunner, heartbeatHostNode, heartbeatUserRunner, listAdminRunnerState, registerHostNode, updateUserRunnerDesiredState } from "./user-runners.js";
 import { createApproval, decideApproval, getApproval, listApprovalsForRun } from "./approvals.js";
 import { createSurface, getSurface, listSurfacesForRun, listSurfacesForWorkItem, publishSurface, updateSurface } from "./surfaces.js";
+import { LambdaAsyncExecutionStarter } from "./lambda-async-execution.js";
 import { DispatcherExecutionStarter } from "./runner-dispatcher-aws.js";
 import type { AuthenticatedUser, ExecutionStarter } from "./ports.js";
 
 const store = DynamoControlApiStore.fromEnvironment();
-// Prefer the resident-runner dispatcher when its env is configured; fall back
-// to the legacy SFN smoke worker path otherwise.
-const executions: ExecutionStarter = DispatcherExecutionStarter.isConfigured()
+const residentDispatcherExecutions: ExecutionStarter | undefined = DispatcherExecutionStarter.isConfigured()
   ? DispatcherExecutionStarter.fromEnvironment({
       store,
       resolveUser: ({ userId }) => ({ userId })
     })
-  : StepFunctionsExecutionStarter.fromEnvironment();
+  : undefined;
+// Prefer an async Lambda handoff for the public create-run path when resident
+// dispatch is configured. The background handler can spend minutes launching
+// ECS and waiting for Hermes, while POST /runs returns a durable 202 quickly.
+const executions: ExecutionStarter = LambdaAsyncExecutionStarter.isConfigured()
+  ? LambdaAsyncExecutionStarter.fromEnvironment()
+  : residentDispatcherExecutions ?? StepFunctionsExecutionStarter.fromEnvironment();
 const profileBundles = S3AgentProfileBundleStore.fromEnvironment();
 const artifactPresigner = S3ArtifactPresigner.fromEnvironment();
 
@@ -43,6 +48,20 @@ export async function createRunHandler(event: APIGatewayProxyEventV2WithJWTAutho
     }
   });
   return json(result.statusCode, result.body);
+}
+
+export async function dispatchRunHandler(event: unknown): Promise<void> {
+  if (!residentDispatcherExecutions) {
+    throw new Error("Resident dispatcher is not configured for dispatchRunHandler.");
+  }
+  const payload = parseDispatchPayload(event);
+  const execution = await residentDispatcherExecutions.startExecution(payload);
+  await store.updateRunExecution({
+    workspaceId: payload.workspaceId,
+    runId: payload.runId,
+    executionArn: execution.executionArn,
+    updatedAt: new Date().toISOString()
+  });
 }
 
 export async function getRunHandler(event: APIGatewayProxyEventV2WithJWTAuthorizer): Promise<APIGatewayProxyStructuredResultV2> {
@@ -787,6 +806,35 @@ function parseJsonBody(body: string | undefined): Record<string, unknown> {
     return {};
   }
   return JSON.parse(body) as Record<string, unknown>;
+}
+
+function parseDispatchPayload(event: unknown): {
+  readonly runId: string;
+  readonly taskId: string;
+  readonly workspaceId: string;
+  readonly workItemId?: string;
+  readonly userId: string;
+  readonly objective: string;
+} {
+  if (typeof event !== "object" || event === null || Array.isArray(event)) {
+    throw new Error("Dispatch payload must be an object.");
+  }
+  const body = event as Record<string, unknown>;
+  const required = (key: string): string => {
+    const value = body[key];
+    if (typeof value !== "string" || !value.trim()) {
+      throw new Error(`Dispatch payload is missing ${key}.`);
+    }
+    return value;
+  };
+  return {
+    runId: required("runId"),
+    taskId: required("taskId"),
+    workspaceId: required("workspaceId"),
+    workItemId: optionalStringField(body, "workItemId"),
+    userId: required("userId"),
+    objective: required("objective")
+  };
 }
 
 function stringField(body: Record<string, unknown>, key: string): string {

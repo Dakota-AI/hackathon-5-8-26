@@ -240,7 +240,8 @@ export class DispatcherExecutionStarter implements ExecutionStarter {
         {
           objective: input.objective,
           runId: input.runId,
-          taskId: input.taskId
+          taskId: input.taskId,
+          workItemId: input.workItemId
         }
       );
       // Reuse executionArn slot for the resident task ARN so the rest of the

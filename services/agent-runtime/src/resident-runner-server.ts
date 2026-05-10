@@ -1,21 +1,13 @@
+import { randomUUID } from "node:crypto";
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import { once } from "node:events";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { ResidentRunner, residentRunnerConfigFromPartial, type ResidentAdapterKind, type ResidentAgentProfile, type ResidentWakeRequest } from "./resident-runner.js";
+import { ResidentRunner, type ResidentAgentProfile, type ResidentUserEngagementRequest, type ResidentWakeRequest } from "./resident-runner.js";
 
 await bootstrapHermesHome();
 
-const runner = new ResidentRunner(residentRunnerConfigFromPartial({
-  rootDir: process.env.AGENTS_RUNNER_ROOT ?? "/runner",
-  orgId: process.env.ORG_ID ?? "org-local-001",
-  userId: process.env.USER_ID ?? "user-local-001",
-  workspaceId: process.env.WORKSPACE_ID ?? "workspace-local-001",
-  runnerId: process.env.RUNNER_ID ?? "runner-local-001",
-  runnerSessionId: process.env.RUNNER_SESSION_ID ?? `session-${Date.now()}`,
-  adapterKind: residentAdapterKindFromEnv(),
-  hermesCommand: process.env.HERMES_COMMAND ?? "hermes"
-}));
+const runner = ResidentRunner.fromEnvironment();
 
 await runner.initialize(defaultProfilesFromEnvironment());
 
@@ -24,6 +16,10 @@ const token = process.env.RUNNER_API_TOKEN;
 if (process.env.AGENTS_RUNTIME_MODE === "ecs-resident" && !token) {
   throw new Error("RUNNER_API_TOKEN is required when AGENTS_RUNTIME_MODE=ecs-resident.");
 }
+if (!process.env.AGENTS_USER_ENGAGEMENT_TOKEN) {
+  process.env.AGENTS_USER_ENGAGEMENT_TOKEN = `engagement-${randomUUID()}`;
+}
+const engagementToken = process.env.AGENTS_USER_ENGAGEMENT_TOKEN;
 
 class HttpError extends Error {
   public constructor(public readonly statusCode: number, message: string) {
@@ -39,11 +35,11 @@ interface HermesAuthUpload {
 
 const server = http.createServer(async (request, response) => {
   try {
-    if (!authorize(request)) {
+    const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+    if (!authorize(request, url.pathname)) {
       return json(response, 401, { error: "Unauthorized" });
     }
 
-    const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
     if (request.method === "GET" && url.pathname === "/health") {
       return json(response, 200, { status: "ok", runner: runner.getState().runner });
     }
@@ -70,6 +66,18 @@ const server = http.createServer(async (request, response) => {
       const result = await runner.wake(wake);
       return json(response, 200, result);
     }
+    if (request.method === "POST" && (url.pathname === "/engagement/notify" || url.pathname === "/engagement/call")) {
+      const payload = await readJson<Omit<ResidentUserEngagementRequest, "kind"> & { readonly kind?: ResidentUserEngagementRequest["kind"] }>(request);
+      try {
+        const result = await runner.recordUserEngagement({
+          ...payload,
+          kind: url.pathname.endsWith("/call") ? "call" : "notify"
+        });
+        return json(response, 202, result);
+      } catch (error) {
+        throw new HttpError(400, error instanceof Error ? error.message : String(error));
+      }
+    }
     if (request.method === "POST" && url.pathname === "/shutdown") {
       json(response, 202, { status: "shutting_down" });
       server.close();
@@ -93,7 +101,10 @@ console.log(JSON.stringify({ status: "resident-runner-listening", port, runner: 
 
 await once(server, "close");
 
-function authorize(request: IncomingMessage): boolean {
+function authorize(request: IncomingMessage, pathname: string): boolean {
+  if (pathname === "/engagement/notify" || pathname === "/engagement/call") {
+    return request.headers.authorization === `Bearer ${engagementToken}`;
+  }
   if (!token) {
     return true;
   }
@@ -213,8 +224,9 @@ function defaultProfilesFromEnvironment(): ResidentAgentProfile[] {
       role: process.env.AGENT_ROLE ?? "Agent Delegator",
       provider: providerFromEnv(),
       model: process.env.AGENTS_MODEL && process.env.AGENTS_MODEL.trim().length > 0 ? process.env.AGENTS_MODEL : "gpt-5.5",
-      toolsets: process.env.HERMES_TOOLSETS ?? "file,terminal,web,delegation,skills,session_search",
+      toolsets: process.env.HERMES_TOOLSETS ?? "web",
       promptTemplate: process.env.AGENT_PROMPT_TEMPLATE ?? defaultDelegatorPromptTemplate(),
+      timeoutMs: positiveNumberFromEnv("AGENTS_RESIDENT_AGENT_TIMEOUT_MS"),
       tenant: {
         orgId: process.env.ORG_ID ?? "org-local-001",
         userId: process.env.USER_ID ?? "user-local-001",
@@ -230,11 +242,19 @@ function defaultDelegatorPromptTemplate(): string {
     "Decompose the objective, delegate focused work to specialist subagents when useful, synthesize their results, and keep the user-facing answer concise and action-oriented.",
     "When a durable new specialist is needed, describe the profile to create and register it through the platform agent APIs rather than only discussing it.",
     "Make logical agents visible as dashboard agent instances by using the resident runner agent registry and delegated-agent events.",
+    "When you need to contact the user, use `agents-cloud-user notify --body \"...\"` for a notification-style message or `agents-cloud-user call --summary \"...\"` to request a phone call. Do not fake this by only mentioning that you would contact the user.",
     "Do not emit ordinary tool-call telemetry. Only when you create/delegate work, request or revise an agent profile, publish a webpage, or record review feedback, include one fenced agents-cloud-event JSON block with an allowlisted type such as agent.delegated, agent.profile.requested, agent.profile.revision_proposed, work_item.created, work_item.assigned, review.session.created, review.feedback.recorded, or webpage.published.",
     "Tenant boundary: org={{orgId}}, user={{userId}}, workspace={{workspaceId}}, runner={{runnerId}}.",
     "Objective: {{objective}}",
     "Run: {{runId}} Task: {{taskId}}"
   ].join("\n");
+}
+
+function positiveNumberFromEnv(name: string): number | undefined {
+  const value = process.env[name];
+  if (!value || !value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function providerFromEnv(): ResidentAgentProfile["provider"] {
@@ -251,12 +271,4 @@ function providerFromEnv(): ResidentAgentProfile["provider"] {
     return provider;
   }
   return undefined;
-}
-
-function residentAdapterKindFromEnv(): ResidentAdapterKind {
-  const adapter = process.env.AGENTS_RESIDENT_ADAPTER;
-  if (adapter && adapter !== "hermes-cli") {
-    throw new Error(`Unsupported resident adapter: ${adapter}. Resident runners require AGENTS_RESIDENT_ADAPTER=hermes-cli.`);
-  }
-  return "hermes-cli";
 }

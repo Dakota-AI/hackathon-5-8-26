@@ -18,6 +18,7 @@ export interface DispatcherWakeRequest {
   readonly objective: string;
   readonly runId?: string;
   readonly taskId?: string;
+  readonly workItemId?: string;
   readonly agentId?: string;
   readonly wakeReason?: string;
 }

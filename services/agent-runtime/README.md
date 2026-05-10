@@ -43,6 +43,18 @@ writes `$HERMES_HOME/auth.json` at container startup, and invokes
 ECS exercise reached the OpenAI Codex backend but failed on provider quota
 (`HTTP 429 usage_limit_reached`).
 
+Resident Hermes subprocesses also receive the `agents-cloud-user` CLI. It posts
+to the local resident-runner API and records durable `user.notification.requested`
+or `user.call.requested` events for the active run:
+
+```bash
+agents-cloud-user notify --body "I need a decision on the deployment."
+agents-cloud-user call --summary "Discuss the blocked deployment."
+```
+
+Those events are ledger/realtime-ready. Native APNS banner and VoIP delivery
+still require the device-token table and APNS sender wiring.
+
 Smoke mode verifies the durable lifecycle:
 
 1. Write `run.status/running` to DynamoDB events.

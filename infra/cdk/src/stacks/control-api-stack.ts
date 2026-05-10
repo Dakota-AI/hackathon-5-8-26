@@ -79,7 +79,7 @@ export class ControlApiStack extends AgentsCloudStack {
       runtime: Runtime.NODEJS_22_X,
       entry: controlApiEntry,
       handler: "createRunHandler",
-      timeout: props.residentDispatch ? Duration.seconds(180) : Duration.seconds(15),
+      timeout: props.residentDispatch ? Duration.seconds(30) : Duration.seconds(15),
       memorySize: 256,
       environment: commonEnvironment,
       ...(props.residentDispatch ? {
@@ -88,6 +88,18 @@ export class ControlApiStack extends AgentsCloudStack {
         securityGroups: [props.residentDispatch.network.workerSecurityGroup]
       } : {})
     });
+
+    const dispatchRunFunction = props.residentDispatch ? new NodejsFunction(this, "DispatchRunFunction", {
+      runtime: Runtime.NODEJS_22_X,
+      entry: controlApiEntry,
+      handler: "dispatchRunHandler",
+      timeout: Duration.seconds(900),
+      memorySize: 256,
+      environment: commonEnvironment,
+      vpc: props.residentDispatch.network.vpc,
+      vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
+      securityGroups: [props.residentDispatch.network.workerSecurityGroup]
+    }) : undefined;
 
     const getRunFunction = new NodejsFunction(this, "GetRunFunction", {
       runtime: Runtime.NODEJS_22_X,
@@ -213,6 +225,18 @@ export class ControlApiStack extends AgentsCloudStack {
     props.state.tasksTable.grantReadWriteData(createRunFunction);
     props.state.eventsTable.grantReadWriteData(createRunFunction);
     props.orchestration.simpleRunStateMachine.grantStartExecution(createRunFunction);
+    if (dispatchRunFunction) {
+      props.state.workItemsTable.grantReadWriteData(dispatchRunFunction);
+      props.state.runsTable.grantReadWriteData(dispatchRunFunction);
+      props.state.tasksTable.grantReadWriteData(dispatchRunFunction);
+      props.state.eventsTable.grantReadWriteData(dispatchRunFunction);
+      props.state.userRunnersTable.grantReadWriteData(dispatchRunFunction);
+      props.state.hostNodesTable.grantReadData(dispatchRunFunction);
+      createRunFunction.addEnvironment("DISPATCH_RUN_FUNCTION_NAME", dispatchRunFunction.functionName);
+      workItemsFunction.addEnvironment("DISPATCH_RUN_FUNCTION_NAME", dispatchRunFunction.functionName);
+      dispatchRunFunction.grantInvoke(createRunFunction);
+      dispatchRunFunction.grantInvoke(workItemsFunction);
+    }
 
     // Resident-runner dispatcher: env vars, IAM, and secret access. When
     // residentDispatch is set, the createRun Lambda boots a per-user resident
@@ -226,30 +250,38 @@ export class ControlApiStack extends AgentsCloudStack {
       );
       props.state.userRunnersTable.grantReadWriteData(createRunFunction);
       props.state.hostNodesTable.grantReadData(createRunFunction);
+      if (dispatchRunFunction) {
+        props.state.userRunnersTable.grantReadWriteData(dispatchRunFunction);
+        props.state.hostNodesTable.grantReadData(dispatchRunFunction);
+      }
 
-      createRunFunction.addEnvironment("RESIDENT_RUNNER_TASK_DEFINITION_ARN", runtime.residentRunnerTaskDefinition.taskDefinitionArn);
-      createRunFunction.addEnvironment("RESIDENT_RUNNER_CONTAINER_NAME", runtime.residentRunnerContainerName);
-      createRunFunction.addEnvironment("RESIDENT_RUNNER_CLUSTER_ARN", cluster.cluster.clusterArn);
-      createRunFunction.addEnvironment(
-        "RESIDENT_RUNNER_SUBNET_IDS",
-        network.vpc.privateSubnets.map((subnet) => subnet.subnetId).join(",")
-      );
-      createRunFunction.addEnvironment("RESIDENT_RUNNER_SECURITY_GROUP_ID", network.workerSecurityGroup.securityGroupId);
-      createRunFunction.addEnvironment("RESIDENT_RUNNER_API_TOKEN_SECRET_ARN", runtime.residentRunnerApiToken.secretArn);
-      createRunFunction.addEnvironment("RESIDENT_RUNNER_LAUNCH_WAIT_MS", "150000");
+      for (const fn of [createRunFunction, ...(dispatchRunFunction ? [dispatchRunFunction] : [])]) {
+        fn.addEnvironment("RESIDENT_RUNNER_TASK_DEFINITION_ARN", logicalName(props.config, "resident-runner"));
+        fn.addEnvironment("RESIDENT_RUNNER_CONTAINER_NAME", runtime.residentRunnerContainerName);
+        fn.addEnvironment("RESIDENT_RUNNER_CLUSTER_ARN", cluster.cluster.clusterArn);
+        fn.addEnvironment(
+          "RESIDENT_RUNNER_SUBNET_IDS",
+          network.vpc.privateSubnets.map((subnet) => subnet.subnetId).join(",")
+        );
+        fn.addEnvironment("RESIDENT_RUNNER_SECURITY_GROUP_ID", network.workerSecurityGroup.securityGroupId);
+        fn.addEnvironment("RESIDENT_RUNNER_API_TOKEN_SECRET_ARN", runtime.residentRunnerApiToken.secretArn);
+        fn.addEnvironment("RESIDENT_RUNNER_LAUNCH_WAIT_MS", "150000");
+      }
 
       // ecs:RunTask scoped to the resident family (revision wildcard).
       const residentFamilyArn = `arn:${Stack.of(this).partition}:ecs:${Stack.of(this).region}:${Stack.of(this).account}:task-definition/${logicalName(props.config, "resident-runner")}:*`;
-      createRunFunction.addToRolePolicy(new PolicyStatement({
-        effect: Effect.ALLOW,
-        actions: ["ecs:RunTask"],
-        resources: [residentFamilyArn]
-      }));
-      createRunFunction.addToRolePolicy(new PolicyStatement({
-        effect: Effect.ALLOW,
-        actions: ["ecs:DescribeTasks", "ecs:StopTask"],
-        resources: ["*"]
-      }));
+      for (const fn of [createRunFunction, ...(dispatchRunFunction ? [dispatchRunFunction] : [])]) {
+        fn.addToRolePolicy(new PolicyStatement({
+          effect: Effect.ALLOW,
+          actions: ["ecs:RunTask"],
+          resources: [residentFamilyArn]
+        }));
+        fn.addToRolePolicy(new PolicyStatement({
+          effect: Effect.ALLOW,
+          actions: ["ecs:DescribeTasks", "ecs:StopTask"],
+          resources: ["*"]
+        }));
+      }
       // PassRole for both task role and execution role.
       const passRoleArns: string[] = [];
       if (runtime.residentRunnerTaskDefinition.taskRole) {
@@ -260,14 +292,18 @@ export class ControlApiStack extends AgentsCloudStack {
         passRoleArns.push(executionRole.roleArn);
       }
       if (passRoleArns.length > 0) {
-        createRunFunction.addToRolePolicy(new PolicyStatement({
-          effect: Effect.ALLOW,
-          actions: ["iam:PassRole"],
-          resources: passRoleArns,
-          conditions: { StringEquals: { "iam:PassedToService": "ecs-tasks.amazonaws.com" } }
-        }));
+        for (const fn of [createRunFunction, ...(dispatchRunFunction ? [dispatchRunFunction] : [])]) {
+          fn.addToRolePolicy(new PolicyStatement({
+            effect: Effect.ALLOW,
+            actions: ["iam:PassRole"],
+            resources: passRoleArns,
+            conditions: { StringEquals: { "iam:PassedToService": "ecs-tasks.amazonaws.com" } }
+          }));
+        }
       }
-      runtime.residentRunnerApiToken.grantRead(createRunFunction);
+      for (const fn of [createRunFunction, ...(dispatchRunFunction ? [dispatchRunFunction] : [])]) {
+        runtime.residentRunnerApiToken.grantRead(fn);
+      }
     }
 
     props.state.runsTable.grantReadData(getRunFunction);

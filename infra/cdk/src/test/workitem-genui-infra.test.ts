@@ -42,7 +42,7 @@ function synthState() {
   return Template.fromStack(state);
 }
 
-function synthPlatform() {
+function synthPlatform(options: { residentDispatch?: boolean } = {}) {
   const app = new App();
   const config = testConfig();
   const network = new NetworkStack(app, "NetworkUnderTest", { config, env: testEnv });
@@ -51,7 +51,14 @@ function synthPlatform() {
   const cluster = new ClusterStack(app, "ClusterUnderTest", { config, env: testEnv, network });
   const runtime = new RuntimeStack(app, "RuntimeUnderTest", { config, env: testEnv, cluster, storage, state });
   const orchestration = new OrchestrationStack(app, "OrchestrationUnderTest", { config, env: testEnv, cluster, network });
-  const controlApi = new ControlApiStack(app, "ControlApiUnderTest", { config, env: testEnv, state, storage, orchestration });
+  const controlApi = new ControlApiStack(app, "ControlApiUnderTest", {
+    config,
+    env: testEnv,
+    state,
+    storage,
+    orchestration,
+    ...(options.residentDispatch ? { residentDispatch: { cluster, network, runtime } } : {})
+  });
 
   return {
     state: Template.fromStack(state),
@@ -183,6 +190,34 @@ describe("WorkItem/GenUI infrastructure", () => {
     ]) {
       controlApi.hasResourceProperties("AWS::ApiGatewayV2::Route", { RouteKey: routeKey });
     }
+  });
+
+  it("provisions an async resident dispatch Lambda so POST /runs can return before ECS/Hermes finishes", () => {
+    const { controlApi } = synthPlatform({ residentDispatch: true });
+
+    controlApi.hasResourceProperties("AWS::Lambda::Function", {
+      Handler: "index.dispatchRunHandler",
+      Timeout: 900,
+      Environment: {
+        Variables: Match.objectLike({
+          RESIDENT_RUNNER_TASK_DEFINITION_ARN: "agents-cloud-dev-resident-runner",
+          RESIDENT_RUNNER_CLUSTER_ARN: Match.anyValue(),
+          RESIDENT_RUNNER_API_TOKEN_SECRET_ARN: Match.anyValue(),
+          RESIDENT_RUNNER_LAUNCH_WAIT_MS: "150000"
+        })
+      }
+    });
+
+    controlApi.hasResourceProperties("AWS::Lambda::Function", {
+      Handler: "index.createRunHandler",
+      Timeout: 30,
+      Environment: {
+        Variables: Match.objectLike({
+          DISPATCH_RUN_FUNCTION_NAME: Match.anyValue(),
+          RESIDENT_RUNNER_TASK_DEFINITION_ARN: "agents-cloud-dev-resident-runner"
+        })
+      }
+    });
   });
 
   it("passes optional WorkItem IDs through orchestration to the runtime container", () => {

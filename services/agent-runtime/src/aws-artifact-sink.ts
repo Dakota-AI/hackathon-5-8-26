@@ -14,7 +14,9 @@ export class AwsArtifactSink implements ArtifactSink {
   ) {}
 
   public static fromEnvironment(): AwsArtifactSink {
-    return new AwsArtifactSink(new S3Client({}), DynamoDBDocumentClient.from(new DynamoDBClient({})), {
+    return new AwsArtifactSink(new S3Client({}), DynamoDBDocumentClient.from(new DynamoDBClient({}), {
+      marshallOptions: { removeUndefinedValues: true }
+    }), {
       artifactsBucketName: mustEnv("ARTIFACTS_BUCKET_NAME"),
       artifactsTableName: mustEnv("ARTIFACTS_TABLE_NAME")
     });

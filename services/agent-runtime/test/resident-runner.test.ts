@@ -159,6 +159,93 @@ describe("ResidentRunner", () => {
     assert.equal(delegated.payload.workItemId, "workitem-ui-polish");
   });
 
+  it("records agent-requested user notification and call events durably", async () => {
+    const rootDir = await tempRoot();
+    const eventSink = new MemoryEventSink();
+    const runner = new ResidentRunner(residentRunnerConfigFromPartial({
+      rootDir,
+      orgId: "org-test",
+      userId: "user-test",
+      workspaceId: "workspace-test",
+      runnerId: "runner-test",
+      runnerSessionId: "runner-session-test",
+      adapterKind: "hermes-cli",
+      now: fixedNow,
+      eventSink
+    }));
+
+    await runner.initialize([agentProfile("agent-delegator", "Agent Delegator")]);
+
+    const notification = await runner.recordUserEngagement({
+      kind: "notify",
+      runId: "run-engagement",
+      taskId: "task-engagement",
+      agentId: "agent-delegator",
+      title: "Status",
+      body: "I need a quick decision.",
+      urgency: "high"
+    });
+    const call = await runner.recordUserEngagement({
+      kind: "call",
+      runId: "run-engagement",
+      taskId: "task-engagement",
+      agentId: "agent-delegator",
+      summary: "Discuss the blocked deployment."
+    });
+
+    assert.equal(notification.type, "user.notification.requested");
+    assert.equal(call.type, "user.call.requested");
+    assert.deepEqual(eventSink.events.map((event) => event.type), [
+      "user.notification.requested",
+      "user.call.requested"
+    ]);
+    assert.equal(eventSink.events[0]?.payload.body, "I need a quick decision.");
+    assert.equal(eventSink.events[1]?.payload.summary, "Discuss the blocked deployment.");
+    assert.equal(eventSink.events[1]?.payload.targetUserId, "user-test");
+
+    await assert.rejects(
+      () => runner.recordUserEngagement({
+        kind: "notify",
+        runId: undefined as unknown as string,
+        body: "Missing run id should fail."
+      }),
+      /runId is required/
+    );
+  });
+
+  it("uses the demo timeout fallback to finish the run ledger when Hermes hangs", async () => {
+    const rootDir = await tempRoot();
+    const hermesCommand = await writeHangingHermesCommand(rootDir);
+    const env = snapshotEnv(["AGENTS_RESIDENT_TIMEOUT_FALLBACK", "AGENTS_RESIDENT_AGENT_TIMEOUT_MS"]);
+    try {
+      process.env.AGENTS_RESIDENT_TIMEOUT_FALLBACK = "1";
+      process.env.AGENTS_RESIDENT_AGENT_TIMEOUT_MS = "20";
+      const eventSink = new MemoryEventSink();
+      const runner = new ResidentRunner(residentRunnerConfigFromPartial({
+        rootDir,
+        orgId: "org-test",
+        userId: "user-test",
+        workspaceId: "workspace-test",
+        runnerId: "runner-test",
+        runnerSessionId: "runner-session-test",
+        adapterKind: "hermes-cli",
+        hermesCommand,
+        now: fixedNow,
+        eventSink
+      }));
+
+      await runner.initialize([agentProfile("agent-timeout", "Timeout Agent")]);
+      const result = await runner.wake({ objective: "Do not hang the demo.", runId: "run-timeout", taskId: "task-timeout" });
+
+      assert.equal(result.heartbeats[0]?.status, "succeeded");
+      assert.match(result.heartbeats[0]?.summary ?? "", /demo heartbeat timeout/);
+      assert.equal(result.events.at(-1)?.payload.status, "succeeded");
+      assert.deepEqual(eventSink.runStatuses.at(-1), "succeeded");
+    } finally {
+      restoreEnv(env);
+    }
+  });
+
   it("rejects logical agents outside the runner tenant boundary", async () => {
     const rootDir = await tempRoot();
     const runner = new ResidentRunner(residentRunnerConfigFromPartial({
@@ -260,6 +347,9 @@ describe("ResidentRunner", () => {
       "console.log(JSON.stringify({",
       "  aws: process.env.AWS_SECRET_ACCESS_KEY ?? null,",
       "  runnerToken: process.env.RUNNER_API_TOKEN ?? null,",
+      "  engagementToken: process.env.AGENTS_USER_ENGAGEMENT_TOKEN ? 'present' : null,",
+      "  engagementUrl: process.env.AGENTS_USER_ENGAGEMENT_URL ?? null,",
+      "  runId: process.env.RUN_ID ?? null,",
       "  providerKey: process.env.OPENROUTER_API_KEY ?? null,",
       "  hermesHome: process.env.HERMES_HOME ?? null",
       "}));",
@@ -273,10 +363,12 @@ describe("ResidentRunner", () => {
       "RUNNER_API_TOKEN",
       "OPENROUTER_API_KEY",
       "HERMES_HOME",
-      "AGENTS_ALLOW_RAW_PROVIDER_KEYS_TO_AGENT"
+      "AGENTS_ALLOW_RAW_PROVIDER_KEYS_TO_AGENT",
+      "AGENTS_USER_ENGAGEMENT_TOKEN"
     ]);
     process.env.AWS_SECRET_ACCESS_KEY = "aws-secret-should-not-leak";
     process.env.RUNNER_API_TOKEN = "runner-token-should-not-leak";
+    process.env.AGENTS_USER_ENGAGEMENT_TOKEN = ["engagement", "token", "allowed"].join("-");
     process.env.OPENROUTER_API_KEY = "provider-key-should-not-leak";
     process.env.HERMES_HOME = join(rootDir, "hermes");
     delete process.env.AGENTS_ALLOW_RAW_PROVIDER_KEYS_TO_AGENT;
@@ -305,6 +397,10 @@ describe("ResidentRunner", () => {
       const report = await readFile(result.artifacts[0]?.path ?? "", "utf8");
       assert.match(report, /"aws":null/);
       assert.match(report, /"runnerToken":null/);
+      assert.match(report, /"engagementToken":"present"/);
+      assert.doesNotMatch(report, /engagement-token-allowed/);
+      assert.match(report, /"engagementUrl":"http:\/\/127\.0\.0\.1:8787\/engagement"/);
+      assert.match(report, /"runId":"run-secure"/);
       assert.match(report, /"providerKey":null/);
       assert.match(report, /session_id: session-sandboxed-env/);
       assert.doesNotMatch(report, /aws-secret-should-not-leak/);
@@ -424,6 +520,50 @@ describe("resident runner HTTP API", () => {
       assert.equal(response.status, 400);
       const body = await response.json() as { error: string };
       assert.equal(body.error, "BadRequest");
+      const shutdown = await fetchJson(port, "/shutdown", { method: "POST", token: "test-token" });
+      assert.equal(shutdown.status, 202);
+      await waitForExit(child);
+    } finally {
+      if (child.exitCode === null) {
+        child.kill("SIGTERM");
+      }
+    }
+  });
+
+  it("accepts local engagement tool calls from the Hermes subprocess boundary", async () => {
+    const rootDir = await tempRoot();
+    const port = await freePort();
+    const child = spawnResidentServer(rootDir, port, { RUNNER_API_TOKEN: "test-token", AGENTS_USER_ENGAGEMENT_TOKEN: "engagement-token" });
+    try {
+      await waitForHealth(port);
+      const rejectedAdminToken = await fetchJson(port, "/engagement/call", {
+        method: "POST",
+        token: "test-token",
+        body: {
+          runId: "run-http-engagement",
+          taskId: "task-http-engagement",
+          summary: "Call the user about the stalled agent run."
+        }
+      });
+      assert.equal(rejectedAdminToken.status, 401);
+
+      const accepted = await fetchJson(port, "/engagement/call", {
+        method: "POST",
+        token: "engagement-token",
+        body: {
+          runId: "run-http-engagement",
+          taskId: "task-http-engagement",
+          summary: "Call the user about the stalled agent run."
+        }
+      });
+      assert.equal(accepted.status, 202);
+      assert.equal(accepted.body.type, "user.call.requested");
+
+      const events = await fetchJson(port, "/events", { token: "test-token" });
+      assert.equal(events.status, 200);
+      assert.equal(events.body.events[0].type, "user.call.requested");
+      assert.equal(events.body.events[0].payload.summary, "Call the user about the stalled agent run.");
+
       const shutdown = await fetchJson(port, "/shutdown", { method: "POST", token: "test-token" });
       assert.equal(shutdown.status, 202);
       await waitForExit(child);
@@ -579,6 +719,17 @@ async function writeFakeHermesCommandWithOutput(rootDir: string, output: string)
   await writeFile(hermesCommand, [
     "#!/usr/bin/env node",
     `process.stdout.write(${JSON.stringify(`${output}\n`)});`,
+    ""
+  ].join("\n"));
+  await chmod(hermesCommand, 0o755);
+  return hermesCommand;
+}
+
+async function writeHangingHermesCommand(rootDir: string): Promise<string> {
+  const hermesCommand = join(rootDir, `hanging-hermes-${Date.now()}-${Math.random().toString(16).slice(2)}.mjs`);
+  await writeFile(hermesCommand, [
+    "#!/usr/bin/env node",
+    "setTimeout(() => {}, 60_000);",
     ""
   ].join("\n"));
   await chmod(hermesCommand, 0o755);

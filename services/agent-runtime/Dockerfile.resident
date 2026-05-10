@@ -16,6 +16,17 @@ RUN pnpm --filter @agents-cloud/protocol run build \
 
 FROM nousresearch/hermes-agent@sha256:df3361f51cff6a5c3cefc088276fe4b2f913097022344b95ecb25f74dd59fa71 AS runtime
 
+# The Hermes base image currently carries Node 20, while the deployed package
+# manager/runtime path now requires Node 22. Copy the Node 22 runtime from the
+# build stage so the resident server starts with the same major version used by
+# tests and local builds.
+COPY --from=build /usr/local/bin/node /usr/local/bin/node
+COPY --from=build /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -sf /usr/local/lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack \
+  && ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+  && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+  && node --version
+
 ENV NODE_ENV=production \
     AGENTS_RUNTIME_MODE=ecs-resident \
     AGENTS_RESIDENT_ADAPTER=hermes-cli \
@@ -36,7 +47,9 @@ RUN apt-get update \
 
 COPY --from=build --chown=hermes:hermes /app /app
 COPY services/agent-runtime/docker/resident-entrypoint.sh /usr/local/bin/agents-cloud-resident-entrypoint
-RUN chmod 0755 /usr/local/bin/agents-cloud-resident-entrypoint
+RUN chmod 0755 /usr/local/bin/agents-cloud-resident-entrypoint \
+  && chmod 0755 /app/services/agent-runtime/bin/agents-cloud-user.mjs \
+  && ln -sf /app/services/agent-runtime/bin/agents-cloud-user.mjs /usr/local/bin/agents-cloud-user
 
 USER hermes
 WORKDIR /app/services/agent-runtime

@@ -31,6 +31,7 @@ Useful commands:
 flutter analyze
 flutter test
 flutter run -d macos
+flutter run -d macos --dart-define=LLM_PROVIDER=hermes --dart-define=HERMES_BASE_URL=http://127.0.0.1:8643
 flutter run -d macos --dart-define=AGENTS_CLOUD_AUTH_BYPASS=true --dart-define=AGENTS_CLOUD_BROWSER_BRIDGE=true --dart-define=AGENTS_CLOUD_BROWSER_BRIDGE_AUTO_OPEN_BROWSER=true
 dart run tool/agent_browser_bridge_probe.dart --dry-run
 dart run tool/agent_browser_bridge_probe.dart --verbose

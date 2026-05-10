@@ -1,39 +1,16 @@
 import 'hermes_client.dart';
 import 'llm_client.dart';
-import 'openai_client.dart';
 
 const _provider = String.fromEnvironment(
   'LLM_PROVIDER',
   defaultValue: 'hermes',
 );
 
-const _openAiBase = String.fromEnvironment(
-  'OPENAI_BASE_URL',
-  defaultValue: 'https://api.openai.com',
-);
-const _openAiKey = String.fromEnvironment('OPENAI_API_KEY');
-const _openAiModel = String.fromEnvironment(
-  'OPENAI_MODEL',
-  defaultValue: 'gpt-4o-mini',
-);
-
-const _ollamaBase = String.fromEnvironment(
-  'OLLAMA_BASE_URL',
-  defaultValue: '',
-);
-const _ollamaModel = String.fromEnvironment(
-  'OLLAMA_MODEL',
-  defaultValue: 'llama3.2',
-);
-
-const _hermesBase = String.fromEnvironment(
-  'HERMES_BASE_URL',
-  defaultValue: _controlApiBase,
-);
-const _controlApiBase = String.fromEnvironment(
-  'CONTROL_API_URL',
-  defaultValue: '',
-);
+// The mobile chat surface talks to the Hermes OpenAI-compatible gateway,
+// not the Agents Cloud Control API.
+//
+// Hermes endpoint is required at build/runtime via HERMES_BASE_URL.
+const _hermesBase = String.fromEnvironment('HERMES_BASE_URL', defaultValue: '');
 const _hermesToken = String.fromEnvironment('HERMES_AUTH_TOKEN');
 const _hermesCallId = String.fromEnvironment(
   'HERMES_TEXT_CALL_ID',
@@ -103,56 +80,23 @@ Rules:
 /// [UnconfiguredLlmClient] with a friendly message when the selected
 /// provider is missing required config.
 LlmClient resolveLlmClient() {
-  switch (_provider) {
-    case 'openai':
-      if (_openAiKey.isEmpty) {
-        return const UnconfiguredLlmClient(
-          'OpenAI provider selected but OPENAI_API_KEY is empty. '
-          'Pass --dart-define=OPENAI_API_KEY=sk-... at run time.',
-        );
-      }
-      return OpenAiCompatibleClient(
-        baseUrl: _openAiBase,
-        apiKey: _openAiKey,
-        model: _openAiModel,
-        systemPrompt: _textSystemPrompt,
-      );
-
-    case 'ollama':
-      if (_ollamaBase.isEmpty) {
-        return const UnconfiguredLlmClient(
-          'Ollama provider selected but OLLAMA_BASE_URL is empty. '
-          'Pass --dart-define=OLLAMA_BASE_URL=http://<mac-ip>:11434 '
-          'and run `ollama serve && ollama pull $_ollamaModel` on the Mac.',
-        );
-      }
-      // Ollama serves /v1/chat/completions in OpenAI-compat mode.
-      return OpenAiCompatibleClient(
-        baseUrl: _ollamaBase,
-        apiKey: 'ollama',
-        model: _ollamaModel,
-        systemPrompt: _textSystemPrompt,
-      );
-
-    case 'hermes':
-      if (_hermesBase.isEmpty) {
-        return const UnconfiguredLlmClient(
-          'Agent backend is not configured. Pass '
-          '--dart-define=HERMES_BASE_URL=https://<runner-host> or wire the '
-          'signed-in Control API chat adapter.',
-        );
-      }
-      return HermesLlmClient(
-        baseUrl: _hermesBase,
-        authToken: _hermesToken,
-        callId: _hermesCallId,
-      );
-
-    default:
-      return UnconfiguredLlmClient(
-        'Unknown LLM_PROVIDER "$_provider". Use openai, ollama, or hermes.',
-      );
+  if (_provider != 'hermes') {
+    return const UnconfiguredLlmClient(
+      'Mobile chat is locked to Hermes. Set --dart-define=LLM_PROVIDER=hermes '
+      'and pass HERMES_BASE_URL.',
+    );
   }
+  if (_hermesBase.isEmpty) {
+    return const UnconfiguredLlmClient(
+      'Hermes provider selected but HERMES_BASE_URL is empty. '
+      'Pass --dart-define=HERMES_BASE_URL=http://... at run time.',
+    );
+  }
+  return HermesLlmClient(
+    baseUrl: _hermesBase,
+    authToken: _hermesToken,
+    callId: _hermesCallId,
+  );
 }
 
 String get llmProviderName => _provider;

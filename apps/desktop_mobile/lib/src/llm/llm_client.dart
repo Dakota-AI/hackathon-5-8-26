@@ -1,8 +1,8 @@
 /// Provider-agnostic LLM contract.
 ///
 /// Adapters implement [LlmClient]. The chat surface and voice surface only
-/// know about this interface — swapping OpenAI for Hermes or a local Ollama
-/// is a config change, not a code change.
+/// know about this interface — mobile chat is wired to Hermes and will fail
+/// fast if Hermes is not correctly configured.
 library;
 
 enum LlmRole { system, user, agent }

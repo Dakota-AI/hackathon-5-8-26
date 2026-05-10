@@ -13,25 +13,8 @@ two short sentences — like a Discord DM. No markdown, no asterisks, no
 code blocks. Conversational, direct.
 ''';
 
-const _openAiBase = String.fromEnvironment(
-  'OPENAI_BASE_URL',
-  defaultValue: 'https://api.openai.com',
-);
-const _openAiKey = String.fromEnvironment('OPENAI_API_KEY');
-const _openAiModel = String.fromEnvironment(
-  'OPENAI_MODEL',
-  defaultValue: 'gpt-4o-mini',
-);
-const _provider = String.fromEnvironment(
-  'LLM_PROVIDER',
-  defaultValue: 'hermes',
-);
-const _hermesBase = String.fromEnvironment('HERMES_BASE_URL');
+const _hermesBase = String.fromEnvironment('HERMES_BASE_URL', defaultValue: '');
 const _hermesToken = String.fromEnvironment('HERMES_AUTH_TOKEN');
-const _hermesCallId = String.fromEnvironment(
-  'HERMES_TEXT_CALL_ID',
-  defaultValue: 'mobile-chat',
-);
 
 const _replyActionId = 'reply_inline';
 const _agentCategory = 'agent_reply';
@@ -172,82 +155,18 @@ int _maxId(List<_Turn> history) {
   return maxN;
 }
 
-Future<String> _openAiCompletion(List<_Turn> history) async {
-  final base = _openAiBase.replaceFirst(RegExp(r'/+$'), '');
-  final uri = Uri.parse('$base/v1/chat/completions');
-  final messages = <Map<String, String>>[
-    {'role': 'system', 'content': _systemPrompt},
-    for (final t in history)
-      {'role': t.role == 'agent' ? 'assistant' : 'user', 'content': t.text},
-  ];
-
-  // iOS gives ~30s of background execution for notification responses.
-  // Cap the HTTP call well below that so the rest of the bookkeeping
-  // (disk write + followup banner) still has room to complete.
-  final response = await http
-      .post(
-        uri,
-        headers: {
-          'authorization': 'Bearer $_openAiKey',
-          'content-type': 'application/json',
-        },
-        body: jsonEncode({
-          'model': _openAiModel,
-          'messages': messages,
-          'stream': false,
-          // Featherless and other OpenAI-compatible providers reject
-          // requests without an explicit cap (they default to model max).
-          'max_tokens': 512,
-        }),
-      )
-      .timeout(const Duration(seconds: 20));
-
-  if (response.statusCode < 200 || response.statusCode >= 300) {
-    _log('openai bg ${response.statusCode}: ${response.body}');
+Future<String> _complete(List<_Turn> history) async {
+  if (_hermesBase.isEmpty) {
+    _log('background reply: HERMES_BASE_URL is empty');
     return '';
   }
-  final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-  final choices = decoded['choices'] as List?;
-  if (choices == null || choices.isEmpty) return '';
-  final content =
-      ((choices.first as Map)['message'] as Map?)?['content'] as String?;
-  return content?.trim() ?? '';
-}
 
-Future<String> _complete(List<_Turn> history) async {
-  switch (_provider) {
-    case 'hermes':
-      if (_hermesBase.isEmpty) {
-        _log('background reply: HERMES_BASE_URL missing');
-        return '';
-      }
-      return _hermesCompletion(history);
-    case 'openai':
-      if (_openAiKey.isEmpty) {
-        _log('background reply: OPENAI_API_KEY missing');
-        return '';
-      }
-      return _openAiCompletion(history);
-    default:
-      _log('background reply: unsupported LLM_PROVIDER=$_provider');
-      return '';
-  }
+  return _hermesCompletion(history);
 }
 
 Future<String> _hermesCompletion(List<_Turn> history) async {
-  final prompt = history.reversed
-      .firstWhere(
-        (turn) => turn.role == 'user' && turn.text.trim().isNotEmpty,
-        orElse: () => _Turn.user('', 0),
-      )
-      .text
-      .trim();
-  if (prompt.isEmpty) return '';
-
   final base = _hermesBase.replaceFirst(RegExp(r'/+$'), '');
-  final uri = Uri.parse(
-    '$base/v1/calls/${Uri.encodeComponent(_hermesCallId)}/messages',
-  );
+  final uri = Uri.parse('$base/v1/chat/completions');
   final headers = <String, String>{
     'content-type': 'application/json',
     if (_hermesToken.isNotEmpty) 'authorization': 'Bearer $_hermesToken',
@@ -258,8 +177,20 @@ Future<String> _hermesCompletion(List<_Turn> history) async {
         uri,
         headers: headers,
         body: jsonEncode({
-          'text': prompt,
-          'clientMessageId': DateTime.now().microsecondsSinceEpoch.toString(),
+          'model': 'hermes-agent',
+          'messages': [
+            {'role': 'system', 'content': _systemPrompt},
+            for (final turn in history)
+              {
+                'role': switch (turn.role) {
+                  'agent' => 'assistant',
+                  'system' => 'system',
+                  _ => 'user',
+                },
+                'content': turn.text,
+              },
+          ],
+          'stream': false,
         }),
       )
       .timeout(const Duration(seconds: 20));
@@ -269,7 +200,13 @@ Future<String> _hermesCompletion(List<_Turn> history) async {
     return '';
   }
   final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-  return (decoded['text'] as String? ?? '').trim();
+  final choices = decoded['choices'];
+  final first = choices is List && choices.isNotEmpty ? choices.first : null;
+  final message = first is Map<String, dynamic> ? first['message'] : null;
+  return (message is Map<String, dynamic>
+          ? message['content'] as String? ?? ''
+          : '')
+      .trim();
 }
 
 Future<void> _showFollowupBanner(String body) async {

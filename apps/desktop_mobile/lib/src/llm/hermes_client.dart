@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 
 import 'llm_client.dart';
 
-/// Text adapter for a Hermes/runner HTTP shim.
+/// Text adapter for the Hermes OpenAI-compatible gateway.
 ///
 /// The mobile client should not carry model-provider keys. It sends text to
 /// the runner/control plane, and the runner owns actual model selection.
@@ -38,9 +38,7 @@ class HermesLlmClient implements LlmClient {
     }
 
     final base = baseUrl.replaceFirst(RegExp(r'/+$'), '');
-    final uri = Uri.parse(
-      '$base/v1/calls/${Uri.encodeComponent(callId)}/messages',
-    );
+    final uri = Uri.parse('$base/v1/chat/completions');
     final headers = <String, String>{
       'content-type': 'application/json',
       if (authToken.isNotEmpty) 'authorization': 'Bearer $authToken',
@@ -54,10 +52,19 @@ class HermesLlmClient implements LlmClient {
             uri,
             headers: headers,
             body: jsonEncode({
-              'text': prompt,
-              'clientMessageId': DateTime.now()
-                  .microsecondsSinceEpoch
-                  .toString(),
+              'model': 'hermes-agent',
+              'messages': [
+                for (final message in history)
+                  {
+                    'role': switch (message.role) {
+                      LlmRole.system => 'system',
+                      LlmRole.user => 'user',
+                      LlmRole.agent => 'assistant',
+                    },
+                    'content': message.text,
+                  },
+              ],
+              'stream': false,
             }),
           )
           .timeout(const Duration(seconds: 30));
@@ -82,7 +89,13 @@ class HermesLlmClient implements LlmClient {
 
     try {
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      yield LlmDelta(text: (decoded['text'] as String? ?? '').trim(), done: true);
+      final choices = decoded['choices'];
+      final first = choices is List && choices.isNotEmpty ? choices.first : null;
+      final message = first is Map<String, dynamic> ? first['message'] : null;
+      final content = message is Map<String, dynamic>
+          ? message['content'] as String?
+          : null;
+      yield LlmDelta(text: (content ?? '').trim(), done: true);
     } catch (e) {
       yield LlmDelta(text: 'Hermes runner returned invalid JSON: $e', done: true);
     }

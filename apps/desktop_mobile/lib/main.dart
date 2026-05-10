@@ -57,15 +57,10 @@ Future<void> main() async {
 enum ConsolePage {
   chat,
   work,
-  kanban,
-  genuiLab,
-  browser,
-  uiKit,
   agents,
-  approvals,
-  runs,
-  artifacts,
-  miro,
+  kanban,
+  browser,
+  inbox,
 }
 
 final selectedWorkspaceIdProvider = StateProvider<String?>((ref) => null);
@@ -197,10 +192,10 @@ class ConsoleShell extends ConsumerWidget {
         return;
       }
       final page = switch (next.targetSurface!) {
-        OrbControlSurface.agents => ConsolePage.work,
+        OrbControlSurface.agents => ConsolePage.agents,
         OrbControlSurface.kanban => ConsolePage.kanban,
         OrbControlSurface.browser => ConsolePage.browser,
-        OrbControlSurface.approvals => ConsolePage.approvals,
+        OrbControlSurface.approvals => ConsolePage.inbox,
       };
       ref.read(selectedPageProvider.notifier).state = page;
       if (next.targetAgentId != null) {
@@ -212,10 +207,10 @@ class ConsoleShell extends ConsumerWidget {
     final selectedPage = controlState.targetSurface == null
         ? ref.watch(selectedPageProvider)
         : switch (controlState.targetSurface!) {
-            OrbControlSurface.agents => ConsolePage.work,
+            OrbControlSurface.agents => ConsolePage.agents,
             OrbControlSurface.kanban => ConsolePage.kanban,
             OrbControlSurface.browser => ConsolePage.browser,
-            OrbControlSurface.approvals => ConsolePage.approvals,
+            OrbControlSurface.approvals => ConsolePage.inbox,
           };
     final isCompact = MediaQuery.sizeOf(context).width < 760;
 
@@ -341,15 +336,22 @@ class _Sidebar extends ConsumerWidget {
             collapsed: collapsed,
           ),
           _NavButton(
-            label: 'Agents',
-            icon: RadixIcons.group,
+            label: 'Work',
+            icon: RadixIcons.layout,
             page: ConsolePage.work,
             selected: selectedPage == ConsolePage.work,
             collapsed: collapsed,
           ),
           _NavButton(
+            label: 'Agents',
+            icon: RadixIcons.group,
+            page: ConsolePage.agents,
+            selected: selectedPage == ConsolePage.agents,
+            collapsed: collapsed,
+          ),
+          _NavButton(
             label: 'Kanban',
-            icon: RadixIcons.layout,
+            icon: RadixIcons.columns,
             page: ConsolePage.kanban,
             selected: selectedPage == ConsolePage.kanban,
             collapsed: collapsed,
@@ -357,22 +359,8 @@ class _Sidebar extends ConsumerWidget {
           _NavButton(
             label: 'Inbox',
             icon: RadixIcons.envelopeClosed,
-            page: ConsolePage.approvals,
-            selected: selectedPage == ConsolePage.approvals,
-            collapsed: collapsed,
-          ),
-          _NavButton(
-            label: 'Browser',
-            icon: RadixIcons.globe,
-            page: ConsolePage.browser,
-            selected: selectedPage == ConsolePage.browser,
-            collapsed: collapsed,
-          ),
-          _NavButton(
-            label: 'UI Kit',
-            icon: RadixIcons.tokens,
-            page: ConsolePage.uiKit,
-            selected: selectedPage == ConsolePage.uiKit,
+            page: ConsolePage.inbox,
+            selected: selectedPage == ConsolePage.inbox,
             collapsed: collapsed,
           ),
           const Spacer(),
@@ -550,6 +538,12 @@ class _MobileNavBar extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(6, 5, 6, 6),
       child: Row(
         children: [
+        _MobileNavItem(
+            label: 'Work',
+            icon: RadixIcons.layout,
+            selected: selectedPage == ConsolePage.work,
+            onTap: () => _selectMobilePage(ref, ConsolePage.work),
+          ),
           _MobileNavItem(
             label: 'Chat',
             icon: RadixIcons.chatBubble,
@@ -558,16 +552,10 @@ class _MobileNavBar extends ConsumerWidget {
             emphasized: true,
           ),
           _MobileNavItem(
-            label: 'Kanban',
-            icon: RadixIcons.layout,
-            selected: selectedPage == ConsolePage.kanban,
-            onTap: () => _selectMobilePage(ref, ConsolePage.kanban),
-          ),
-          _MobileNavItem(
             label: 'Agents',
             icon: RadixIcons.group,
-            selected: selectedPage == ConsolePage.work,
-            onTap: () => _selectMobilePage(ref, ConsolePage.work),
+            selected: selectedPage == ConsolePage.agents,
+            onTap: () => _selectMobilePage(ref, ConsolePage.agents),
           ),
         ],
       ),
@@ -577,7 +565,7 @@ class _MobileNavBar extends ConsumerWidget {
   void _selectMobilePage(WidgetRef ref, ConsolePage page) {
     if (selectedPage == page) return;
     HapticFeedback.selectionClick();
-    if (page != ConsolePage.work) {
+    if (page != ConsolePage.agents) {
       ref.read(selectedAgentIdProvider.notifier).state = null;
     }
     ref.read(selectedPageProvider.notifier).state = page;
@@ -657,16 +645,11 @@ class _PageBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (page) {
       ConsolePage.chat => const AgentChatSurface(),
-      ConsolePage.work => const _AgentsWorkspacePage(),
+      ConsolePage.work => const _WorkDashboard(),
       ConsolePage.kanban => const _KanbanPage(),
-      ConsolePage.genuiLab => const _GenUiLabPage(),
       ConsolePage.browser => const _BrowserPage(),
-      ConsolePage.uiKit => const _UiKitPage(),
-      ConsolePage.agents => const _AgentsPage(),
-      ConsolePage.approvals => const _ApprovalsPage(),
-      ConsolePage.runs => const _RunsPage(),
-      ConsolePage.artifacts => const _ArtifactsPage(),
-      ConsolePage.miro => const _MiroPage(),
+      ConsolePage.agents => const _AgentsWorkspacePage(),
+      ConsolePage.inbox => const _ApprovalsPage(),
     };
   }
 }

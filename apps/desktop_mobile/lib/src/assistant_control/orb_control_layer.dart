@@ -107,11 +107,6 @@ class OrbTopBarStatus extends ConsumerWidget {
       message: state.statusLine,
       actions: [
         _TopBarControlButton(
-          key: const ValueKey('orb-control-run-mock'),
-          label: state.mockRunning ? 'Running…' : 'Show me',
-          onTap: state.mockRunning ? null : controller.startMockSequence,
-        ),
-        _TopBarControlButton(
           label: 'Voice',
           onTap: controller.enterVoiceMode,
           muted: true,

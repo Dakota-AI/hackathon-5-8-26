@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -69,7 +67,6 @@ class OrbControlState {
     this.mode = OrbControlMode.idle,
     this.panelState = OrbControlPanelState.minimized,
     this.statusLine = 'Ask the main agent when you want a guided walkthrough.',
-    this.mockRunning = false,
     this.controlPaused = false,
     this.events = const [],
     this.artifacts = const [],
@@ -84,7 +81,6 @@ class OrbControlState {
   final OrbControlMode mode;
   final OrbControlPanelState panelState;
   final String statusLine;
-  final bool mockRunning;
   final bool controlPaused;
   final List<OrbControlEvent> events;
   final List<OrbControlArtifact> artifacts;
@@ -99,7 +95,6 @@ class OrbControlState {
     OrbControlMode? mode,
     OrbControlPanelState? panelState,
     String? statusLine,
-    bool? mockRunning,
     bool? controlPaused,
     List<OrbControlEvent>? events,
     List<OrbControlArtifact>? artifacts,
@@ -116,7 +111,6 @@ class OrbControlState {
       mode: mode ?? this.mode,
       panelState: panelState ?? this.panelState,
       statusLine: statusLine ?? this.statusLine,
-      mockRunning: mockRunning ?? this.mockRunning,
       controlPaused: controlPaused ?? this.controlPaused,
       events: events ?? this.events,
       artifacts: artifacts ?? this.artifacts,
@@ -137,12 +131,8 @@ final orbControlControllerProvider =
     );
 
 class OrbControlController extends Notifier<OrbControlState> {
-  Timer? _mockTimer;
-  int _mockStep = 0;
-
   @override
   OrbControlState build() {
-    ref.onDispose(_cancelMockTimer);
     return const OrbControlState();
   }
 
@@ -182,13 +172,11 @@ class OrbControlController extends Notifier<OrbControlState> {
   }
 
   void dismiss() {
-    _cancelMockTimer();
     state = state.copyWith(
       presence: OrbControlPresence.hidden,
       mode: OrbControlMode.idle,
       panelState: OrbControlPanelState.minimized,
       statusLine: 'Ask the main agent when you want a guided walkthrough.',
-      mockRunning: false,
       controlPaused: false,
       clearPendingApproval: true,
       clearTarget: true,
@@ -215,24 +203,7 @@ class OrbControlController extends Notifier<OrbControlState> {
     state = state.copyWith(position: position);
   }
 
-  void startMockSequence() {
-    _cancelMockTimer();
-    _mockStep = 0;
-    state = const OrbControlState(
-      presence: OrbControlPresence.topBar,
-      mode: OrbControlMode.thinking,
-      panelState: OrbControlPanelState.minimized,
-      statusLine: 'Planning local control sequence',
-      mockRunning: true,
-    );
-    _advanceMockSequence();
-    _mockTimer = Timer.periodic(const Duration(milliseconds: 650), (_) {
-      _advanceMockSequence();
-    });
-  }
-
   void pauseControl() {
-    _cancelMockTimer();
     _appendEvent(
       kind: OrbControlEventKind.control,
       title: 'Control paused',
@@ -241,7 +212,6 @@ class OrbControlController extends Notifier<OrbControlState> {
     state = state.copyWith(
       mode: OrbControlMode.paused,
       statusLine: 'Paused by user',
-      mockRunning: false,
       controlPaused: true,
       clearPendingApproval: true,
       clearTarget: true,
@@ -285,7 +255,6 @@ class OrbControlController extends Notifier<OrbControlState> {
       mode: OrbControlMode.paused,
       statusLine: 'Publish stopped',
       clearPendingApproval: true,
-      mockRunning: false,
     );
   }
 
@@ -432,81 +401,6 @@ class OrbControlController extends Notifier<OrbControlState> {
     return trimmed.isEmpty ? null : trimmed;
   }
 
-  void _advanceMockSequence() {
-    if (state.controlPaused) {
-      _cancelMockTimer();
-      return;
-    }
-
-    switch (_mockStep) {
-      case 0:
-        _appendEvent(
-          kind: OrbControlEventKind.message,
-          title: 'Main agent is planning',
-          detail:
-              'Preparing a local UI-control rehearsal without backend calls.',
-        );
-        state = state.copyWith(
-          mode: OrbControlMode.thinking,
-          statusLine: 'Thinking through where to take you first…',
-          targetSurface: OrbControlSurface.agents,
-          targetAgentId: 'agent-exec',
-          targetRevision: state.targetRevision + 1,
-        );
-      case 1:
-        _appendEvent(
-          kind: OrbControlEventKind.delegation,
-          title: 'Opened Kanban',
-          detail: 'Moved the UI to the board where delegated WorkItems live.',
-        );
-        state = state.copyWith(
-          mode: OrbControlMode.controlling,
-          statusLine: 'Taking you to Kanban to show delegated work',
-          targetSurface: OrbControlSurface.kanban,
-          targetAgentId: 'agent-builder',
-          targetRevision: state.targetRevision + 1,
-        );
-      case 2:
-        final artifact = OrbControlArtifact(
-          id: 'artifact-local-review-brief',
-          name: 'Review walkthrough brief',
-          kind: 'report',
-          uri: 'local://artifacts/review-walkthrough-brief.md',
-        );
-        _appendEvent(
-          kind: OrbControlEventKind.artifact,
-          title: 'Opened Browser',
-          detail:
-              'Moved the UI to the preview surface for the staged artifact.',
-        );
-        state = state.copyWith(
-          mode: OrbControlMode.speaking,
-          statusLine: 'Opening the preview surface for the local artifact',
-          artifacts: [artifact, ...state.artifacts].take(6).toList(),
-          targetSurface: OrbControlSurface.browser,
-          targetRevision: state.targetRevision + 1,
-        );
-      case 3:
-        _appendEvent(
-          kind: OrbControlEventKind.approval,
-          title: 'Opened Inbox',
-          detail: 'Moved the UI to approvals for the final publish decision.',
-        );
-        state = state.copyWith(
-          mode: OrbControlMode.awaitingApproval,
-          statusLine: 'Now I need your approval in the Inbox',
-          pendingApproval: 'Publish the staged preview page?',
-          targetSurface: OrbControlSurface.approvals,
-          targetRevision: state.targetRevision + 1,
-        );
-      default:
-        _cancelMockTimer();
-        state = state.copyWith(mockRunning: false);
-        return;
-    }
-    _mockStep += 1;
-  }
-
   void _appendEvent({
     required OrbControlEventKind kind,
     required String title,
@@ -522,10 +416,6 @@ class OrbControlController extends Notifier<OrbControlState> {
     state = state.copyWith(events: [event, ...state.events].take(8).toList());
   }
 
-  void _cancelMockTimer() {
-    _mockTimer?.cancel();
-    _mockTimer = null;
-  }
 }
 
 extension OrbControlModeLabel on OrbControlMode {

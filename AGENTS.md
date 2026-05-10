@@ -2,8 +2,9 @@
 
 This repository is building Agents Cloud: a CDK-backed autonomous AI agent
 platform for 24/7 agent teams, isolated ECS workers, durable AWS state,
-Cloudflare realtime sync, synchronized Next.js and Flutter clients, generated UI
-surfaces, collaboration integrations, and safe coding/build agents.
+AWS-native realtime sync, synchronized Next.js and Flutter clients, generated UI
+surfaces, collaboration integrations, safe coding/build agents, and an optional
+Cloudflare realtime fallback path.
 
 ## Read First
 
@@ -14,16 +15,19 @@ Before making implementation decisions, read these in order:
 3. `docs/IMPLEMENTATION_READINESS_AUDIT.md`
 4. `docs/AI_AGENT_ENGINEERING_QUALITY_GATES.md`
 5. `docs/roadmap/PROJECT_STATUS.md`
-6. `docs/roadmap/PROJECT_REMAINING_WORK_AUDIT_2026_05_10.md`
-7. `docs/agent-workstreams/README.md`
-8. `docs/roadmap/FOUNDATION_NEXT_STEPS.md`
-9. `docs/roadmap/CODEBASE_ORIENTATION.md`
-10. `docs/adr/README.md`
-11. `docs/adr/0008-user-runner-placement.md`
-12. `docs/roadmap/USER_RUNNER_LOCAL_ECS_ARCHITECTURE.md`
-13. `infra/cdk/README.md`
-14. `docs/roadmap/AMPLIFY_NEXT_FRONTEND_PLAN.md` when touching the web app.
-15. `docs/roadmap/WILDCARD_PREVIEW_HOSTING_STATUS.md` when touching previews.
+6. `docs/roadmap/NEXT_SYSTEM_AUDIT_AND_EXECUTION_PLAN_2026_05_10.md`
+7. `docs/roadmap/TENANT_AUTHORIZATION_AND_ACCESS_CODES_PLAN_2026_05_10.md`
+8. `docs/roadmap/PROJECT_REMAINING_WORK_AUDIT_2026_05_10.md`
+9. `docs/agent-workstreams/README.md`
+10. `docs/roadmap/FOUNDATION_NEXT_STEPS.md`
+11. `docs/roadmap/CODEBASE_ORIENTATION.md`
+12. `docs/adr/README.md`
+13. `docs/adr/0008-user-runner-placement.md`
+14. `docs/adr/0010-tenant-access-control-and-access-codes.md`
+15. `docs/roadmap/USER_RUNNER_LOCAL_ECS_ARCHITECTURE.md`
+16. `infra/cdk/README.md`
+17. `docs/roadmap/AMPLIFY_NEXT_FRONTEND_PLAN.md` when touching the web app.
+18. `docs/roadmap/WILDCARD_PREVIEW_HOSTING_STATUS.md` when touching previews.
 
 The master scope document is the current source of truth. Supporting roadmap and
 architecture docs should stay aligned with current implementation status.
@@ -39,6 +43,13 @@ Available workstreams:
 - Agent Harness: `docs/agent-workstreams/agent-harness/`
 - Realtime Streaming: `docs/agent-workstreams/realtime-streaming/`
 - Product Coordination: `docs/agent-workstreams/product-coordination/`
+- Access Control: `docs/agent-workstreams/access-control/`
+- Miro Integration: `docs/agent-workstreams/miro-integration/`
+- Source Control: `docs/agent-workstreams/source-control/`
+- Preview Hosting: `docs/agent-workstreams/preview-hosting/`
+- Specialist Creation: `docs/agent-workstreams/specialist-creation/`
+- Self-Improvement: `docs/agent-workstreams/self-improvement/`
+- Quality Audit: `docs/agent-workstreams/quality-audit/`
 
 Before starting, each agent must read its workstream README and
 `docs/agent-workstreams/COORDINATION.md`. If a change affects another
@@ -90,46 +101,49 @@ Completed:
 - Deployed Amplify Auth sandbox.
 - Green Amplify Hosting web build.
 - First Control API slice for run creation/querying.
+- AWS-native realtime WebSocket first slice.
 - Preview deployment registry and optional preview ingress stack.
 - Next.js command center under `apps/web`.
 - Flutter console under `apps/desktop_mobile`.
 - Agent runtime smoke adapter package under `services/agent-runtime`.
 - Cloudflare realtime Worker/Durable Object package under
-  `infra/cloudflare/realtime`.
+  `infra/cloudflare/realtime` as an alternate/fallback path.
 
 Not complete:
 
 - Full production run lifecycle.
+- Tenant/workspace membership authorization and invite/access-code gating.
 - Production worker runtime with real model/provider/secrets/workspace policy.
 - Event relay.
-- Deployed production Cloudflare realtime relay, replay, and client integration.
+- Product-grade realtime replay, subscription authorization, and optional
+  Cloudflare fallback integration.
 - Production web and Flutter auth/API/realtime integration.
 - advanced coding-agent and collaboration integrations.
 - Specialist-agent creation and self-improvement.
 
 ## Highest-Priority Build Rule
 
-The next implementation slice is completing the durable run loop through real
-clients and a production-shaped worker path:
+The durable run loop exists as a first slice. The next implementation slice is
+making it tenant-safe and access-gated before widening agent capabilities:
 
 ```text
-authenticated web/native command
-  -> Control API
-  -> DynamoDB run/event records
-  -> Step Functions execution
-  -> ECS worker
-  -> worker status/events/artifacts
-  -> queryable ordered events
+access-code admitted Cognito user
+  -> Cognito group gate
+  -> workspace membership/capability check
+  -> Control API run/work/resource route
+  -> realtime subscription authorization
+  -> scoped runner context
 ```
 
-Do not start by building advanced UI, specialist agents, collaboration surfaces,
-or full GenUI until the durable run lifecycle exists. Those features should plug
-into the run ledger, event schema, auth boundary, and worker lifecycle.
+Do not start by enabling Miro writes, GitHub pushes, broad preview publishing,
+or self-improving specialist agents before tenant authorization, access-code
+onboarding, workspace membership, and capability checks are in place.
 
 ## Architecture Rules
 
 - AWS is the durable source of truth.
-- Cloudflare is realtime fanout/sync only.
+- AWS-native realtime is the primary realtime path for this phase.
+- Cloudflare is an alternate/fallback realtime fanout/sync plane only.
 - DynamoDB/S3/Step Functions/ECS own execution truth.
 - S3 stores durable per-user/per-workspace artifacts and large payloads.
 - EFS is optional and deferred until hot POSIX workspace semantics are required.
@@ -148,6 +162,11 @@ into the run ledger, event schema, auth boundary, and worker lifecycle.
   default should be API-key/service-account style model auth.
 - External collaboration and source-control credentials must be brokered and
   scoped; never expose refresh tokens directly to arbitrary agent code.
+- Access-code onboarding and Cognito group gates are required before broad user
+  onboarding or public signup.
+- Every workspace-scoped route, realtime subscription, and worker context must
+  derive workspace access from server-side membership, not client-supplied
+  workspace IDs alone.
 
 ## Implementation Standards
 
@@ -216,11 +235,15 @@ Core commands:
 pnpm contracts:test
 pnpm control-api:test
 pnpm agent-runtime:test
+pnpm realtime-api:test
 pnpm cloudflare:test
+pnpm web:test
 pnpm web:typecheck
 pnpm web:build
 pnpm infra:build
+pnpm infra:test
 pnpm infra:synth
+pnpm agent-creator:test
 pnpm --filter @agents-cloud/infra-amplify run typecheck
 pnpm amplify:hosting:build
 ```

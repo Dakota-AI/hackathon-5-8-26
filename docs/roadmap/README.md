@@ -10,6 +10,8 @@ Planning documents for the autonomous agent cloud platform.
 - [Amplify Next.js Frontend Plan](AMPLIFY_NEXT_FRONTEND_PLAN.md)
 - [User Runner Local And ECS Architecture](USER_RUNNER_LOCAL_ECS_ARCHITECTURE.md)
 - [Project Remaining Work Audit](PROJECT_REMAINING_WORK_AUDIT_2026_05_10.md)
+- [Next System Audit And Execution Plan](NEXT_SYSTEM_AUDIT_AND_EXECUTION_PLAN_2026_05_10.md)
+- [Tenant Authorization And Access Code Plan](TENANT_AUTHORIZATION_AND_ACCESS_CODES_PLAN_2026_05_10.md)
 - [Proactive Communication Architecture Audit](PROACTIVE_COMMUNICATION_ARCHITECTURE_AUDIT_2026_05_10.md)
 - [AI Caller iOS Foundation Audit](AICALLER_IOS_FOUNDATION_AUDIT_2026_05_10.md)
 - [Communication Event Contracts](COMMUNICATION_EVENT_CONTRACTS_2026_05_10.md)
@@ -20,6 +22,7 @@ Planning documents for the autonomous agent cloud platform.
 - [Implementation Roadmap](AUTONOMOUS_AGENT_PLATFORM_IMPLEMENTATION_ROADMAP.md)
 - [Autonomous Agent Company Architecture](AUTONOMOUS_AGENT_COMPANY_ARCHITECTURE.md)
 
-`MASTER_SCOPE_AND_PROGRESS.md` and `PROJECT_STATUS.md` reflect the current
-implementation state. Supporting roadmap and architecture docs should stay
-aligned with those current status files.
+`MASTER_SCOPE_AND_PROGRESS.md`, `PROJECT_STATUS.md`, and
+`NEXT_SYSTEM_AUDIT_AND_EXECUTION_PLAN_2026_05_10.md` reflect the current
+implementation state and next execution sequence. Supporting roadmap and
+architecture docs should stay aligned with those current status files.

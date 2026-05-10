@@ -5,6 +5,11 @@
 Own live event delivery, subscription authorization, replay, cursors, streaming
 status, and fanout from durable AWS state to connected clients.
 
+AWS-native API Gateway WebSocket realtime is the primary implementation path for
+the current phase. Cloudflare Durable Objects stay as an alternate/fallback edge
+plane until their auth, envelope, replay, and client behavior match the AWS
+contract.
+
 ## Primary Paths
 
 - `infra/cloudflare/realtime/`
@@ -22,6 +27,21 @@ status, and fanout from durable AWS state to connected clients.
 5. Standardize stream progress events for clients.
 6. Add metrics for connections, subscriptions, dropped events, replay misses,
    and authorization failures.
+
+## Current Audit Findings
+
+P0/P1 gaps found on 2026-05-10:
+
+- `$connect` validates a Cognito token, but `subscribeRun` must load the run and
+  authorize `run:read` against the stored workspace before saving the
+  subscription.
+- The current WebSocket URL passes the Cognito token in the query string. The
+  safer target is a short-lived Control API-issued realtime ticket scoped to a
+  run/workspace and capability.
+- AWS and Cloudflare realtime envelopes are different today. Clients need one
+  adapter/parser contract before Cloudflare can be called a fallback.
+- Replay/gap repair should use durable Control API event queries, not in-memory
+  socket state.
 
 ## Must Coordinate With
 
@@ -64,4 +84,3 @@ Create a handoff when:
 - event payloads are missing fields for streaming UI,
 - infrastructure needs to wire a stream, queue, route, or secret,
 - runtime event volume requires batching or throttling.
-

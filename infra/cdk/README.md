@@ -310,6 +310,7 @@ Default `dev` synth creates these stack ids:
 - `agents-cloud-dev-runtime`
 - `agents-cloud-dev-orchestration`
 - `agents-cloud-dev-control-api`
+- `agents-cloud-dev-realtime-api`
 
 To inspect one synthesized template:
 
@@ -321,8 +322,10 @@ pnpm --filter @agents-cloud/infra-cdk synth -- agents-cloud-dev-state
 
 The next infra/application layer should add:
 
-1. A real `agent-runtime` image/script that receives `RUN_ID`, writes a test artifact, emits canonical status events, and exits.
-2. EventBridge/SQS resources for durable event movement between workers, Control API, and realtime relay.
-3. Real-client Control API calls using Cognito tokens from the web/native shells.
-4. `ClusterStack` expansion for separate worker classes (`agent-light`, `agent-code`, `agent-builder-heavy`, `agent-eval`, `preview-app`).
-5. Cloudflare Worker/Durable Object realtime skeleton for run status fanout.
+1. Tenant authorization infrastructure: Cognito groups, access-code tables,
+   user/org/workspace/membership tables, and signup/redeem triggers.
+2. Control API and realtime membership/capability checks.
+3. Artifact/DataSource/Surface APIs and preview publish routes.
+4. Resident user-runner task/service shape and scoped runner token contract.
+5. Optional Cloudflare realtime fallback only after the AWS-native contract is
+   stable.

@@ -19,10 +19,31 @@ notifications, generated UI rendering, and realtime status behavior.
 2. Show run ledgers, ordered events, artifacts, approvals, and generated
    surfaces under each WorkItem.
 3. Connect authenticated clients to the real Control API.
-4. Connect clients to realtime event streams.
+4. Connect clients to AWS-native realtime event streams first.
 5. Add loading, empty, error, denied, offline, and reconnect states.
 6. Keep web and Flutter concepts aligned.
 7. Keep generated UI rendering constrained to validated server payloads.
+
+## Current Audit Findings
+
+Findings from the 2026-05-10 client audit:
+
+- Web can create/query runs and subscribe to the AWS-native WebSocket, but it is
+  still run-first and partly fixture-backed for WorkItems.
+- Web still hardcodes `workspace-web` in the create-run flow; remove this after
+  workspace membership and picker APIs exist.
+- Web idempotency currently creates a new key per timestamped attempt; retry
+  behavior needs one stable key per user submit attempt.
+- Web realtime state is not visible enough to users; reconnect, stale, and gap
+  repair states need UI.
+- Cloudflare is not a real client fallback yet because its message envelope and
+  auth/session shape do not match the AWS-native WebSocket path.
+- Flutter has config and a minimal Control API helper, but the app UI is still a
+  fixture shell and does not create runs or subscribe to realtime.
+- Flutter copy still contains Cloudflare-first wording in places; AWS-native
+  realtime is the primary path for this phase.
+- GenUI/A2UI renderers remain incomplete until server-side Surface validation
+  and allowlisted catalogs exist.
 
 ## Must Coordinate With
 
@@ -70,4 +91,3 @@ Create a handoff when:
 - realtime reconnect/replay behavior is missing,
 - a server-side validation rule blocks a UI feature,
 - auth or deployment outputs are unclear.
-

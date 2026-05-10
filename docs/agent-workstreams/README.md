@@ -26,6 +26,13 @@ Use `CURRENT_PLAN_TEMPLATE.md` when creating or updating a lane plan.
 | Agent Harness | `agent-harness/` | Runtime, tools, logical agents, user runners, snapshots, safe execution |
 | Realtime Streaming | `realtime-streaming/` | Event streams, websocket/fanout, replay, subscription auth |
 | Product Coordination | `product-coordination/` | Cross-cutting product shape, docs, audits, sequencing, interface alignment |
+| Access Control | `access-control/` | Cognito groups, access codes, tenant/workspace membership, capability checks |
+| Miro Integration | `miro-integration/` | Miro OAuth/MCP/REST bridge, board artifacts, collaboration surfaces |
+| Source Control | `source-control/` | GitHub/repository integration, commits, PRs, code review workflows |
+| Preview Hosting | `preview-hosting/` | Wildcard domains, preview registry, preview router, publish/retire flows |
+| Specialist Creation | `specialist-creation/` | New specialist profile drafts, tool policy, review, and approved version materialization |
+| Self-Improvement | `self-improvement/` | Specialist profiles, evals, quarantine, promotion, regression evidence |
+| Quality Audit | `quality-audit/` | Cross-agent audit phases, validation matrices, contract/readiness reviews |
 
 ## Parallel Work Rules
 
@@ -72,6 +79,8 @@ These areas are shared and require extra care:
 - `services/agent-runtime`: runtime behavior and event/artifact production.
 - `infra/cloudflare/realtime` and `services/realtime-api`: live event delivery.
 - `apps/web` and `apps/desktop_mobile`: client expectations and UI behavior.
+- tenant authorization tables/groups/access codes: shared by Control API,
+  realtime, clients, runtime, preview, Miro, and source-control work.
 
 If a workstream changes a shared contract, it must document the compatibility
 impact and tell the affected workstreams through a handoff note.

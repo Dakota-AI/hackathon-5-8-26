@@ -26,6 +26,20 @@ catch-all owner for implementation.
 6. Turn ambiguous product ideas into concrete contracts and acceptance criteria.
 7. Verify agents self-audit before claiming completion.
 
+Current priority:
+
+```text
+tenant authorization/access-code gate
+  -> workspace membership and capability checks
+  -> WorkItem/product API completion
+  -> client wiring to real APIs
+  -> resident runner and critical integrations
+```
+
+AWS-native realtime is the current primary realtime path. Cloudflare Durable
+Objects remain documented as an alternate/fallback path, not the durable source
+of truth.
+
 ## Must Coordinate With
 
 - Infrastructure for deployment and state architecture status.
@@ -59,4 +73,3 @@ Create a handoff when:
 - a contract change affects multiple workstreams,
 - a demo path is blocked,
 - an old status doc conflicts with current implementation reality.
-

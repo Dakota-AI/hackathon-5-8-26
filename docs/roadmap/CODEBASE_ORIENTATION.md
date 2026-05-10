@@ -14,8 +14,8 @@ workflows.
 
 This is not yet a finished product application. It contains a deployed AWS CDK
 foundation, a deployed Amplify Auth sandbox, a working web build path, a first
-Control API slice, a first ECS agent-runtime package, a Cloudflare realtime
-package, and protocol contracts.
+Control API slice, a first ECS agent-runtime package, an AWS-native realtime
+slice, a Cloudflare realtime fallback package, and protocol contracts.
 
 Read these first:
 
@@ -37,7 +37,10 @@ Implemented:
 - Step Functions state machine that launches ECS Fargate.
 - Successful Step Functions to ECS smoke execution.
 - Control API stack with create/query run endpoints and Cognito JWT authorizer.
+- AWS-native realtime stack with API Gateway WebSocket handlers and DynamoDB
+  stream relay.
 - Agent runtime package under `services/agent-runtime`.
+- Agent creator workshop prototype under `services/agent-creator`.
 - Preview deployment registry table.
 - Optional preview ingress stack.
 - Amplify Gen 2 Auth backend under `infra/amplify`.
@@ -48,7 +51,8 @@ Implemented:
 - Next.js command center under `apps/web`.
 - Cloudflare Worker/Durable Object realtime package under
   `infra/cloudflare/realtime` with health, WebSocket route, internal event relay
-  endpoint, Cognito JWT helpers, and run-scoped `SessionHubDO` fanout.
+  endpoint, Cognito JWT helpers, and run-scoped `SessionHubDO` fanout. This is
+  an alternate/fallback path, not the current primary realtime implementation.
 - Planning docs and ADRs.
 
 Not implemented:
@@ -56,7 +60,7 @@ Not implemented:
 - Production-grade run lifecycle hardening.
 - Production model/provider runtime policy.
 - Event relay.
-- Deployed Cloudflare realtime plane and client integration.
+- Product-grade replay/gap repair and optional Cloudflare fallback integration.
 - Production Flutter auth/API/realtime integration.
 - A2UI/GenUI renderers.
 - Codex/Hermes worker integrations.
@@ -85,16 +89,17 @@ These commands were verified on 2026-05-09.
 ```text
 agents-cloud/
   apps/
-    web-next/        planned Next.js web command center
-    flutter/         planned desktop/mobile command center
     desktop_mobile/
                      Flutter command-center app
+    web/
+                     Next.js web command center
   packages/
     protocol/        canonical event schemas and validator
   services/
-    control-api/     planned API for run creation/query/callbacks
+    control-api/     API for run creation/query/callbacks and product routes
     agent-manager/   planned ECS scheduler/lifecycle service
-    agent-runtime/   planned Hermes/OpenAI agent worker runtime wrapper
+    agent-creator/   adaptive specialist profile workshop prototype
+    agent-runtime/   Hermes/OpenAI agent worker runtime wrapper
     builder-runtime/ planned build/test/browser-heavy runtime
     preview-router/  planned wildcard project preview router
     event-relay/     planned AWS-to-Cloudflare event relay

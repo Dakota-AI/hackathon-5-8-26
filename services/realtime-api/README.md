@@ -24,6 +24,10 @@ After connecting with a valid Cognito token, clients can send:
 {"action":"subscribeRun","workspaceId":"workspace-1","runId":"run-1"}
 ```
 
+Current limitation: `workspaceId` is still client-supplied in the message. The
+next access-control slice must load the stored run and authorize membership
+before saving the subscription.
+
 ```json
 {"action":"unsubscribeRun","workspaceId":"workspace-1","runId":"run-1"}
 ```
@@ -62,7 +66,9 @@ Deployed dev stack:
 
 ## Current limitations
 
-- Web/native product clients are not wired to the WebSocket URL yet.
+- The web command center has first-slice WebSocket wiring. Desktop/mobile is not
+  wired yet.
 - Workspace membership authorization is not implemented yet.
-- Replay/gap repair is expected through Control API event query, but clients are not wired yet.
+- Replay/gap repair is expected through Control API event query and still needs
+  product-grade UX.
 - Notification-specific event schemas still need to be added to `packages/protocol`.

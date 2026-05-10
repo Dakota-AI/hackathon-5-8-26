@@ -36,7 +36,7 @@ ledger creation and queries the runs table through the `by-idempotency-scope` GS
 
 Remaining gaps before declaring the broader run lifecycle complete:
 
-- Exercise the HTTP routes with a real Cognito login token from web/native clients.
+- Promote the real Cognito HTTP smoke path into repeatable CI-friendly coverage.
 - Add recovery policy for the narrow case where Step Functions start succeeds but storing the execution ARN fails.
 - Add explicit request/response schemas.
 - Add workspace membership authorization beyond owner-user checks.
@@ -54,6 +54,14 @@ Smoke evidence from 2026-05-09:
 - Live Lambda smoke created `run-362d8866-ac8e-4b00-82d2-6b7eddaca43e`.
 - Ordered event query returned initial `run.status` event.
 - Step Functions execution reached `SUCCEEDED`.
+
+Additional 2026-05-10 smoke evidence:
+
+- `scripts/smoke-web-http-e2e.sh` created run
+  `run-idem-40e5c2eeae1183234f86c187` with a temporary Cognito user.
+- Step Functions returned `SUCCEEDED`.
+- Control API returned run status `succeeded`, four canonical events, and an
+  artifact event.
 
 Commands:
 

@@ -247,7 +247,8 @@ DynamoDB event/artifact writes are conditional. It still does not yet:
 
 ### AWS-Native Realtime WebSocket Plane
 
-Implemented locally and synth-validated. The supporting StateStack update is deployed; the WebSocket API stack is not deployed yet.
+Implemented, deployed, and smoke-tested as the primary realtime path for the
+current phase.
 
 Implemented under `services/realtime-api` plus `infra/cdk/src/stacks/realtime-api-stack.ts`:
 
@@ -271,16 +272,17 @@ Verified locally:
 Deployed so far:
 
 - `agents-cloud-dev-state` update succeeded.
+- `agents-cloud-dev-realtime-api` is deployed.
 - `RealtimeConnectionsTable` exists.
 - EventsTable DynamoDB stream is enabled.
+- Web command center has first-slice AWS-native WebSocket wiring.
 
 Still missing:
 
-- AWS deployment of `agents-cloud-dev-realtime-api` stack.
-- Real Cognito-token WebSocket smoke test with `wscat` or app client.
 - Workspace membership authorization beyond current authenticated user context.
-- Client replay/gap repair using `GET /runs/{runId}/events?afterSeq=`.
-- Web/desktop/mobile integration.
+- Product-grade client replay/gap repair using
+  `GET /runs/{runId}/events?afterSeq=`.
+- Desktop/mobile integration.
 - Custom realtime domain decision, likely `realtime.solo-ceo.ai`, if the AWS-native path is kept.
 
 ### Cloudflare Realtime Plane
@@ -346,7 +348,8 @@ Completed:
 
 Not complete:
 
-- No preview base domain has been selected.
+- Preview base domain has been selected as `*.preview.solo-ceo.ai`, but the
+  wildcard path is not live yet.
 - No wildcard DNS/ACM certificate/ALB preview ingress is deployed yet.
 - The preview-router container currently uses a temporary nginx image.
 - No Control API or agent workflow writes preview deployment records yet.

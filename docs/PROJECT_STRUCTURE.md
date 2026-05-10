@@ -900,6 +900,11 @@ a broker or credential vault, not in app code or agent workspaces.
 
 - The current canonical client directories are `apps/web` and
   `apps/desktop_mobile`.
+- `docs/plans` and `docs/audits` contain active planning/audit material and
+  should be indexed from roadmap or workstream docs when promoted.
+- `services/agent-creator` is the current specialist profile workshop
+  prototype; future source-control work should use a dedicated bridge service
+  rather than raw tokens inside runners.
 - The implemented DynamoDB layout uses focused tables for runs, tasks, events,
   artifacts, approvals, and preview deployments.
 - Control API V1 exists as a first slice. The broader product workflow still

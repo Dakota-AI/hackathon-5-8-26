@@ -13,3 +13,4 @@ Index:
 - [0007 Preview Hosting](0007-preview-hosting.md)
 - [0008 User Runner Placement](0008-user-runner-placement.md)
 - [0009 Proactive Communication Plane](0009-proactive-communication-plane.md)
+- [0010 Tenant Access Control And Access Codes](0010-tenant-access-control-and-access-codes.md)

@@ -29,6 +29,12 @@ abstract class LlmClient {
   /// they arrive over the wire. The [history] is the canonical conversation
   /// — newest message last. The system prompt is implementation-defined.
   Stream<LlmDelta> chat(List<LlmMessage> history);
+
+  /// Optional hook for clients that support server-side session state.
+  ///
+  /// Mobile chat uses session-scoped calls for Hermes-backed providers to
+  /// ensure fresh context when users tap "New session".
+  void clearSession() {}
 }
 
 /// Sentinel client that surfaces a clear "configure me" message in the UI
@@ -44,4 +50,7 @@ class UnconfiguredLlmClient implements LlmClient {
   Stream<LlmDelta> chat(List<LlmMessage> history) async* {
     yield LlmDelta(text: reason, done: true);
   }
+
+  @override
+  void clearSession() {}
 }

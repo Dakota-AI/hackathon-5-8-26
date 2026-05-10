@@ -54,9 +54,7 @@ class OpenAiCompatibleClient implements LlmClient {
         history.isNotEmpty && history.first.role == LlmRole.system;
 
     final messages = <Map<String, String>>[
-      if (!hasInlineSystem &&
-          systemPrompt != null &&
-          systemPrompt!.isNotEmpty)
+      if (!hasInlineSystem && systemPrompt != null && systemPrompt!.isNotEmpty)
         {'role': 'system', 'content': systemPrompt!},
       for (final m in history)
         {
@@ -82,9 +80,7 @@ class OpenAiCompatibleClient implements LlmClient {
         'max_tokens': maxTokens,
       });
 
-    safePrint(
-      '[llm] POST $uri model=$model historyLen=${history.length}',
-    );
+    safePrint('[llm] POST $uri model=$model historyLen=${history.length}');
     // Hard timeout on the connect+headers phase so a stalled provider
     // doesn't lock the UI in "Generating…" forever. Once the stream is
     // open, individual chunk reads have their own iOS-level timeouts.
@@ -152,4 +148,7 @@ class OpenAiCompatibleClient implements LlmClient {
     safePrint('[llm] stream closed deltas=$deltas');
     yield const LlmDelta(text: '', done: true);
   }
+
+  @override
+  void clearSession() {}
 }

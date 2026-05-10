@@ -14,6 +14,8 @@ Own the user-facing Agents Cloud experience across:
 - client-facing roadmap/status docs.
 - client expectations against shared protocol, Control API, realtime, artifact, approval, and generated UI contracts.
 - future agent-controlled GenUI/client-control UX described in `docs/roadmap/AGENT_CONTROLLED_GENUI_ARCHITECTURE_AND_PHASE_PLAN_2026_05_10.md`, including Surface renderers, streaming patches, client observation, command application/rejection, user takeover states, and Flutter/mobile agent presence.
+- This session adds clear/new-session controls to both web and mobile chat surfaces, with
+  Hermes session state reset on mobile when users start a fresh chat.
 
 This session is intentionally scope-first. The first required deliverable is this plan. Broad UI implementation should not start until this file exists and records current state, gaps, risks, dependencies, expected files, validation, and definition of done.
 

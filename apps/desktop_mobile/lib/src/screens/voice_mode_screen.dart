@@ -33,11 +33,7 @@ import '../ui/tokens.dart';
 /// Barge-in: if the user starts speaking while TTS is playing, the
 /// orchestrator stops playback and the queue clears.
 class VoiceModeScreen extends StatefulWidget {
-  const VoiceModeScreen({
-    super.key,
-    required this.store,
-    required this.inbox,
-  });
+  const VoiceModeScreen({super.key, required this.store, required this.inbox});
 
   final ConversationStore store;
   final AgentInbox inbox;
@@ -139,7 +135,9 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> {
           }
         },
         onError: (error) {
-          safePrint('[stt] error code=${error.errorMsg} permanent=${error.permanent}');
+          safePrint(
+            '[stt] error code=${error.errorMsg} permanent=${error.permanent}',
+          );
           if (!mounted) return;
           setState(() {
             _listening = false;
@@ -223,7 +221,9 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> {
     // Barge-in: if the user starts talking while the agent is speaking,
     // hush TTS and let the listen loop take over.
     if (_tts.isSpeaking && normalized > 0.32) {
-      safePrint('[voice] barge-in detected (level=$normalized) → cancelling TTS');
+      safePrint(
+        '[voice] barge-in detected (level=$normalized) → cancelling TTS',
+      );
       unawaited(_tts.cancel());
     }
   }
@@ -336,6 +336,24 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> {
     Navigator.of(context).pop();
   }
 
+  void _startNewSession() {
+    widget.store.startNewSession();
+    unawaited(_tts.cancel());
+    _rearmTimer?.cancel();
+    _dispatchTimer?.cancel();
+    _utteranceBuffer.clear();
+    _currentSegment = '';
+    _speechRequested = false;
+    _partialTranscript = null;
+    _soundLevel = 0;
+    if (mounted) {
+      setState(() {});
+    }
+    if (!_closing && !_muted) {
+      unawaited(_armMic());
+    }
+  }
+
   _VoiceState get _state {
     if (_tts.isSpeaking) return _VoiceState.speaking;
     if (widget.store.isResponding) return _VoiceState.thinking;
@@ -357,14 +375,14 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> {
     //   - while TTS plays: synthesize a higher-amplitude wave
     //   - while listening: drive from mic sound level
     //   - else: idle
-    final isMicChannel = state == _VoiceState.listening ||
-        state == _VoiceState.captured;
+    final isMicChannel =
+        state == _VoiceState.listening || state == _VoiceState.captured;
     final visualizerActive = isMicChannel || state == _VoiceState.speaking;
     final visualizerLevel = state == _VoiceState.speaking
         ? 0.65
         : isMicChannel
-            ? _soundLevel
-            : 0.0;
+        ? _soundLevel
+        : 0.0;
 
     return Scaffold(
       backgroundColor: Palette.background,
@@ -375,6 +393,7 @@ class _VoiceModeScreenState extends State<VoiceModeScreen> {
               state: state,
               providerLabel:
                   '${widget.store.providerLabel} · ${_tts.client.label}',
+              onNewSession: _startNewSession,
               onClose: _hangup,
             ),
             Container(height: 1, color: Palette.border),
@@ -444,24 +463,26 @@ enum _VoiceState { idle, listening, captured, thinking, speaking, muted }
 
 extension _VoiceStateLabel on _VoiceState {
   String get label => switch (this) {
-        _VoiceState.idle => 'Idle',
-        _VoiceState.listening => 'Listening',
-        _VoiceState.captured => 'Captured',
-        _VoiceState.thinking => 'Thinking',
-        _VoiceState.speaking => 'Speaking',
-        _VoiceState.muted => 'Muted',
-      };
+    _VoiceState.idle => 'Idle',
+    _VoiceState.listening => 'Listening',
+    _VoiceState.captured => 'Captured',
+    _VoiceState.thinking => 'Thinking',
+    _VoiceState.speaking => 'Speaking',
+    _VoiceState.muted => 'Muted',
+  };
 }
 
 class _VoiceTopBar extends StatelessWidget {
   const _VoiceTopBar({
     required this.state,
     required this.providerLabel,
+    required this.onNewSession,
     required this.onClose,
   });
 
   final _VoiceState state;
   final String providerLabel;
+  final VoidCallback onNewSession;
   final VoidCallback onClose;
 
   @override
@@ -500,6 +521,15 @@ class _VoiceTopBar extends StatelessWidget {
               ],
             ),
           ),
+          Tooltip(
+            tooltip: (_) => const TooltipContainer(child: Text('New session')),
+            child: GhostButton(
+              density: ButtonDensity.icon,
+              onPressed: onNewSession,
+              child: const Icon(RadixIcons.cross1, size: 14),
+            ),
+          ),
+          const Gap(6),
           GhostButton(
             density: ButtonDensity.icon,
             onPressed: onClose,
@@ -545,8 +575,9 @@ class _TranscriptTurn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = turn.role == TurnRole.user;
-    final segments =
-        isUser ? const <AgentSegment>[] : parseAgentText(turn.text);
+    final segments = isUser
+        ? const <AgentSegment>[]
+        : parseAgentText(turn.text);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -554,8 +585,9 @@ class _TranscriptTurn extends StatelessWidget {
         alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth:
-                segments.any((s) => s is GenUiSegment) ? double.infinity : 520,
+            maxWidth: segments.any((s) => s is GenUiSegment)
+                ? double.infinity
+                : 520,
           ),
           child: Container(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
@@ -780,13 +812,13 @@ class _VoiceCircleButton extends StatelessWidget {
     final bg = destructive
         ? Palette.danger.withValues(alpha: 0.18)
         : emphasized
-            ? Palette.inputElevated
-            : Palette.input;
+        ? Palette.inputElevated
+        : Palette.input;
     final border = destructive
         ? Palette.danger.withValues(alpha: 0.5)
         : emphasized
-            ? Palette.borderStrong
-            : Palette.border;
+        ? Palette.borderStrong
+        : Palette.border;
     final fg = destructive ? Palette.danger : Palette.text;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,

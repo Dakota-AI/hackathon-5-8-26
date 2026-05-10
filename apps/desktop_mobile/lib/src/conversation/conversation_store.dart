@@ -56,11 +56,9 @@ class Turn {
 /// surface so switching modes keeps context. Persists to disk so cold
 /// starts don't lose history.
 class ConversationStore extends ChangeNotifier {
-  ConversationStore({
-    LlmClient? client,
-    StorePersistence? persistence,
-  })  : _client = client ?? resolveLlmClient(),
-        _persistence = persistence;
+  ConversationStore({LlmClient? client, StorePersistence? persistence})
+    : _client = client ?? resolveLlmClient(),
+      _persistence = persistence;
 
   LlmClient _client;
   StorePersistence? _persistence;
@@ -82,7 +80,8 @@ class ConversationStore extends ChangeNotifier {
 
   /// Last write time of the persisted file. The chat surface polls this
   /// to detect background-isolate writes. Null if never persisted.
-  Future<DateTime?> persistedAt() => _persistence?.mtime() ?? Future.value(null);
+  Future<DateTime?> persistedAt() =>
+      _persistence?.mtime() ?? Future.value(null);
 
   Future<void> attachPersistence(StorePersistence persistence) async {
     _persistence = persistence;
@@ -132,10 +131,20 @@ class ConversationStore extends ChangeNotifier {
   }
 
   void clear() {
+    startNewSession();
+  }
+
+  /// Clears visible chat turns and asks the LLM to start a fresh session.
+  ///
+  /// Keep this as the single callsite for user-driven new-session actions so
+  /// both provider and persistence state stay aligned.
+  void startNewSession() {
     _activeStream?.cancel();
     _activeStream = null;
     _activeAgentTurnId = null;
     _turns.clear();
+    _seq = 0;
+    _client.clearSession();
     _persist();
     notifyListeners();
   }
@@ -220,7 +229,10 @@ class ConversationStore extends ChangeNotifier {
       onDelta: onDelta,
       onComplete: onComplete,
     );
-    return _turns.firstWhere((t) => t.id == agentTurn.id, orElse: () => agentTurn);
+    return _turns.firstWhere(
+      (t) => t.id == agentTurn.id,
+      orElse: () => agentTurn,
+    );
   }
 
   /// Drop a fully-formed proactive agent turn into the conversation —
@@ -268,32 +280,38 @@ class ConversationStore extends ChangeNotifier {
     final buffer = StringBuffer();
     var errored = false;
 
-    _activeStream = _client.chat(history).listen(
-      (delta) {
-        if (delta.text.isNotEmpty) {
-          buffer.write(delta.text);
-          _patchAgent(agentTurnId, buffer.toString(), streaming: !delta.done);
-          onDelta?.call(delta.text);
-        }
-        if (delta.done) {
-          _patchAgent(agentTurnId, buffer.toString(), streaming: false);
-        }
-      },
-      onError: (Object e) {
-        errored = true;
-        _patchAgent(
-          agentTurnId,
-          'LLM stream failed: $e',
-          streaming: false,
-          error: true,
+    _activeStream = _client
+        .chat(history)
+        .listen(
+          (delta) {
+            if (delta.text.isNotEmpty) {
+              buffer.write(delta.text);
+              _patchAgent(
+                agentTurnId,
+                buffer.toString(),
+                streaming: !delta.done,
+              );
+              onDelta?.call(delta.text);
+            }
+            if (delta.done) {
+              _patchAgent(agentTurnId, buffer.toString(), streaming: false);
+            }
+          },
+          onError: (Object e) {
+            errored = true;
+            _patchAgent(
+              agentTurnId,
+              'LLM stream failed: $e',
+              streaming: false,
+              error: true,
+            );
+            if (!completer.isCompleted) completer.complete();
+          },
+          onDone: () {
+            if (!completer.isCompleted) completer.complete();
+          },
+          cancelOnError: true,
         );
-        if (!completer.isCompleted) completer.complete();
-      },
-      onDone: () {
-        if (!completer.isCompleted) completer.complete();
-      },
-      cancelOnError: true,
-    );
 
     await completer.future;
     _activeStream = null;
@@ -362,8 +380,11 @@ class ConversationStore extends ChangeNotifier {
   }) {
     final index = _turns.indexWhere((t) => t.id == id);
     if (index == -1) return;
-    _turns[index] =
-        _turns[index].copyWith(text: text, streaming: streaming, error: error);
+    _turns[index] = _turns[index].copyWith(
+      text: text,
+      streaming: streaming,
+      error: error,
+    );
     notifyListeners();
     _persist();
   }

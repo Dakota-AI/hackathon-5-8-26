@@ -251,6 +251,13 @@ class _AgentChatSurfaceState extends ConsumerState<AgentChatSurface>
     await _store.sendUser(text: text);
   }
 
+  void _startNewSession() {
+    _store.startNewSession();
+    _composer.clear();
+    _focus.requestFocus();
+    setState(() {});
+  }
+
   void _dismissKeyboard() {
     if (_focus.hasFocus) _focus.unfocus();
   }
@@ -309,7 +316,7 @@ class _AgentChatSurfaceState extends ConsumerState<AgentChatSurface>
                           ? const _EmptyState()
                           : ListView.builder(
                               controller: _scroll,
-                keyboardDismissBehavior:
+                              keyboardDismissBehavior:
                                   ScrollViewKeyboardDismissBehavior.onDrag,
                               padding: EdgeInsets.fromLTRB(
                                 widget.compact ? 10 : 16,
@@ -334,10 +341,12 @@ class _AgentChatSurfaceState extends ConsumerState<AgentChatSurface>
             _Composer(
               controller: _composer,
               focusNode: _focus,
-              busy: _store.isResponding ||
+              busy:
+                  _store.isResponding ||
                   _isBootstrappingRunner ||
                   _isRunnerBootstrappingMessage(_runnerStatusMessage ?? ''),
               onSubmit: _send,
+              onNewSession: _startNewSession,
               onConversation: widget.showVoiceAction
                   ? _startConversation
                   : null,
@@ -634,6 +643,7 @@ class _Composer extends StatelessWidget {
     required this.focusNode,
     required this.busy,
     required this.onSubmit,
+    required this.onNewSession,
     required this.onConversation,
   });
 
@@ -641,6 +651,7 @@ class _Composer extends StatelessWidget {
   final FocusNode focusNode;
   final bool busy;
   final VoidCallback onSubmit;
+  final VoidCallback onNewSession;
   final VoidCallback? onConversation;
 
   @override
@@ -662,6 +673,20 @@ class _Composer extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              Tooltip(
+                tooltip: (_) =>
+                    const TooltipContainer(child: Text('New session')),
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: GhostButton(
+                    density: ButtonDensity.icon,
+                    onPressed: onNewSession,
+                    child: const Icon(RadixIcons.cross1, size: 16),
+                  ),
+                ),
+              ),
+              const Gap(8),
               if (onConversation != null) ...[
                 SizedBox(
                   width: 44,

@@ -6,7 +6,8 @@ import {
   GearIcon,
   PaperPlaneIcon,
   PlusIcon,
-  ReloadIcon
+  ReloadIcon,
+  TrashIcon
 } from "@radix-ui/react-icons";
 import {
   createControlApiWorkItem,
@@ -260,6 +261,7 @@ function Conversation({
   const [submitting, setSubmitting] = React.useState(false);
   const [draft, setDraft] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
+  const [sessionCutoffMs, setSessionCutoffMs] = React.useState<number | null>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const activeRun = React.useMemo(() => runs.find((r) => !isTerminal(r.status)) ?? null, [runs]);
 
@@ -326,7 +328,18 @@ function Conversation({
     }
   }, [events.length]);
 
-  const turns = React.useMemo(() => buildChatTurns({ workItem, events }), [workItem, events]);
+  const visibleEvents = React.useMemo(() => {
+    if (!sessionCutoffMs) return events;
+    return events.filter((event) => {
+      const t = Date.parse(event.createdAt ?? "");
+      if (Number.isNaN(t)) return true;
+      return t >= sessionCutoffMs;
+    });
+  }, [events, sessionCutoffMs]);
+  const turns = React.useMemo(
+    () => buildChatTurns({ workItem, events: visibleEvents }),
+    [workItem, visibleEvents],
+  );
   const showWorkingIndicator = Boolean(activeRun) || submitting;
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -351,6 +364,10 @@ function Conversation({
     }
   }
 
+  function clearConversationHistory() {
+    setSessionCutoffMs(Date.now());
+  }
+
   if (!workItem) return null;
 
   return (
@@ -367,6 +384,9 @@ function Conversation({
         <div className="flex shrink-0 items-center gap-2">
           <StatusPill label={`${runs.length} runs`} tone="info" />
           <StatusPill label={`${events.length} events`} tone="info" />
+          <Button variant="ghost" size="icon" onClick={clearConversationHistory} title="Clear history">
+            <TrashIcon />
+          </Button>
           <Button variant="ghost" size="icon" onClick={refresh} title="Refresh">
             <ReloadIcon className={cn(loading && "animate-spin")} />
           </Button>

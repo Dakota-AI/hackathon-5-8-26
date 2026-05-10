@@ -78,7 +78,7 @@ final selectedPageProvider = StateProvider<ConsolePage>(
 
 final selectedAgentIdProvider = StateProvider<String?>((ref) => null);
 
-final sidebarCollapsedProvider = StateProvider<bool>((ref) => false);
+final sidebarCollapsedProvider = StateProvider<bool>((ref) => true);
 
 class AgentsCloudConsoleApp extends StatelessWidget {
   const AgentsCloudConsoleApp({super.key});
@@ -283,49 +283,42 @@ class _Sidebar extends ConsumerWidget {
   }
 }
 
-class _SidebarCollapseButton extends ConsumerWidget {
+class _SidebarCollapseButton extends StatelessWidget {
   const _SidebarCollapseButton({required this.collapsed});
 
   final bool collapsed;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final button = GestureDetector(
+  Widget build(BuildContext context) {
+    final button = Container(
       key: const ValueKey('sidebar-collapse-button'),
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        HapticFeedback.selectionClick();
-        ref.read(sidebarCollapsedProvider.notifier).state = !collapsed;
-      },
-      child: Container(
-        height: 38,
-        width: collapsed ? 44 : double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: _Palette.input,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _Palette.border),
-        ),
-        child: Row(
-          mainAxisAlignment: collapsed
-              ? MainAxisAlignment.center
-              : MainAxisAlignment.spaceBetween,
-          children: [
-            const BrandMark(size: 17),
-            if (!collapsed) ...[
-              const Spacer(),
-              const Icon(
-                RadixIcons.doubleArrowLeft,
-                size: 14,
-                color: _Palette.muted,
-              ),
-            ],
+      height: 38,
+      width: collapsed ? 44 : double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: _Palette.input,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _Palette.border),
+      ),
+      child: Row(
+        mainAxisAlignment: collapsed
+            ? MainAxisAlignment.center
+            : MainAxisAlignment.spaceBetween,
+        children: [
+          const BrandMark(size: 17),
+          if (!collapsed) ...[
+            const Spacer(),
+            const Icon(
+              RadixIcons.doubleArrowLeft,
+              size: 14,
+              color: _Palette.muted,
+            ),
           ],
-        ),
+        ],
       ),
     );
     return _NavTooltip(
-      label: collapsed ? 'Expand navigation' : 'Collapse navigation',
+      label: 'Navigation locked',
       enabled: collapsed,
       child: button,
     );

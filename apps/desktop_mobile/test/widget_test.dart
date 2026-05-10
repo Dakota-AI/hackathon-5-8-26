@@ -84,7 +84,6 @@ void main() {
     // Sidebar order: Agents(0), Kanban(1), Inbox(2), Browser(3), UI Kit(4).
     final navItems = find.byType(NavigationItem);
     expect(navItems, findsNWidgets(5));
-    expect(find.text('Inbox'), findsOneWidget);
 
     await tester.tap(navItems.at(1));
     await _settle(tester);

@@ -373,8 +373,8 @@ du -sh infra/cdk/cdk.out
 Notes:
 
 - `pnpm infra:synth` emitted two CDK deprecation warnings for `aws_iam.GrantOnPrincipalOptions#scope`; synth still succeeded.
-- Deploy still needs to be performed before claiming the WorkItem routes are live.
-- Before deploy, stage selectively and avoid unrelated working-tree docs/ADR/frontend changes.
+- Deployment completed for `agents-cloud-dev-control-api` after rebuilding CDK from the repo root.
+- Before commit, stage selectively and avoid unrelated working-tree docs/ADR/frontend changes.
 
 ## Definition Of Done For This Work Session
 

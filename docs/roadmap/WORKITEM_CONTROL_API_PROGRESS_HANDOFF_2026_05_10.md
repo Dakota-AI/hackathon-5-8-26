@@ -202,7 +202,7 @@ CDK asset hygiene find                                  -> PASS, no output
 du -sh infra/cdk/cdk.out                                -> 1.5M
 ```
 
-This implementation is now the completed WorkItem handler slice for create/list/get/status/run/event behavior. Next backend/API work should be artifact query APIs, DataSourceRef v0, or Surface v0; next pure infrastructure work should be the user-runner state model.
+This implementation is now the deployed completed WorkItem handler slice for create/list/get/status/run/event behavior. Next backend/API work should be artifact query APIs, DataSourceRef v0, or Surface v0; next pure infrastructure work should be the user-runner state model.
 
 ## Why the current split exists
 

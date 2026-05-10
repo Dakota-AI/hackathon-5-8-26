@@ -139,14 +139,17 @@ Results:
 
 ## Deployment expectation
 
-After this slice is deployed, the deployed HTTP API should expose the real WorkItem handler for create/list/get/status/run/event routes while artifact, DataSourceRef, and Surface APIs continue returning explicit `501 NotImplemented` until their own slices land.
+This slice has been deployed to `agents-cloud-dev-control-api`; the deployed HTTP API now exposes the real WorkItem handler for create/list/get/status/run/event routes while artifact, DataSourceRef, and Surface APIs continue returning explicit `501 NotImplemented` until their own slices land.
 
-Recommended deployed smoke checks:
+Deployed smoke checks performed:
 
-1. Verify `/work-items` still requires Cognito auth through API Gateway.
-2. Invoke the deployed `WorkItemsFunction` with a Cognito-shaped API Gateway event in dev to create an idempotent smoke WorkItem.
-3. Invoke the same event again and verify HTTP 200 with the same `workItemId`.
-4. Query the deployed WorkItems DynamoDB table by the idempotency GSI to confirm persistence.
+1. Verified unauthenticated `GET /work-items?workspaceId=workspace-smoke` returns HTTP 401 through API Gateway.
+2. Invoked deployed `WorkItemsFunction` with Cognito-shaped dev claims and created WorkItem `work-idem-0afed2c76f048c7c66649ed9` with HTTP 201.
+3. Replayed the same create event and verified idempotent HTTP 200 with the same WorkItem id.
+4. Updated the WorkItem status to `in_progress` and verified HTTP 200.
+5. Created a WorkItem-linked run and verified HTTP 202 plus Step Functions execution ARN.
+6. Listed WorkItem runs and verified HTTP 200 with the linked run persisted as `succeeded`.
+7. Listed WorkItem events and verified HTTP 200 with four ordered run events.
 
 ## Remaining Control API work
 

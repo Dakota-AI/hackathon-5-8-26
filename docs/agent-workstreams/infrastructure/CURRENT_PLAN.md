@@ -2,7 +2,7 @@
 
 Date: 2026-05-10
 Owner: Infrastructure Workstream
-Status: WorkItem handler deployed; user-runner state model slice deployed
+Status: WorkItem/user-runner state deployed; obsolete sandbox cleanup complete
 
 ## Session Goal
 
@@ -84,6 +84,41 @@ du -sh infra/cdk/cdk.out
 1.4M infra/cdk/cdk.out
 ```
 
+
+## Production-Shaped Infrastructure Direction
+
+The user explicitly clarified that Agents Cloud should use one production-shaped CDK path: no alternate dev/prod architecture, no duplicate experimental CDK stack family, and no "sandbox stack" as a long-term product path. Current `agents-cloud-dev-*` names are legacy/bootstrap environment names for the already-deployed stack family, not a license to create a parallel production architecture. Future work should evolve this stack family in place unless a deliberate migration plan is written and approved.
+
+Rules for future agents:
+
+- Do not add a second CDK app or alternate stack family for production.
+- Do not create separate dev/prod feature stacks with different architecture.
+- Keep environment variables for names, removal policy, capacity, and external DNS/certificate inputs only.
+- Keep AWS as durable truth and Cloudflare/Amplify as edge/auth/hosting integrations, not parallel state planes.
+- If current `dev` naming must be removed later, treat it as a controlled rename/migration, not as a new architecture.
+
+## Cleanup Completed
+
+Obsolete Amplify template sandbox deleted on 2026-05-10:
+
+```text
+amplify-amplifybackendapptemplate-sebastian-sandbox-43886d8444
+```
+
+That sandbox owned old template AppSync/Data/Lambda/Auth resources and was not referenced by the current Agents Cloud app. Verification after delete:
+
+- AWS account checked: `625250616301`.
+- Deleted stack now returns `ValidationError: Stack ... does not exist`.
+- Current Agents Cloud Amplify Auth sandbox remains intact:
+  - `amplify-agentscloudinfraamplify-sebastian-sandbox-9f28c677ec`
+  - user pool `us-east-1_1UeU1hTME`
+  - app client `3kq79rodc3ofjkulh0b31sfpos`
+- Current CDK stacks remain active and are not alternate architectures.
+
+Cleanup still pending:
+
+- Move Cognito/Auth ownership from the current Amplify Auth sandbox into the main CDK path when ready, update web/native config, then delete the remaining Amplify sandbox. Do not delete it before auth migration because current web/native config uses its user pool/client.
+
 ## Current Infrastructure State
 
 ### Durable AWS foundation
@@ -99,7 +134,7 @@ Implemented in `infra/cdk` and documented as deployed/synthesizing:
 - Orchestration stack with Step Functions `ecs:runTask.sync` path into the smoke/runtime task.
 - Control API stack with Cognito-protected HTTP API routes for runs, admin runs, admin run event lineage, and product-shaped WorkItem/Artifact/DataSourceRef/Surface routes.
 - Realtime API stack with API Gateway WebSocket API, Cognito query-token authorizer, connection handlers, DynamoDB stream relay Lambda, and realtime connection table permissions.
-- Optional PreviewIngress stack, gated behind explicit preview env vars.
+- Optional PreviewIngress stack exists in code but is not deployed in the current stack list; future preview work should keep the same CDK app/path and avoid alternate stack families.
 
 ### Deployment reality from docs and recent session evidence
 
@@ -109,6 +144,7 @@ Implemented in `infra/cdk` and documented as deployed/synthesizing:
 - WorkItem/DataSource/Surface infrastructure exists. The active WorkItem handler slice now implements create/list/get/status/run/event behavior locally; artifact, DataSourceRef, and Surface handlers remain intentionally not implemented.
 - Admin request lineage is deployed via `GET /admin/runs/{runId}/events` and should remain admin-only.
 - `admin.solo-ceo.ai` still depends on external Cloudflare DNS, not CDK.
+- Obsolete old Amplify template sandbox has been deleted; the remaining Amplify sandbox is the active auth provider until Cognito is migrated into CDK.
 
 ## What Is Complete
 
@@ -414,6 +450,37 @@ RunnerSnapshotsTable ACTIVE
 AgentInstancesTable ACTIVE
 ```
 
+
+## Next Slice Plan: Runner Registration And Heartbeat Control API
+
+Recommended immediate next build slice after cleanup:
+
+```text
+Control API -> HostNodes/UserRunners tables -> admin runner visibility
+```
+
+Scope:
+
+1. Add Control API use cases for HostNode registration/update and heartbeat.
+2. Add Control API use cases for UserRunner create/update/get and heartbeat.
+3. Add bounded admin list/query views for online/stale/failed/restoring runners.
+4. Wire routes into the existing `agents-cloud-dev-control-api` stack only.
+5. Use the deployed runner table GSIs; avoid product-path scans.
+6. Keep auth production-shaped: Cognito/admin for operator views, trusted-supervisor/runner auth contract for heartbeat writes. If the trusted-supervisor token broker is not ready, keep heartbeat writes behind an explicit not-yet-production test/admin path and document it.
+
+Non-scope:
+
+- no alternate CDK app or stack family,
+- no ECS resident service yet,
+- no local Docker supervisor yet,
+- no realtime runner-status relay yet,
+- no frontend UI unless Clients request a minimal admin read view.
+
+Coordination:
+
+- Handoff created: `docs/agent-workstreams/handoffs/2026-05-10-infra-to-control-api-runner-registration-heartbeat.md`.
+- Existing handoffs to Agent Harness and Realtime Streaming remain relevant.
+
 ## Definition Of Done For This Work Session
 
 This WorkItem-first infrastructure session is done when:
@@ -428,4 +495,4 @@ This WorkItem-first infrastructure session is done when:
 
 ## Current Recommendation
 
-WorkItem handler deployment is complete. User-runner state model CDK tables/tests are now deployed as an infrastructure-only slice, with handoffs created for Agent Harness and Realtime Streaming. Next recommended slice: implement Control API/admin read/write endpoints for host registration and runner heartbeat only after Agent Harness confirms payload/status contracts.
+WorkItem handler deployment is complete. User-runner state model CDK tables/tests are now deployed as an infrastructure-only slice, with handoffs created for Agent Harness and Realtime Streaming. Next recommended slice: implement Control API/admin read/write endpoints for HostNode registration and UserRunner heartbeat/state using the deployed runner tables. Keep this in the existing Control API/CDK stack family, add tests first, deploy, and smoke real AWS. Auth migration into CDK should follow soon after so the remaining Amplify auth sandbox can be removed.

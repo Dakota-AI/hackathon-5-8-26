@@ -15,17 +15,25 @@ operational safety.
 - runtime deployment contract touchpoints in `services/agent-runtime/`
 - Control API deployment contract touchpoints in `services/control-api/`
 
+## Single Production-Shaped CDK Path
+
+Agents Cloud should evolve one production-shaped CDK app/stack family. Do not create alternate dev/prod architectures, duplicate experimental stack families, or sandbox-only production paths. The current `agents-cloud-dev-*` naming is legacy/bootstrap naming for the active deployed family; future work should improve this path in place unless a deliberate migration is approved.
+
+Cleanup status: the obsolete `amplify-amplifybackendapptemplate-sebastian-sandbox-43886d8444` stack has been deleted. The remaining `amplify-agentscloudinfraamplify-sebastian-sandbox-9f28c677ec` stack is still active because current web/native auth uses its Cognito user pool/client.
+
 ## Current Focus
 
-1. Keep CDK asset staging safe and minimal.
-2. Finish infrastructure support for WorkItems, artifacts, data sources, and
-   generated surfaces.
-3. Add user-runner state tables and indexes.
-4. Add local host placement records.
-5. Add ECS Fargate user-runner service/task definitions.
-6. Add scoped task roles and runtime environment variables.
-7. Add alarms and metrics for failed runs, stale runners, failed snapshots, and
-   high error rates.
+1. Keep the single CDK path production-shaped and avoid alternate stack families.
+2. Keep CDK asset staging safe and minimal.
+3. Finish product APIs for artifacts, data sources, and generated surfaces.
+4. Add HostNode/UserRunner registration and heartbeat Control API endpoints over the deployed runner state tables.
+5. Migrate Cognito/Auth ownership into CDK when ready, then delete the remaining Amplify Auth sandbox.
+6. Add local host placement records/APIs and later the ECS Fargate user-runner service/task definition.
+7. Add scoped task roles, runtime environment variables, alarms, and metrics for failed runs, stale runners, failed snapshots, and high error rates.
+
+Current proposal docs:
+
+- `AI_CALLER_CLOUDFLARE_REALTIME_INFRA_PROPOSAL.md`
 
 ## Required Planning File
 

@@ -2,6 +2,12 @@
 
 This package contains the first deployable AWS CDK foundation for `agents-cloud`.
 
+## Single Production-Shaped Stack Path
+
+This CDK package is the production-shaped infrastructure path for Agents Cloud. Do not add a separate production CDK app, alternate dev/prod architecture, or duplicate experimental stack family. The current stack names include `dev` because this was the bootstrap environment name; future changes should evolve this stack family in place unless a controlled migration/rename is explicitly planned.
+
+Environment variables may adjust names, capacity, removal policy, and external DNS/certificate inputs, but should not fork the architecture. Amplify remains hosting/auth integration for now; Cognito/Auth should be migrated into this CDK path before deleting the remaining active Amplify Auth sandbox.
+
 ## Current Status
 
 Implemented, deployed, and synthesizing:
@@ -85,14 +91,14 @@ Not complete yet:
 - Real Hermes CLI/model execution with scoped provider secrets.
 - EventBridge/SQS event relay.
 - Cloudflare realtime stack.
-- The Cognito user pool/client defaults point at the current Amplify sandbox and
+- The Cognito user pool/client defaults point at the current Amplify Auth sandbox and
   can be overridden with `AGENTS_CLOUD_COGNITO_USER_POOL_ID` and
-  `AGENTS_CLOUD_COGNITO_USER_POOL_CLIENT_ID`.
+  `AGENTS_CLOUD_COGNITO_USER_POOL_CLIENT_ID`. This should migrate into CDK soon so the remaining Amplify sandbox can be deleted.
 
 Related implementation that lives outside this package:
 
-- `infra/amplify` has a deployed Amplify Gen 2 Auth sandbox with Cognito email
-  login.
+- `infra/amplify` has the active Amplify Gen 2 Auth sandbox with Cognito email
+  login. The obsolete old Amplify backend template sandbox was deleted on 2026-05-10.
 - The repo root has an `amplify.yml` web Hosting build that currently deploys
   successfully.
 

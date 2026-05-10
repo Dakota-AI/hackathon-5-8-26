@@ -54,6 +54,13 @@ Implemented, deployed, and synthesizing:
   - IAM grants for DynamoDB run/task/event access and Step Functions execution
     start.
 
+- `RealtimeApiStack`
+  - API Gateway WebSocket API for AWS-native realtime streaming.
+  - Lambda REQUEST authorizer validating Cognito JWTs on `$connect`.
+  - `$connect`, `$disconnect`, and `$default` handlers from `services/realtime-api`.
+  - DynamoDB Streams relay from authoritative run events to subscribed connections.
+  - Outputs WebSocket URL and callback URL.
+
 - Optional `PreviewIngressStack`
   - Gated by `AGENTS_CLOUD_PREVIEW_INGRESS_ENABLED=true`.
   - Creates the public HTTPS ALB and temporary ECS `preview-router` service.

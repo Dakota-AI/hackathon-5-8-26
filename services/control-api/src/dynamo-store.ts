@@ -1,5 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { ControlApiStore, EventRecord, RunRecord, TaskRecord } from "./ports.js";
 
 export class DynamoControlApiStore implements ControlApiStore {
@@ -24,15 +24,40 @@ export class DynamoControlApiStore implements ControlApiStore {
   }
 
   async putRun(item: RunRecord): Promise<void> {
-    await this.client.send(new PutCommand({ TableName: this.tables.runsTableName, Item: item }));
+    await this.client.send(new PutCommand({
+      TableName: this.tables.runsTableName,
+      Item: item,
+      ConditionExpression: "attribute_not_exists(workspaceId) AND attribute_not_exists(runId)"
+    }));
   }
 
   async putTask(item: TaskRecord): Promise<void> {
-    await this.client.send(new PutCommand({ TableName: this.tables.tasksTableName, Item: item }));
+    await this.client.send(new PutCommand({
+      TableName: this.tables.tasksTableName,
+      Item: item,
+      ConditionExpression: "attribute_not_exists(runId) AND attribute_not_exists(taskId)"
+    }));
   }
 
   async putEvent(item: EventRecord): Promise<void> {
-    await this.client.send(new PutCommand({ TableName: this.tables.eventsTableName, Item: item }));
+    await this.client.send(new PutCommand({
+      TableName: this.tables.eventsTableName,
+      Item: item,
+      ConditionExpression: "attribute_not_exists(runId) AND attribute_not_exists(seq)"
+    }));
+  }
+
+  async updateRunExecution(input: { readonly workspaceId: string; readonly runId: string; readonly executionArn: string; readonly updatedAt: string }): Promise<void> {
+    await this.client.send(new UpdateCommand({
+      TableName: this.tables.runsTableName,
+      Key: { workspaceId: input.workspaceId, runId: input.runId },
+      UpdateExpression: "SET executionArn = :executionArn, updatedAt = :updatedAt",
+      ConditionExpression: "attribute_exists(workspaceId) AND attribute_exists(runId)",
+      ExpressionAttributeValues: {
+        ":executionArn": input.executionArn,
+        ":updatedAt": input.updatedAt
+      }
+    }));
   }
 
   async getRunById(runId: string): Promise<RunRecord | undefined> {
@@ -42,6 +67,19 @@ export class DynamoControlApiStore implements ControlApiStore {
         IndexName: "by-run-id",
         KeyConditionExpression: "runId = :runId",
         ExpressionAttributeValues: { ":runId": runId },
+        Limit: 1
+      })
+    );
+    return result.Items?.[0] as RunRecord | undefined;
+  }
+
+  async getRunByIdempotencyScope(idempotencyScope: string): Promise<RunRecord | undefined> {
+    const result = await this.client.send(
+      new QueryCommand({
+        TableName: this.tables.runsTableName,
+        IndexName: "by-idempotency-scope",
+        KeyConditionExpression: "idempotencyScope = :idempotencyScope",
+        ExpressionAttributeValues: { ":idempotencyScope": idempotencyScope },
         Limit: 1
       })
     );

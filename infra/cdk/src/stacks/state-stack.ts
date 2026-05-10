@@ -1,5 +1,5 @@
 import { CfnOutput, RemovalPolicy } from "aws-cdk-lib";
-import { AttributeType, BillingMode, ProjectionType, Table } from "aws-cdk-lib/aws-dynamodb";
+import { AttributeType, BillingMode, ProjectionType, StreamViewType, Table } from "aws-cdk-lib/aws-dynamodb";
 import type { Construct } from "constructs";
 import { logicalName } from "../config/environments.js";
 import { AgentsCloudStack } from "./agents-cloud-stack.js";
@@ -12,6 +12,7 @@ export class StateStack extends AgentsCloudStack {
   public readonly artifactsTable: Table;
   public readonly approvalsTable: Table;
   public readonly previewDeploymentsTable: Table;
+  public readonly realtimeConnectionsTable: Table;
 
   public constructor(scope: Construct, id: string, props: AgentsCloudStackProps) {
     super(scope, id, props);
@@ -28,6 +29,11 @@ export class StateStack extends AgentsCloudStack {
       partitionKey: { name: "runId", type: AttributeType.STRING },
       projectionType: ProjectionType.ALL
     });
+    this.runsTable.addGlobalSecondaryIndex({
+      indexName: "by-idempotency-scope",
+      partitionKey: { name: "idempotencyScope", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
 
     this.tasksTable = this.createTable("TasksTable", "runId", AttributeType.STRING, "taskId", AttributeType.STRING, props);
     this.tasksTable.addGlobalSecondaryIndex({
@@ -37,7 +43,7 @@ export class StateStack extends AgentsCloudStack {
       projectionType: ProjectionType.ALL
     });
 
-    this.eventsTable = this.createTable("EventsTable", "runId", AttributeType.STRING, "seq", AttributeType.NUMBER, props);
+    this.eventsTable = this.createTable("EventsTable", "runId", AttributeType.STRING, "seq", AttributeType.NUMBER, props, StreamViewType.NEW_IMAGE);
     this.eventsTable.addGlobalSecondaryIndex({
       indexName: "by-workspace-created-at",
       partitionKey: { name: "workspaceId", type: AttributeType.STRING },
@@ -75,12 +81,20 @@ export class StateStack extends AgentsCloudStack {
       projectionType: ProjectionType.ALL
     });
 
+    this.realtimeConnectionsTable = this.createTable("RealtimeConnectionsTable", "pk", AttributeType.STRING, "sk", AttributeType.STRING, props);
+    this.realtimeConnectionsTable.addGlobalSecondaryIndex({
+      indexName: "by-connection",
+      partitionKey: { name: "connectionId", type: AttributeType.STRING },
+      projectionType: ProjectionType.ALL
+    });
+
     this.outputTable("RunsTableName", "runs-table-name", this.runsTable, props);
     this.outputTable("TasksTableName", "tasks-table-name", this.tasksTable, props);
     this.outputTable("EventsTableName", "events-table-name", this.eventsTable, props);
     this.outputTable("ArtifactsTableName", "artifacts-table-name", this.artifactsTable, props);
     this.outputTable("ApprovalsTableName", "approvals-table-name", this.approvalsTable, props);
     this.outputTable("PreviewDeploymentsTableName", "preview-deployments-table-name", this.previewDeploymentsTable, props);
+    this.outputTable("RealtimeConnectionsTableName", "realtime-connections-table-name", this.realtimeConnectionsTable, props);
   }
 
   private createTable(
@@ -89,12 +103,14 @@ export class StateStack extends AgentsCloudStack {
     partitionKeyType: AttributeType,
     sortKeyName: string,
     sortKeyType: AttributeType,
-    props: AgentsCloudStackProps
+    props: AgentsCloudStackProps,
+    stream?: StreamViewType
   ): Table {
     return new Table(this, id, {
       partitionKey: { name: partitionKeyName, type: partitionKeyType },
       sortKey: { name: sortKeyName, type: sortKeyType },
       billingMode: BillingMode.PAY_PER_REQUEST,
+      stream,
       pointInTimeRecoverySpecification: {
         pointInTimeRecoveryEnabled: props.config.envName !== "dev"
       },

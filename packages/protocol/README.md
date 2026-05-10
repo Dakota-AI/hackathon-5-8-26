@@ -1,6 +1,6 @@
 # Protocol Package
 
-Canonical protocol schemas for the platform.
+Canonical event and payload contracts for the platform.
 
 This package owns:
 
@@ -9,6 +9,32 @@ This package owns:
 - Approval request/decision schemas.
 - Artifact pointer schemas.
 - A2UI wrapper event schema.
-- Future TypeScript and Dart model generation.
+- TypeScript event builder/types used by service producers.
+- Future Dart model generation.
 
-Every backend service and client must treat these schemas as the shared contract.
+Every backend service and client must treat these schemas and builders as the shared contract.
+
+## TypeScript helpers
+
+`src/events.ts` exports the first shared producer helpers:
+
+- `buildCanonicalEvent(...)`
+- `buildRunStatusEvent(...)`
+- `buildArtifactCreatedEvent(...)`
+- `RunStatus`
+- `ArtifactKind`
+- `CanonicalEventEnvelope`
+
+Control API and agent-runtime now use these helpers for service-produced
+`run.status` and `artifact.created` events so event envelope fields do not drift
+between producers.
+
+## Commands
+
+```bash
+pnpm contracts:build
+pnpm contracts:test
+```
+
+`contracts:test` builds the TypeScript helpers and validates the JSON Schemas and
+golden example.

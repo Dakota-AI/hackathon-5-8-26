@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { executeRun } from "../src/worker.js";
-import type { ArtifactSink, EventSink, HermesRunner, RuntimeContext } from "../src/ports.js";
+import type { ArtifactSink, EventSink, HermesRunner, RuntimeContext, RuntimeEvent } from "../src/ports.js";
 
 class MemoryEventSink implements EventSink {
-  public events: Array<{ seq: number; type: string; payload: Record<string, unknown> }> = [];
+  public events: RuntimeEvent[] = [];
   public runStatuses: string[] = [];
   public taskStatuses: string[] = [];
 
-  async putEvent(event: { seq: number; type: string; payload: Record<string, unknown> }): Promise<void> {
+  async putEvent(event: RuntimeEvent): Promise<void> {
     this.events.push(event);
   }
 
@@ -72,28 +72,32 @@ describe("executeRun", () => {
     assert.deepEqual(events.runStatuses, ["running", "succeeded"]);
     assert.deepEqual(events.taskStatuses, ["running", "succeeded"]);
     assert.deepEqual(
-      events.events.map((event) => [event.seq, event.type, event.payload.status ?? event.payload.artifactId]),
+      events.events.map((event) => [event.id, event.seq, event.type, event.payload.status ?? event.payload.artifactId]),
       [
-        [2, "run.status", "running"],
-        [3, "artifact.created", "artifact-0001"],
-        [4, "run.status", "succeeded"]
+        ["evt-run-123-000002", 2, "run.status", "running"],
+        ["evt-run-123-000003", 3, "artifact.created", "artifact-task-123-0001"],
+        ["evt-run-123-000004", 4, "run.status", "succeeded"]
       ]
     );
+    assert.equal(events.events[0]?.source.kind, "worker");
+    assert.equal(events.events[0]?.payload.runId, "run-123");
+    assert.equal(events.events[1]?.payload.kind, "report");
+    assert.equal(events.events[1]?.payload.name, "Hermes worker report");
 
     assert.equal(artifacts.artifacts.length, 1);
-    assert.equal(artifacts.artifacts[0]?.key, "workspaces/workspace-abc/runs/run-123/artifacts/artifact-0001/hermes-report.md");
+    assert.equal(artifacts.artifacts[0]?.key, "workspaces/workspace-abc/runs/run-123/artifacts/artifact-task-123-0001/hermes-report.md");
     assert.match(artifacts.artifacts[0]?.body ?? "", /Hermes completed the first worker run/);
     assert.deepEqual(artifacts.records[0], {
       runId: "run-123",
-      artifactId: "artifact-0001",
+      artifactId: "artifact-task-123-0001",
       workspaceId: "workspace-abc",
       userId: "user-123",
       taskId: "task-123",
-      kind: "hermes-report",
-      title: "Hermes worker report",
+      kind: "report",
+      name: "Hermes worker report",
       bucket: "artifact-bucket",
-      key: "workspaces/workspace-abc/runs/run-123/artifacts/artifact-0001/hermes-report.md",
-      uri: "s3://artifact-bucket/workspaces/workspace-abc/runs/run-123/artifacts/artifact-0001/hermes-report.md",
+      key: "workspaces/workspace-abc/runs/run-123/artifacts/artifact-task-123-0001/hermes-report.md",
+      uri: "s3://artifact-bucket/workspaces/workspace-abc/runs/run-123/artifacts/artifact-task-123-0001/hermes-report.md",
       contentType: "text/markdown; charset=utf-8",
       createdAt: "2026-05-10T01:00:00.000Z"
     });

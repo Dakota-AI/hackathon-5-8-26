@@ -1,18 +1,19 @@
 {
-  "name": "@agents-cloud/control-api",
+  "name": "@agents-cloud/realtime-api",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Control API Lambda handlers for durable Agents Cloud run lifecycle.",
+  "description": "AWS-native WebSocket realtime handlers for Agents Cloud events and notifications.",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "pnpm build && node --test dist/test/**/*.test.js"
   },
   "dependencies": {
-    "@agents-cloud/protocol": "workspace:*",
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.821.0",
     "@aws-sdk/client-dynamodb": "^3.821.0",
-    "@aws-sdk/client-sfn": "^3.821.0",
-    "@aws-sdk/lib-dynamodb": "^3.821.0"
+    "@aws-sdk/lib-dynamodb": "^3.821.0",
+    "@aws-sdk/util-dynamodb": "^3.821.0",
+    "aws-jwt-verify": "^5.1.0"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.147",

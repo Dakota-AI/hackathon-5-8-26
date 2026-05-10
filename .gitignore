@@ -33,7 +33,9 @@ infra/amplify/amplify_outputs.*
 *.p8
 tools/App-Store-Connect-CLI/
 tools/shadcn_flutter/
+tools/research/
 tools/bin/asc
 *.tsbuildinfo
 apps/web/.next/
 apps/web/tsconfig.tsbuildinfo
+apps/web/out

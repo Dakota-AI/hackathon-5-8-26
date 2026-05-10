@@ -263,7 +263,7 @@ Required next resources:
 - [x] Lambda `ListRunEventsFunction`.
 - [x] Cognito JWT authorizer wired to Amplify Auth user pool.
 - [x] IAM grants from API Lambdas to DynamoDB and Step Functions.
-- [ ] Idempotency handling for `POST /runs`.
+- [x] Idempotency handling for `POST /runs` first slice: duplicate scoped idempotency keys return the same run in unit tests and do not start duplicate work.
 - [x] Server-assigned first event sequence allocation.
 - [ ] EventBridge bus or SQS path for event propagation.
 - [ ] DLQs for failed event relay and failed worker callbacks.
@@ -277,7 +277,7 @@ Acceptance criteria:
 - [x] `GET /runs/{runId}` returns durable status in the handler implementation.
 - [x] `GET /runs/{runId}/events` returns ordered events with cursor support in the handler implementation.
 - [x] Unauthorized user cannot read another user/workspace run in unit tests.
-- [ ] Repeated idempotent create request does not create duplicate runs.
+- [x] Repeated idempotent create request does not create duplicate runs in unit tests; deployed HTTP auth smoke still pending.
 - [x] CDK synth/build pass.
 - [x] Contract tests pass.
 
@@ -320,7 +320,7 @@ Required build items:
 - [x] Add structured logs with run/task/workspace correlation.
 - [ ] Add cancellation polling.
 - [ ] Add timeout handling.
-- [ ] Add retry semantics with idempotency.
+- [x] Add retry semantics with idempotency first slice: runtime writes canonical deterministic artifact ids and conditional event/artifact records; full duplicate-worker idempotence still pending.
 - [ ] Add worker role boundaries per worker class.
 - [x] Add container image build/push workflow for the dev runtime ECR asset.
 - [ ] Add basic egress policy and allowlist strategy for later.

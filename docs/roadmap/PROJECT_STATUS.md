@@ -22,6 +22,7 @@ Current state:
 - Amplify Hosting app exists and deploys successfully with an explicit `amplify.yml` build spec.
 - The first Control API slice is deployed: create/query run endpoints, Cognito JWT authorizer, DynamoDB run/event writes, and Step Functions start.
 - The first real worker slice is deployed: a Hermes-boundary ECS runtime writes `running`, `artifact.created`, and terminal status events plus one S3 report artifact. It currently defaults to `HERMES_RUNNER_MODE=smoke`; real CLI/model execution needs scoped provider secret brokering before enabling in ECS.
+- An AWS-native realtime WebSocket first slice is implemented locally and synth-validates: API Gateway WebSocket API, Cognito Lambda REQUEST authorizer, connection/subscription table, WebSocket handlers, and DynamoDB Streams relay from run events to subscribed clients.
 
 Approximate progress:
 
@@ -150,13 +151,14 @@ Implemented in this repo:
   - `GET /runs/{runId}/events`
 - DynamoDB write/query helpers for run, task, and event records.
 - Step Functions start helper for the existing simple-run state machine.
-- Unit tests for create-run durability, request validation, owned-run reads,
+- Unit tests for create-run durability, idempotent duplicate requests, durable-write-before-execution ordering, request validation, owned-run reads,
   cross-user denial, and ordered event cursor queries.
+- Canonical initial `run.status` event creation through `@agents-cloud/protocol` helpers.
 
 Still needed before calling this product-complete:
 
 - Smoke-test an authenticated Cognito request end-to-end.
-- Add true idempotency handling for repeated `POST /runs` requests.
+- Exercise idempotent `POST /runs` through real authenticated HTTP traffic and add recovery for execution-ARN persistence failure.
 - Query worker-authored events through the HTTP API using a real Cognito token.
 
 Responsibilities:
@@ -175,19 +177,52 @@ Package exists, but it is not production-ready.
 
 Current runtime code under `services/agent-runtime` can write smoke/Hermes
 status events and an S3-backed report artifact. It proves orchestration and
-artifact mechanics, but it does not yet:
+artifact mechanics. After the readiness-audit hardening pass, runtime events are
+canonical envelopes, artifact metadata uses protocol `kind`/`name` fields, and
+DynamoDB event/artifact writes are conditional. It still does not yet:
 
 - call models or providers in production mode with scoped secrets,
 - manage workspaces,
-- emit fully canonical protocol event envelopes,
-- allocate retry-safe event sequence numbers,
-- write retry-safe artifact ids,
+- allocate general-purpose retry-safe event sequence numbers for multi-step workers,
+- provide fully idempotent duplicate-worker retries rather than safe conditional failure,
 - support cancellation/resume/retry,
 - stream progress to clients.
 
+### AWS-Native Realtime WebSocket Plane
+
+Implemented locally and synth-validated, not deployed yet.
+
+Implemented under `services/realtime-api` plus `infra/cdk/src/stacks/realtime-api-stack.ts`:
+
+- API Gateway WebSocket API with `$connect`, `$disconnect`, and `$default` routes.
+- Lambda REQUEST authorizer for Cognito JWT validation on `$connect`.
+- DynamoDB `RealtimeConnectionsTable` for connection metadata and run subscriptions.
+- WebSocket actions:
+  - `subscribeRun`
+  - `unsubscribeRun`
+  - `ping`
+- DynamoDB Streams relay from authoritative run events to subscribed WebSocket clients.
+- Stale connection cleanup when API Gateway Management API returns gone/410.
+- Root scripts: `pnpm realtime-api:build`, `pnpm realtime-api:test`.
+
+Verified locally:
+
+- `pnpm realtime-api:test` passed: 9/9 tests.
+- `pnpm infra:build` passed.
+- `pnpm infra:synth` passed and produced stack `agents-cloud-dev-realtime-api`.
+
+Still missing:
+
+- AWS deployment of `agents-cloud-dev-state` update and `agents-cloud-dev-realtime-api` stack.
+- Real Cognito-token WebSocket smoke test with `wscat` or app client.
+- Workspace membership authorization beyond current authenticated user context.
+- Client replay/gap repair using `GET /runs/{runId}/events?afterSeq=`.
+- Web/desktop/mobile integration.
+- Custom realtime domain decision, likely `realtime.solo-ceo.ai`, if the AWS-native path is kept.
+
 ### Cloudflare Realtime Plane
 
-Package exists locally, not deployed yet.
+Package exists locally, but is now deferred behind AWS-native realtime unless edge fanout becomes necessary.
 
 Implemented under `infra/cloudflare/realtime`:
 

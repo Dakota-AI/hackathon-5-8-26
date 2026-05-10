@@ -22,19 +22,10 @@ export class DynamoEventSink implements EventSink {
   }
 
   async putEvent(event: RuntimeEvent): Promise<void> {
-    const createdAt = this.context.now();
     await this.client.send(new PutCommand({
       TableName: this.tables.eventsTableName,
-      Item: {
-        runId: this.context.runId,
-        seq: event.seq,
-        workspaceId: this.context.workspaceId,
-        userId: this.context.userId,
-        taskId: this.context.taskId,
-        createdAt,
-        type: event.type,
-        payload: event.payload
-      }
+      Item: event,
+      ConditionExpression: "attribute_not_exists(runId) AND attribute_not_exists(seq)"
     }));
   }
 

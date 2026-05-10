@@ -4,11 +4,21 @@
   "version": "0.0.0",
   "type": "module",
   "description": "Canonical event and protocol schemas for agents-cloud.",
+  "main": "./dist/src/events.js",
+  "types": "./dist/src/events.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/events.d.ts",
+      "default": "./dist/src/events.js"
+    }
+  },
   "scripts": {
-    "test": "node ./scripts/validate-schemas.mjs",
+    "build": "tsc -p tsconfig.json",
+    "test": "pnpm build && node ./scripts/validate-schemas.mjs",
     "validate": "node ./scripts/validate-schemas.mjs"
   },
   "devDependencies": {
+    "@types/node": "^22.10.7",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1"
   }

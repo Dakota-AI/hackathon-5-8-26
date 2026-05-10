@@ -62,5 +62,12 @@ Deployed smoke evidence from 2026-05-10:
 - Step Functions execution: `run-hermes-ecs-smoke-1778376731`
 - State machine status: `SUCCEEDED`
 - ECS task definition family/revision: `agents-cloud-dev-agent-runtime:6`
-- Events written: `running`, `artifact.created`, `succeeded`
+- Events written: canonical `run.status/running`, `artifact.created`, `run.status/succeeded`
 - Artifact written: `s3://agents-cloud-dev-storage-workspaceliveartifactsbuc-8br4g70cte0m/workspaces/workspace-smoke/runs/run-hermes-ecs-smoke-1778376731/artifacts/artifact-0001/hermes-report.md`
+
+Current local implementation hardening after the audit:
+
+- Worker events are built through `@agents-cloud/protocol` helpers and include canonical envelope fields.
+- Artifact events use protocol `kind: "report"` and `name`, not the earlier smoke-only `kind: "hermes-report"` / `title` shape.
+- Artifact ids are deterministic per task attempt (`artifact-<taskId>-0001`) instead of the globally fixed `artifact-0001`.
+- DynamoDB event and artifact metadata writes use conditional expressions so duplicate writes fail instead of silently overwriting ledger entries.

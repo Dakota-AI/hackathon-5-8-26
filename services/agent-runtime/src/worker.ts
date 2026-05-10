@@ -1,3 +1,5 @@
+import { buildArtifactCreatedEvent, buildRunStatusEvent } from "@agents-cloud/protocol";
+import type { RunStatus } from "@agents-cloud/protocol";
 import type { ArtifactSink, EventSink, HermesRunner, RuntimeContext, RuntimeEvent } from "./ports.js";
 
 export interface ExecuteRunDeps {
@@ -21,7 +23,7 @@ export async function executeRun(deps: ExecuteRunDeps): Promise<ExecuteRunResult
 
   try {
     const hermesResult = await hermes.run(buildHermesPrompt(context));
-    const artifactId = "artifact-0001";
+    const artifactId = artifactIdForAttempt(context);
     const createdAt = context.now();
     const key = `workspaces/${context.workspaceId}/runs/${context.runId}/artifacts/${artifactId}/hermes-report.md`;
     const contentType = "text/markdown; charset=utf-8";
@@ -34,8 +36,8 @@ export async function executeRun(deps: ExecuteRunDeps): Promise<ExecuteRunResult
       workspaceId: context.workspaceId,
       userId: context.userId,
       taskId: context.taskId,
-      kind: "hermes-report",
-      title: "Hermes worker report",
+      kind: "report",
+      name: "Hermes worker report",
       bucket: artifactPointer.bucket,
       key: artifactPointer.key,
       uri: artifactPointer.uri,
@@ -43,18 +45,24 @@ export async function executeRun(deps: ExecuteRunDeps): Promise<ExecuteRunResult
       createdAt
     });
 
-    await events.putEvent({
+    await events.putEvent(buildArtifactCreatedEvent({
+      id: eventId(context.runId, 3),
       seq: 3,
-      type: "artifact.created",
-      payload: {
-        artifactId,
-        kind: "hermes-report",
-        title: "Hermes worker report",
-        uri: artifactPointer.uri,
-        contentType,
+      createdAt,
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+      runId: context.runId,
+      taskId: context.taskId,
+      source: { kind: "worker", name: "agent-runtime.hermes" },
+      artifactId,
+      kind: "report",
+      name: "Hermes worker report",
+      uri: artifactPointer.uri,
+      contentType,
+      metadata: {
         runnerMode: hermesResult.mode
       }
-    });
+    }));
     await events.updateRunStatus("succeeded");
     await events.updateTaskStatus("succeeded");
     await events.putEvent(statusEvent(context, 4, "succeeded", hermesResult.summary));
@@ -64,21 +72,44 @@ export async function executeRun(deps: ExecuteRunDeps): Promise<ExecuteRunResult
     const message = error instanceof Error ? error.message : String(error);
     await events.updateRunStatus("failed");
     await events.updateTaskStatus("failed");
-    await events.putEvent(statusEvent(context, 3, "failed", `Hermes worker failed: ${message}`));
+    await events.putEvent(statusEvent(context, 3, "failed", `Hermes worker failed: ${message}`, {
+      code: "HERMES_WORKER_FAILED",
+      message,
+      retryable: true
+    }));
     return { status: "failed" };
   }
 }
 
-function statusEvent(context: RuntimeContext, seq: number, status: string, message: string): RuntimeEvent {
-  return {
+function statusEvent(
+  context: RuntimeContext,
+  seq: number,
+  status: "running" | "succeeded" | "failed",
+  message: string,
+  error?: { readonly code: string; readonly message: string; readonly retryable?: boolean }
+): RuntimeEvent {
+  return buildRunStatusEvent({
+    id: eventId(context.runId, seq),
     seq,
-    type: "run.status",
-    payload: {
-      status,
-      message,
-      taskId: context.taskId
-    }
-  };
+    createdAt: context.now(),
+    userId: context.userId,
+    workspaceId: context.workspaceId,
+    runId: context.runId,
+    taskId: context.taskId,
+    source: { kind: "worker", name: "agent-runtime.hermes" },
+    status,
+    message,
+    error
+  });
+}
+
+function eventId(runId: string, seq: number): string {
+  return `evt-${runId}-${String(seq).padStart(6, "0")}`;
+}
+
+function artifactIdForAttempt(context: RuntimeContext): string {
+  const safeTaskId = context.taskId.replace(/[^a-zA-Z0-9_-]/g, "-");
+  return `artifact-${safeTaskId}-0001`;
 }
 
 function buildHermesPrompt(context: RuntimeContext): string {

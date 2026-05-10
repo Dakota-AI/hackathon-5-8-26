@@ -17,6 +17,7 @@ export interface RunRecord {
   readonly objective: string;
   readonly status: string;
   readonly idempotencyKey?: string;
+  readonly idempotencyScope?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly executionArn?: string;
@@ -34,12 +35,21 @@ export interface TaskRecord {
 }
 
 export interface EventRecord {
-  readonly runId: string;
-  readonly seq: number;
-  readonly workspaceId: string;
-  readonly userId: string;
-  readonly createdAt: string;
+  readonly id: string;
   readonly type: string;
+  readonly seq: number;
+  readonly createdAt: string;
+  readonly orgId: string;
+  readonly userId: string;
+  readonly workspaceId: string;
+  readonly runId: string;
+  readonly taskId?: string;
+  readonly idempotencyKey?: string;
+  readonly source: {
+    readonly kind: string;
+    readonly name: string;
+    readonly version?: string;
+  };
   readonly payload: Record<string, unknown>;
 }
 
@@ -47,7 +57,9 @@ export interface ControlApiStore {
   putRun(item: RunRecord): Promise<void>;
   putTask(item: TaskRecord): Promise<void>;
   putEvent(item: EventRecord): Promise<void>;
+  updateRunExecution(input: { readonly workspaceId: string; readonly runId: string; readonly executionArn: string; readonly updatedAt: string }): Promise<void>;
   getRunById(runId: string): Promise<RunRecord | undefined>;
+  getRunByIdempotencyScope(idempotencyScope: string): Promise<RunRecord | undefined>;
   listEvents(runId: string, options?: { readonly afterSeq?: number; readonly limit?: number }): Promise<EventRecord[]>;
 }
 

@@ -26,7 +26,9 @@ Still missing:
 - [x] Minimal real worker runtime first slice.
 - [x] Worker event/artifact writes first slice.
 - [ ] Event relay.
-- [ ] Deployed Cloudflare realtime plane and AWS relay integration.
+- [x] AWS-native realtime WebSocket first slice implemented and synth-validated.
+- [ ] Deploy AWS realtime WebSocket stack and wire clients.
+- [ ] Deployed Cloudflare realtime plane and AWS relay integration, deferred unless edge fanout is needed.
 - [ ] Next.js command center.
 - [ ] Production desktop/mobile client integration.
 - [ ] Miro bridge.
@@ -61,10 +63,10 @@ contract, and worker lifecycle underneath them.
 2. Define the worker context contract: run id, task id, workspace id, user id, objective, event sink, artifact sink. Done in `services/agent-runtime`.
 3. Have the worker write `running`, artifact-created, and terminal status events. Done in deployed smoke.
 4. Have the worker write one small S3 artifact and corresponding artifact metadata. Done in deployed smoke.
-5. Add true idempotency behavior for repeated `POST /runs`.
+5. Add true idempotency behavior for repeated `POST /runs`. First unit-tested slice is done; authenticated HTTP smoke and post-execution-ARN recovery are still pending.
 6. Exercise Control API with a real Cognito token from the first client.
 7. Enable real Hermes CLI/model execution with scoped provider secrets after the smoke path is stable.
-8. Add event relay and Cloudflare realtime after durable polling works.
+8. Add AWS-native realtime WebSocket streaming after the event ledger is stable; Cloudflare remains deferred unless edge fanout is needed.
 
 ## User Inputs Needed Soon
 
@@ -102,7 +104,7 @@ Build:
 - [x] DynamoDB access helpers.
 - [x] Step Functions start helper.
 - [ ] Request and response schemas.
-- [ ] Full idempotency key support for repeated run creation.
+- [x] Full idempotency key support first slice for repeated run creation: scoped lookup plus duplicate-request unit tests.
 
 Exit criteria:
 
@@ -139,14 +141,18 @@ Exit criteria:
 - [x] Artifact metadata can be queried.
 - [x] Logs include run id and task id.
 
-## Phase 3: Realtime Skeleton
+## Phase 3: AWS-Native Realtime Skeleton
 
-Build only after durable polling works:
+Build after durable event writes exist:
 
-- [ ] EventBridge/SQS event path.
-- [ ] Event relay publisher.
-- [ ] Cloudflare Wrangler project.
-- [ ] Durable Object WebSocket endpoint.
+- [x] API Gateway WebSocket API CDK stack.
+- [x] WebSocket Cognito Lambda REQUEST authorizer.
+- [x] Connection/subscription DynamoDB table.
+- [x] `$connect`, `$disconnect`, and `$default` handlers.
+- [x] `subscribeRun`, `unsubscribeRun`, and `ping` actions.
+- [x] DynamoDB Streams relay publisher from run events to subscribed connections.
+- [ ] Deploy stack update.
+- [ ] Real Cognito-token WebSocket smoke.
 - [ ] Client cursor/replay protocol.
 - [ ] Gap repair through Control API.
 

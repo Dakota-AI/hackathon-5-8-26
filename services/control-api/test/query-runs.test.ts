@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { buildRunStatusEvent } from "@agents-cloud/protocol";
 import { getRun, listRunEvents } from "../src/query-runs.js";
 import type { AuthenticatedUser, ControlApiStore, EventRecord, RunRecord, TaskRecord } from "../src/ports.js";
 
@@ -12,9 +13,14 @@ class MemoryStore implements ControlApiStore {
   async putRun(): Promise<void> {}
   async putTask(): Promise<void> {}
   async putEvent(): Promise<void> {}
+  async updateRunExecution(): Promise<void> {}
 
   async getRunById(): Promise<RunRecord | undefined> {
     return this.run;
+  }
+
+  async getRunByIdempotencyScope(): Promise<undefined> {
+    return undefined;
   }
 
   async listEvents(_runId: string, options?: { readonly afterSeq?: number; readonly limit?: number }): Promise<EventRecord[]> {
@@ -37,24 +43,26 @@ const run: RunRecord = {
   executionArn: "execution-1"
 };
 const events: EventRecord[] = [
-  {
-    runId: "run-1",
+  buildRunStatusEvent({
+    id: "evt-run-1-000001",
     seq: 1,
-    workspaceId: "workspace-abc",
-    userId: "user-123",
     createdAt: "2026-05-09T19:30:00.000Z",
-    type: "run.status",
-    payload: { status: "queued" }
-  },
-  {
-    runId: "run-1",
-    seq: 2,
-    workspaceId: "workspace-abc",
     userId: "user-123",
+    workspaceId: "workspace-abc",
+    runId: "run-1",
+    source: { kind: "control-api", name: "test" },
+    status: "queued"
+  }),
+  buildRunStatusEvent({
+    id: "evt-run-1-000002",
+    seq: 2,
     createdAt: "2026-05-09T19:31:00.000Z",
-    type: "run.status",
-    payload: { status: "running" }
-  }
+    userId: "user-123",
+    workspaceId: "workspace-abc",
+    runId: "run-1",
+    source: { kind: "worker", name: "test" },
+    status: "running"
+  })
 ];
 
 describe("query runs", () => {

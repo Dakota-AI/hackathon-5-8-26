@@ -6,13 +6,15 @@ Implemented first slice:
 
 - `POST /runs`
   - accepts `workspaceId`, `objective`, and optional `idempotencyKey`.
-  - creates a run record, task record, and initial `run.status` event.
-  - starts the existing Step Functions simple-run state machine.
+  - checks for an existing run by the scoped idempotency key before creating work.
+  - writes the run record, task record, and canonical initial `run.status` event before starting Step Functions.
+  - starts the existing Step Functions simple-run state machine only after durable writes succeed.
+  - stores the returned execution ARN back onto the run record.
 - `GET /runs/{runId}`
   - returns an owned run by id.
   - hides other users' runs as `404`.
 - `GET /runs/{runId}/events`
-  - returns ordered events for an owned run.
+  - returns ordered canonical events for an owned run.
   - supports `afterSeq` and `limit` query parameters.
 
 The CDK stack is `ControlApiStack` under `infra/cdk` and wires these handlers to
@@ -21,13 +23,23 @@ API Gateway HTTP API routes with a Cognito JWT authorizer.
 Durable truth remains in DynamoDB, Step Functions, and S3. This service is a
 command/query boundary; it must not become an in-memory run owner.
 
-Current gaps before declaring the broader run lifecycle complete:
+## Durability notes
+
+The current create-run path closes the most dangerous ordering gap from the audit:
+execution does not start until the run/task/initial-event writes have succeeded.
+Repeated requests with the same `(userId, workspaceId, idempotencyKey)` return the
+existing run in unit tests and do not start duplicate work.
+
+The DynamoDB implementation uses conditional puts for run/task/event creation and
+queries the runs table through the `by-idempotency-scope` GSI.
+
+Remaining gaps before declaring the broader run lifecycle complete:
 
 - Exercise the HTTP routes with a real Cognito login token from web/native clients.
-- Add full idempotency behavior for repeated `POST /runs` calls.
+- Add recovery policy for the narrow case where Step Functions start succeeds but storing the execution ARN fails.
 - Add explicit request/response schemas.
-- Wire the minimal real worker so API-created runs produce running/artifact/
-  terminal status events.
+- Add workspace membership authorization beyond owner-user checks.
+- Add list-runs and artifact read endpoints for real client history/detail surfaces.
 
 Deployed endpoint:
 

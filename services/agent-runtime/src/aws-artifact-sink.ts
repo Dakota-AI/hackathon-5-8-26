@@ -37,7 +37,8 @@ export class AwsArtifactSink implements ArtifactSink {
   async putArtifactRecord(record: Record<string, unknown>): Promise<void> {
     await this.dynamo.send(new PutCommand({
       TableName: this.config.artifactsTableName,
-      Item: record
+      Item: record,
+      ConditionExpression: "attribute_not_exists(runId) AND attribute_not_exists(artifactId)"
     }));
   }
 }

@@ -53,6 +53,7 @@ contract-correct.
 - Control API first slice exists under `services/control-api`.
 - Agent runtime first slice exists under `services/agent-runtime`.
 - Cloudflare realtime first slice exists under `infra/cloudflare/realtime`.
+- AWS-native realtime WebSocket first slice exists under `services/realtime-api` and `infra/cdk/src/stacks/realtime-api-stack.ts`.
 - Root docs now include a project structure guide and clear entrypoints.
 
 ### Complete Only As Current Shells
@@ -63,6 +64,9 @@ contract-correct.
   production worker policy boundary.
 - Cloudflare realtime can accept WebSocket sessions and relay events to a
   Durable Object, but it does not yet do replay, gap repair, or signed relay.
+- AWS-native realtime can synthesize a WebSocket API, store connections/subscriptions,
+  and relay DynamoDB event stream records to subscribed clients, but it is not
+  deployed or client-smoke-tested yet.
 - Web creates a Control API run when configured, but the run list, artifacts,
   approvals, and status panels remain mostly fixture-backed.
 - Flutter configures Amplify and contains a Control API client, but the user
@@ -73,7 +77,7 @@ contract-correct.
 - Workspace/organization membership model.
 - Tenant authorization enforcement across Control API, runtime, and realtime.
 - Canonical service-side event producer library.
-- Event relay from AWS to Cloudflare.
+- Event relay from AWS to Cloudflare or AWS WebSocket clients.
 - Durable replay cursor protocol.
 - Production agent runtime with model/provider secrets, workspace policy, and
   isolation.
@@ -160,15 +164,18 @@ work.
 The protocol package defines the expected event envelope and event payload
 shapes, but producers do not yet emit those shapes consistently.
 
-Current risk:
+Current progress:
 
-- `services/control-api` writes initial run events that are not full canonical
-  envelopes.
-- `services/agent-runtime` writes runtime events that omit envelope fields.
-- Artifact events use `title` where the protocol expects `name`.
-- Artifact `kind` values do not consistently match the protocol enum.
-- Event names and payload shapes can drift because producers do not import a
-  shared builder or validator.
+- `@agents-cloud/protocol` now exports TypeScript builders for canonical `run.status` and `artifact.created` events.
+- `services/control-api` uses the shared builder for its initial queued event.
+- `services/agent-runtime` uses the shared builders for running, artifact-created, succeeded, and failed events.
+- Runtime artifact events now use protocol `kind: "report"` and `name` fields.
+
+Remaining risk:
+
+- Event fixtures still need broader validation against payload schemas in service tests.
+- Realtime, web, and Flutter consumers still need to converge on the same builder/types or generated models.
+- Future approval and GenUI producers still need the same shared-builder treatment.
 
 Required fix:
 
@@ -191,12 +198,19 @@ Acceptance criteria:
 The Control API accepts an idempotency key, but repeated POST requests can still
 create duplicate runs or duplicate Step Functions executions.
 
-Current risk:
+Current progress:
 
-- Step Functions execution starts before run/task/event writes complete.
-- A DynamoDB write failure can leave an execution with no matching run ledger.
-- Retried browser/native requests do not reuse a stable idempotency key.
-- DynamoDB puts do not use conditional expressions.
+- `services/control-api` checks an idempotency scope for `(userId, workspaceId, idempotencyKey)` before creating a run.
+- Unit tests now prove a duplicate idempotency key returns the same run and does not start duplicate execution.
+- Run, task, and initial event writes happen before Step Functions execution starts.
+- Unit tests now prove a failed durable run write does not start orphan work.
+- DynamoDB writes use conditional expressions for run/task/event item creation.
+
+Remaining risk:
+
+- A dedicated idempotency table/outbox would be stronger for concurrent duplicate requests.
+- The narrow failure case after Step Functions starts but before execution ARN persistence still needs recovery policy.
+- Browser/native clients still need stable persisted idempotency keys for retrying the same user action.
 
 Required fix:
 
@@ -221,12 +235,18 @@ The first runtime writes fixed event sequence numbers and a fixed artifact id.
 That is enough for a smoke path, but not for retries, duplicate ECS starts, or
 multi-step worker behavior.
 
-Current risk:
+Current progress:
 
-- Event sequence numbers can collide.
-- Artifact ids can collide.
-- Terminal state can be overwritten or regress.
-- A status update can succeed while the matching event write fails.
+- Runtime events are now canonical envelopes produced by `@agents-cloud/protocol` helpers.
+- Artifact ids are deterministic per task attempt instead of globally fixed.
+- Artifact records and events use protocol-aligned `kind: "report"` and `name` fields.
+- DynamoDB event and artifact writes use conditional expressions to prevent silent overwrite on duplicate attempts.
+
+Remaining risk:
+
+- Fixed sequence slots are still a first-slice convention; a general sequence allocator is needed for multi-step workers.
+- Terminal state transition guards still need DynamoDB conditional update expressions.
+- Duplicate worker invocation currently fails safely on duplicate event/artifact writes rather than becoming fully idempotent.
 
 Required fix:
 

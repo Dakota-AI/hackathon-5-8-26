@@ -1,3 +1,5 @@
+import type { CanonicalEventEnvelope } from "@agents-cloud/protocol";
+
 export interface RuntimeContext {
   readonly runId: string;
   readonly taskId: string;
@@ -7,11 +9,7 @@ export interface RuntimeContext {
   readonly now: () => string;
 }
 
-export interface RuntimeEvent {
-  readonly seq: number;
-  readonly type: string;
-  readonly payload: Record<string, unknown>;
-}
+export type RuntimeEvent = CanonicalEventEnvelope;
 
 export interface EventSink {
   putEvent(event: RuntimeEvent): Promise<void>;

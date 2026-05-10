@@ -20,7 +20,19 @@ class MemoryStore implements ControlApiStore {
     this.tasks.push(item);
   }
 
+  async updateRunExecution(input: { workspaceId: string; runId: string; executionArn: string; updatedAt: string }): Promise<void> {
+    const run = this.runs.find((item) => (item as { runId?: string }).runId === input.runId) as Record<string, unknown> | undefined;
+    if (run) {
+      run.executionArn = input.executionArn;
+      run.updatedAt = input.updatedAt;
+    }
+  }
+
   async getRunById(): Promise<undefined> {
+    return undefined;
+  }
+
+  async getRunByIdempotencyScope(): Promise<undefined> {
     return undefined;
   }
 
@@ -57,25 +69,26 @@ describe("createRun", () => {
     });
 
     assert.equal(result.statusCode, 202);
-    assert.equal(result.body.runId, "run-fixed-id");
+    assert.equal(result.body.runId, "run-idem-9afb2e14da64cb03d37d99eb");
     assert.equal(result.body.status, "queued");
     assert.equal(result.body.executionArn, "arn:aws:states:us-east-1:123456789012:execution:agents-cloud-dev-simple-run:test");
 
     assert.deepEqual(store.runs[0], {
       workspaceId: "workspace-abc",
-      runId: "run-fixed-id",
+      runId: "run-idem-9afb2e14da64cb03d37d99eb",
       userId: "user-123",
       ownerEmail: "owner@example.com",
       objective: "Research market and draft plan",
       status: "queued",
       idempotencyKey: "request-1",
+      idempotencyScope: "user-123#workspace-abc#request-1",
       createdAt: "2026-05-09T19:30:00.000Z",
       updatedAt: "2026-05-09T19:30:00.000Z",
       executionArn: "arn:aws:states:us-east-1:123456789012:execution:agents-cloud-dev-simple-run:test"
     });
     assert.deepEqual(store.tasks[0], {
-      runId: "run-fixed-id",
-      taskId: "task-fixed-id",
+      runId: "run-idem-9afb2e14da64cb03d37d99eb",
+      taskId: "task-idem-9afb2e14da64cb03d37d99eb",
       workspaceId: "workspace-abc",
       userId: "user-123",
       workerClass: "agent-runtime",
@@ -84,20 +97,30 @@ describe("createRun", () => {
       updatedAt: "2026-05-09T19:30:00.000Z"
     });
     assert.deepEqual(store.events[0], {
-      runId: "run-fixed-id",
-      seq: 1,
-      workspaceId: "workspace-abc",
-      userId: "user-123",
-      createdAt: "2026-05-09T19:30:00.000Z",
+      id: "evt-run-idem-9afb2e14da64cb03d37d99eb-000001",
       type: "run.status",
+      seq: 1,
+      createdAt: "2026-05-09T19:30:00.000Z",
+      orgId: "org:user-123",
+      userId: "user-123",
+      workspaceId: "workspace-abc",
+      runId: "run-idem-9afb2e14da64cb03d37d99eb",
+      taskId: "task-idem-9afb2e14da64cb03d37d99eb",
+      idempotencyKey: "request-1",
+      source: {
+        kind: "control-api",
+        name: "control-api.create-run"
+      },
       payload: {
+        runId: "run-idem-9afb2e14da64cb03d37d99eb",
+        taskId: "task-idem-9afb2e14da64cb03d37d99eb",
         status: "queued",
         message: "Run accepted and queued for execution."
       }
     });
     assert.deepEqual(executions.started[0], {
-      runId: "run-fixed-id",
-      taskId: "task-fixed-id",
+      runId: "run-idem-9afb2e14da64cb03d37d99eb",
+      taskId: "task-idem-9afb2e14da64cb03d37d99eb",
       workspaceId: "workspace-abc",
       userId: "user-123",
       objective: "Research market and draft plan"

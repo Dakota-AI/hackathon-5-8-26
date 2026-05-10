@@ -8,6 +8,7 @@ import { NetworkStack } from "../stacks/network-stack.js";
 import { OrchestrationStack } from "../stacks/orchestration-stack.js";
 import { PreviewIngressStack } from "../stacks/preview-ingress-stack.js";
 import { RuntimeStack } from "../stacks/runtime-stack.js";
+import { RealtimeApiStack } from "../stacks/realtime-api-stack.js";
 import { StateStack } from "../stacks/state-stack.js";
 import { StorageStack } from "../stacks/storage-stack.js";
 
@@ -36,6 +37,11 @@ const controlApi = new ControlApiStack(app, stackName(config, "control-api"), {
   state,
   orchestration
 });
+const realtimeApi = new RealtimeApiStack(app, stackName(config, "realtime-api"), {
+  config,
+  env,
+  state
+});
 
 const previewIngress = config.previewIngress.enabled
   ? new PreviewIngressStack(app, stackName(config, "preview-ingress"), {
@@ -57,6 +63,7 @@ runtime.addDependency(storage);
 runtime.addDependency(state);
 controlApi.addDependency(orchestration);
 controlApi.addDependency(state);
+realtimeApi.addDependency(state);
 if (previewIngress) {
   previewIngress.addDependency(cluster);
   previewIngress.addDependency(storage);

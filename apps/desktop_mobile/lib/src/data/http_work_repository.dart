@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/control_api.dart';
@@ -7,8 +9,14 @@ import 'fixture_work_repository.dart';
 
 /// Real HTTP-backed [WorkRepository] that delegates to [ControlApi].
 ///
-/// On any failure (unauthenticated, network, parse), it falls back to
-/// [FixtureWorkRepository] so the UI still renders something useful.
+/// Failure policy:
+///   * Missing/null auth token (treated as "not signed in") falls back to
+///     the fixture repository so the app still renders demo content.
+///   * Real HTTP / parse / 5xx errors are LOGGED and PROPAGATED, never
+///     silently swapped for fixture data — that would surface stale demo
+///     work items as if they were the user's real data.
+///   * Per-side-endpoint failures inside getWorkItem (runs/events/artifacts)
+///     ARE tolerated as empty lists, but each failure is logged.
 class HttpWorkRepository implements WorkRepository {
   HttpWorkRepository({required ControlApi api, WorkRepository? fallback})
     : _api = api,
@@ -26,38 +34,88 @@ class HttpWorkRepository implements WorkRepository {
         items.add(_decodeWorkItem(json));
       }
       return List.unmodifiable(items);
-    } catch (_) {
+    } on StateError catch (e) {
+      // ControlApi throws StateError when the id token is missing.
+      // This is the "not signed in" path — safe to fall back to fixtures.
+      developer.log(
+        'HttpWorkRepository.listWorkItems unauthenticated; falling back to fixtures',
+        name: 'http_work_repository',
+        error: e,
+      );
       return _fallback.listWorkItems();
+    } catch (e, st) {
+      developer.log(
+        'HttpWorkRepository.listWorkItems failed',
+        name: 'http_work_repository',
+        error: e,
+        stackTrace: st,
+      );
+      rethrow;
     }
   }
 
   @override
   Future<WorkItem?> getWorkItem(String id) async {
+    final Map<String, dynamic> json;
     try {
-      final json = await _api.getWorkItem(id);
-      if (json.isEmpty) return _fallback.getWorkItem(id);
-
-      List<Map<String, dynamic>> runs = const [];
-      List<Map<String, dynamic>> events = const [];
-      List<Map<String, dynamic>> artifacts = const [];
-      try {
-        runs = await _api.listRuns(id);
-      } catch (_) {}
-      try {
-        events = await _api.listEvents(id);
-      } catch (_) {}
-      try {
-        artifacts = await _api.listArtifacts(id);
-      } catch (_) {}
-
-      return _decodeWorkItem(
-        json,
-        runsOverride: runs,
-        eventsOverride: events,
-        artifactsOverride: artifacts,
+      json = await _api.getWorkItem(id);
+    } on StateError catch (e) {
+      developer.log(
+        'HttpWorkRepository.getWorkItem unauthenticated; falling back to fixtures',
+        name: 'http_work_repository',
+        error: e,
       );
-    } catch (_) {
       return _fallback.getWorkItem(id);
+    } catch (e, st) {
+      developer.log(
+        'HttpWorkRepository.getWorkItem($id) failed',
+        name: 'http_work_repository',
+        error: e,
+        stackTrace: st,
+      );
+      rethrow;
+    }
+    if (json.isEmpty) return null;
+
+    final runs = await _safeSideCall(
+      label: 'listRuns',
+      id: id,
+      call: () => _api.listRuns(id),
+    );
+    final events = await _safeSideCall(
+      label: 'listEvents',
+      id: id,
+      call: () => _api.listEvents(id),
+    );
+    final artifacts = await _safeSideCall(
+      label: 'listArtifacts',
+      id: id,
+      call: () => _api.listArtifacts(id),
+    );
+
+    return _decodeWorkItem(
+      json,
+      runsOverride: runs,
+      eventsOverride: events,
+      artifactsOverride: artifacts,
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> _safeSideCall({
+    required String label,
+    required String id,
+    required Future<List<Map<String, dynamic>>> Function() call,
+  }) async {
+    try {
+      return await call();
+    } catch (e, st) {
+      developer.log(
+        'HttpWorkRepository.$label($id) failed; rendering as empty list',
+        name: 'http_work_repository',
+        error: e,
+        stackTrace: st,
+      );
+      return const [];
     }
   }
 
@@ -258,14 +316,17 @@ class HttpWorkRepository implements WorkRepository {
 
   static WorkItemSurfaceValidation _decodeValidation(String? raw) {
     switch ((raw ?? '').toLowerCase()) {
-      case 'unvalidated':
-      case 'untrusted':
-        return WorkItemSurfaceValidation.unvalidated;
       case 'server_validated':
       case 'server-validated':
       case 'validated':
-      default:
         return WorkItemSurfaceValidation.serverValidated;
+      case 'unvalidated':
+      case 'untrusted':
+      default:
+        // Safe default: anything we don't explicitly recognize is treated
+        // as unvalidated. Surfaces only get the validated badge when the
+        // backend says so explicitly.
+        return WorkItemSurfaceValidation.unvalidated;
     }
   }
 

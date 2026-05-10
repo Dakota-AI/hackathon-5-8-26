@@ -148,7 +148,8 @@ Amplify Hosting uses the root build specification:
 pnpm amplify:hosting:build
 ```
 
-Root `amplify.yml` builds the real Next.js app:
+Root `amplify.yml` builds the real Next.js app as a static export for the current
+Amplify Hosting `WEB` app:
 
 ```yaml
 version: 1
@@ -161,18 +162,18 @@ frontend:
         - pnpm install --frozen-lockfile
     build:
       commands:
-        - pnpm --filter @agents-cloud/web build
+        - pnpm amplify:hosting:build
   artifacts:
-    baseDirectory: apps/web/.next
+    baseDirectory: apps/web/out
     files:
       - '**/*'
   cache:
     paths:
-      - node_modules/**/*
+      - .pnpm-store/**/*
       - apps/web/.next/cache/**/*
 ```
 
-If we want static export first, use `output: 'export'` and artifact directory `apps/web/out`, but for authenticated dashboards and future server-side auth, normal Amplify Next.js SSR hosting is the better long-term path.
+This requires `output: "export"` in `apps/web/next.config.mjs`. If the frontend later needs server routes, server-side auth helpers, ISR, or other non-static Next.js behavior, migrate the Amplify app to the appropriate SSR/WEB_COMPUTE hosting mode before pointing artifacts back at `.next`.
 
 ## Current Blocker for Real Auth Frontend
 

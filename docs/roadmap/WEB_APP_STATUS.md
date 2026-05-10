@@ -1,6 +1,6 @@
 # Web App Status
 
-_Last updated: 2026-05-09_
+_Last updated: 2026-05-10_
 
 ## Summary
 
@@ -26,6 +26,8 @@ apps/web             -> Next.js web app
 - [x] Added fixture-backed panels for runs, teams, artifacts, approvals, and GenUI preview.
 - [x] Added optional Amplify client configuration from public environment variables.
 - [x] Added a Control API helper for the backend URL.
+- [x] Configured the web app for static export so the current Amplify Hosting `WEB` app serves `/` instead of uploading raw `.next` internals.
+- [x] Added `public/status.json` so the documented hosting health endpoint is emitted into the static artifact.
 - [x] Added root web scripts.
 - [x] Updated `amplify.yml` to build `apps/web`.
 - [ ] Auth UI is not production-wired yet.
@@ -65,10 +67,11 @@ pnpm amplify:hosting:build
 
 ## Amplify Hosting
 
-`amplify.yml` now points to the Next.js build artifact directory:
+The current Amplify app is a static `WEB` hosting app, so `apps/web/next.config.mjs`
+uses `output: "export"` and `amplify.yml` points to the exported site directory:
 
 ```text
-apps/web/.next
+apps/web/out
 ```
 
 The pre-build phase still uses Corepack and pnpm 10.0.0 so Amplify Hosting can build the monorepo reliably.

@@ -67,22 +67,28 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
   const [lineageError, setLineageError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [runnerError, setRunnerError] = useState<string | undefined>();
   const [lastLoadedAt, setLastLoadedAt] = useState<string | undefined>();
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(undefined);
+    setRunnerError(undefined);
     try {
-      const [runsResponse, runnersResponse] = await Promise.all([
-        listControlApiAdminRuns({ limit: 75 }),
-        listControlApiAdminRunners({ limit: 75 })
-      ]);
+      const runsResponse = await listControlApiAdminRuns({ limit: 75 });
       setData(runsResponse);
-      setRunnerData(runnersResponse);
       setSelectedRunId((current) => current ?? runsResponse.runs[0]?.runId);
       setLastLoadedAt(new Date().toISOString());
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to load admin runs.");
+    }
+
+    try {
+      const runnersResponse = await listControlApiAdminRunners({ limit: 75 });
+      setRunnerData(runnersResponse);
+    } catch (caught) {
+      setRunnerError(caught instanceof Error ? caught.message : "Unable to load runner fleet.");
+      setRunnerData(defaultRunnerState);
     } finally {
       setLoading(false);
     }
@@ -165,9 +171,10 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
         <div className="panel-heading">
           <div>
             <h2>Runner fleet</h2>
-            <p>{describeRunnerHealth(runnerData.totals)}</p>
+            <p>{runnerError ? "Runner fleet could not be loaded; request ledger remains available." : describeRunnerHealth(runnerData.totals)}</p>
           </div>
         </div>
+        {runnerError ? <div className="admin-alert danger inline-alert">{runnerError}</div> : null}
         <div className="runner-grid">
           <div>
             <h3>Hosts</h3>
@@ -175,7 +182,7 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
               {runnerData.hosts.length ? (
                 runnerData.hosts.slice(0, 8).map((host) => (
                   <div className="runner-row" key={host.hostId}>
-                    <span className={`status-dot ${host.status}`} />
+                    <span className={`status-dot ${statusClassName(host.status)}`} />
                     <span>
                       <strong>{host.hostId}</strong>
                       <small>{host.placementTarget} · {host.status} · heartbeat {formatDate(host.lastHeartbeatAt)}</small>
@@ -217,7 +224,7 @@ function AdminConsoleApp({ userLabel, onSignOut }: { userLabel: string; onSignOu
                   onClick={() => setSelectedRunId(run.runId)}
                   type="button"
                 >
-                  <span className={`status-dot ${run.status}`} />
+                  <span className={`status-dot ${statusClassName(run.status)}`} />
                   <span className="run-row-main">
                     <strong>{run.objective || "Untitled request"}</strong>
                     <small>{run.ownerEmail || run.userId} · {run.status} · {formatDate(run.updatedAt || run.createdAt)}</small>
@@ -277,7 +284,7 @@ function MetricCard({ label, value, danger = false }: { label: string; value: nu
 function RunnerRow({ runner }: { runner: AdminRunnerRecord }) {
   return (
     <div className="runner-row">
-      <span className={`status-dot ${runner.status}`} />
+      <span className={`status-dot ${statusClassName(runner.status)}`} />
       <span>
         <strong>{runner.runnerId}</strong>
         <small>{runner.userId} · {runner.workspaceId} · {runner.status} / {runner.desiredState}</small>
@@ -382,6 +389,10 @@ function formatDate(value?: string): string {
     return value;
   }
   return date.toLocaleString();
+}
+
+function statusClassName(status: string): string {
+  return /^[a-z0-9_-]+$/i.test(status) ? status.toLowerCase() : "unknown";
 }
 
 function formatFailure(run: AdminRunSummary): string {

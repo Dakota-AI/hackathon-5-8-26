@@ -502,8 +502,12 @@ button {
 }
 
 .admin-alert.danger {
-  border-color: rgba(255, 143, 143, 0.35);
-  color: var(--danger);
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #fecaca;
+}
+
+.inline-alert {
+  margin: 0 16px 12px;
 }
 
 .admin-grid {
